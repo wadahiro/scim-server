@@ -44,7 +44,7 @@ features = [
 
 [dev-dependencies]
 axum-test = "15.0"
-tower = { version = "0.4", features = ["util"] }
+tower = { version = "0.5", features = ["util"] }
 http = "1.0"
 testcontainers = "0.15"
 testcontainers-modules = { version = "0.3", features = ["postgres"] }
