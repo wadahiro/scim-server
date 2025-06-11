@@ -1,0 +1,286 @@
+use async_trait::async_trait;
+use sqlx::SqlitePool;
+use sqlx::sqlite::SqlitePoolOptions;
+use std::time::Duration;
+
+use crate::error::{AppError, AppResult};
+use crate::backend::{Backend, UserBackend, GroupBackend};
+use super::super::config::DatabaseBackendConfig;
+use crate::backend::database::{
+    UnifiedUserInsertOps, UnifiedUserUpdateOps, UnifiedUserDeleteOps, UnifiedUserPatchOps, UnifiedUserReadOps,
+    UnifiedGroupInsertOps, UnifiedGroupUpdateOps, UnifiedGroupDeleteOps, UnifiedGroupReadOps,
+    SqliteUserInserter, SqliteUserUpdater, SqliteUserDeleter, SqliteUserPatcher, SqliteUserReader,
+    SqliteGroupInserter, SqliteGroupUpdater, SqliteGroupDeleter, SqliteGroupReader,
+};
+use crate::models::{User, Group};
+use crate::parser::SortSpec;
+use crate::parser::filter_operator::FilterOperator;
+
+use super::filter_impl::SqliteFilterConverter;
+
+/// SQLite database backend implementation
+/// 
+/// This provides a complete SCIM 2.0 database backend using SQLite
+/// with support for JSON columns, complex filtering, and tenant isolation.
+pub struct SqliteBackend {
+    pool: SqlitePool,
+    filter_converter: SqliteFilterConverter,
+    // New operations
+    user_insert_ops: UnifiedUserInsertOps<SqliteUserInserter>,
+    user_update_ops: UnifiedUserUpdateOps<SqliteUserUpdater>,
+    user_delete_ops: UnifiedUserDeleteOps<SqliteUserDeleter>,
+    user_patch_ops: UnifiedUserPatchOps<SqliteUserPatcher>,
+    user_read_ops: UnifiedUserReadOps<SqliteUserReader>,
+    group_insert_ops: UnifiedGroupInsertOps<SqliteGroupInserter>,
+    group_update_ops: UnifiedGroupUpdateOps<SqliteGroupUpdater>,
+    group_delete_ops: UnifiedGroupDeleteOps<SqliteGroupDeleter>,
+    group_read_ops: UnifiedGroupReadOps<SqliteGroupReader>,
+}
+
+impl SqliteBackend {
+    /// Create a new SQLite backend instance
+    pub fn new(pool: SqlitePool) -> Self {
+        // Create database-specific adapters
+        let user_inserter = SqliteUserInserter::new(pool.clone());
+        let user_updater = SqliteUserUpdater::new(pool.clone());
+        let user_deleter = SqliteUserDeleter::new(pool.clone());
+        let user_patcher = SqliteUserPatcher::new(pool.clone());
+        let user_reader = SqliteUserReader::new(pool.clone());
+        let group_inserter = SqliteGroupInserter::new(pool.clone());
+        let group_updater = SqliteGroupUpdater::new(pool.clone());
+        let group_deleter = SqliteGroupDeleter::new(pool.clone());
+        let group_reader = SqliteGroupReader::new(pool.clone());
+        
+        Self {
+            pool,
+            filter_converter: SqliteFilterConverter::new(),
+            // Initialize unified operations
+            user_insert_ops: UnifiedUserInsertOps::new(user_inserter),
+            user_update_ops: UnifiedUserUpdateOps::new(user_updater),
+            user_delete_ops: UnifiedUserDeleteOps::new(user_deleter),
+            user_patch_ops: UnifiedUserPatchOps::new(user_patcher),
+            user_read_ops: UnifiedUserReadOps::new(user_reader),
+            group_insert_ops: UnifiedGroupInsertOps::new(group_inserter),
+            group_update_ops: UnifiedGroupUpdateOps::new(group_updater),
+            group_delete_ops: UnifiedGroupDeleteOps::new(group_deleter),
+            group_read_ops: UnifiedGroupReadOps::new(group_reader),
+        }
+    }
+    
+    /// Get the connection pool reference
+    pub fn pool(&self) -> &SqlitePool {
+        &self.pool
+    }
+    
+    
+    /// Get the filter converter reference
+    pub fn filter_converter(&self) -> &SqliteFilterConverter {
+        &self.filter_converter
+    }
+    
+    /// Generate table name for a resource type and tenant
+    /// Tables are named as: t{tenant_id}_{resource}
+    pub fn table_name(&self, resource: &str, tenant_id: u32) -> String {
+        format!("t{}_{}", tenant_id, resource)
+    }
+    
+    /// Get users table name for a tenant
+    pub fn users_table(&self, tenant_id: u32) -> String {
+        self.table_name("users", tenant_id)
+    }
+    
+    /// Get groups table name for a tenant
+    pub fn groups_table(&self, tenant_id: u32) -> String {
+        self.table_name("groups", tenant_id)
+    }
+    
+    /// Get group memberships table name for a tenant
+    pub fn memberships_table(&self, tenant_id: u32) -> String {
+        self.table_name("group_memberships", tenant_id)
+    }
+}
+
+#[async_trait]
+impl Backend for SqliteBackend {
+    async fn connect(config: &DatabaseBackendConfig) -> AppResult<Self> {
+        // Validate configuration
+        config.validate().map_err(|e| {
+            AppError::Internal(format!("Invalid backend config: {}", e))
+        })?;
+        
+        // Create connection pool
+        let pool = SqlitePoolOptions::new()
+            .max_connections(config.max_connections)
+            .acquire_timeout(Duration::from_secs(config.connection_timeout))
+            .connect(&config.connection_url)
+            .await
+            .map_err(|e| {
+                AppError::Database(format!("Failed to connect to SQLite: {}", e))
+            })?;
+        
+        Ok(Self::new(pool))
+    }
+    
+    async fn health_check(&self) -> AppResult<()> {
+        sqlx::query("SELECT 1")
+            .fetch_one(&self.pool)
+            .await
+            .map_err(|e| {
+                AppError::Database(format!("Health check failed: {}", e))
+            })?;
+        
+        Ok(())
+    }
+    
+    async fn init_tenant(&self, tenant_id: u32) -> AppResult<()> {
+        super::schema::init_tenant_schema(&self.pool, tenant_id).await
+    }
+}
+
+#[async_trait]
+impl UserBackend for SqliteBackend {
+    async fn create_user(&self, tenant_id: u32, user: &User) -> AppResult<User> {
+        self.user_insert_ops.create_user(tenant_id, user).await
+    }
+    
+    async fn find_user_by_id(&self, tenant_id: u32, id: &str) -> AppResult<Option<User>> {
+        self.user_read_ops.find_user_by_id(tenant_id, id).await
+    }
+    
+    async fn find_user_by_username(&self, tenant_id: u32, username: &str) -> AppResult<Option<User>> {
+        self.user_read_ops.find_user_by_username(tenant_id, username).await
+    }
+    
+    async fn find_all_users(
+        &self,
+        tenant_id: u32,
+        start_index: Option<i64>,
+        count: Option<i64>,
+    ) -> AppResult<(Vec<User>, i64)> {
+        self.user_read_ops.find_all_users(tenant_id, start_index, count).await
+    }
+    
+    async fn find_all_users_sorted(
+        &self,
+        tenant_id: u32,
+        start_index: Option<i64>,
+        count: Option<i64>,
+        sort_spec: Option<&SortSpec>,
+    ) -> AppResult<(Vec<User>, i64)> {
+        self.user_read_ops.find_all_users_sorted(tenant_id, start_index, count, sort_spec).await
+    }
+    
+    async fn find_users_by_filter(
+        &self,
+        tenant_id: u32,
+        filter: &FilterOperator,
+        start_index: Option<i64>,
+        count: Option<i64>,
+        sort_spec: Option<&SortSpec>,
+    ) -> AppResult<(Vec<User>, i64)> {
+        self.user_read_ops.find_users_by_filter(tenant_id, filter, start_index, count, sort_spec).await
+    }
+    
+    async fn update_user(&self, tenant_id: u32, id: &str, user: &User) -> AppResult<Option<User>> {
+        let tenant_id = tenant_id;
+        // Perform the update using the unified operations
+        match self.user_update_ops.update_user(tenant_id, id, user).await? {
+            Some(_) => {
+                // After successful update, fetch the user with groups populated
+                self.user_read_ops.find_user_by_id(tenant_id, id).await
+            }
+            None => Ok(None),
+        }
+    }
+    
+    async fn patch_user(
+        &self,
+        tenant_id: u32,
+        id: &str,
+        patch_ops: &crate::models::ScimPatchOp,
+    ) -> AppResult<Option<User>> {
+        let tenant_id = tenant_id;
+        // Perform the patch using the unified operations
+        match self.user_patch_ops.patch_user(tenant_id, id, patch_ops).await? {
+            Some(_) => {
+                // After successful patch, fetch the user with groups populated
+                self.user_read_ops.find_user_by_id(tenant_id, id).await
+            }
+            None => Ok(None),
+        }
+    }
+    
+    async fn delete_user(&self, tenant_id: u32, id: &str) -> AppResult<bool> {
+        self.user_delete_ops.delete_user(tenant_id, id).await
+    }
+    
+    async fn find_users_by_group_id(&self, tenant_id: u32, group_id: &str) -> AppResult<Vec<User>> {
+        self.user_read_ops.find_users_by_group_id(tenant_id, group_id).await
+    }
+}
+
+#[async_trait]
+impl GroupBackend for SqliteBackend {
+    async fn create_group(&self, tenant_id: u32, group: &Group) -> AppResult<Group> {
+        self.group_insert_ops.create_group(tenant_id, group).await
+    }
+    
+    async fn find_group_by_id(&self, tenant_id: u32, id: &str) -> AppResult<Option<Group>> {
+        self.group_read_ops.find_group_by_id(tenant_id, id).await
+    }
+    
+    async fn find_group_by_display_name(&self, tenant_id: u32, display_name: &str) -> AppResult<Option<Group>> {
+        self.group_read_ops.find_group_by_display_name(tenant_id, display_name).await
+    }
+    
+    async fn find_all_groups(
+        &self,
+        tenant_id: u32,
+        start_index: Option<i64>,
+        count: Option<i64>,
+    ) -> AppResult<(Vec<Group>, i64)> {
+        self.group_read_ops.find_all_groups(tenant_id, start_index, count).await
+    }
+    
+    async fn find_all_groups_sorted(
+        &self,
+        tenant_id: u32,
+        start_index: Option<i64>,
+        count: Option<i64>,
+        sort_spec: Option<&SortSpec>,
+    ) -> AppResult<(Vec<Group>, i64)> {
+        self.group_read_ops.find_all_groups_sorted(tenant_id, start_index, count, sort_spec).await
+    }
+    
+    async fn find_groups_by_filter(
+        &self,
+        tenant_id: u32,
+        filter: &FilterOperator,
+        start_index: Option<i64>,
+        count: Option<i64>,
+        sort_spec: Option<&SortSpec>,
+    ) -> AppResult<(Vec<Group>, i64)> {
+        self.group_read_ops.find_groups_by_filter(tenant_id, filter, start_index, count, sort_spec).await
+    }
+    
+    async fn update_group(&self, tenant_id: u32, id: &str, group: &Group) -> AppResult<Option<Group>> {
+        self.group_update_ops.update_group(tenant_id, id, group).await
+    }
+    
+    async fn patch_group(
+        &self,
+        tenant_id: u32,
+        id: &str,
+        patch_ops: &crate::models::ScimPatchOp,
+    ) -> AppResult<Option<Group>> {
+        self.group_read_ops.patch_group(tenant_id, id, patch_ops).await
+    }
+    
+    async fn delete_group(&self, tenant_id: u32, id: &str) -> AppResult<bool> {
+        self.group_delete_ops.delete_group(tenant_id, id).await
+    }
+    
+    async fn find_groups_by_user_id(&self, tenant_id: u32, user_id: &str) -> AppResult<Vec<Group>> {
+        self.group_read_ops.find_groups_by_user_id(tenant_id, user_id).await
+    }
+}

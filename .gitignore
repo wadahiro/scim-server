@@ -1,1 +1,38 @@
+# Rust build artifacts
 /target
+*.rlib
+
+# Database files
+*.db
+*.db-shm
+*.db-wal
+
+# Log files
+*.log
+
+# Temporary files and directories
+tmp/
+.tmp/
+temp/
+
+# Debug and development files
+debug_*.rs
+test_*.rs
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Environment variables (if any contain secrets)
+.env
+.env.local
+
+# Claude local memory
+.claude_memory
