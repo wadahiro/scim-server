@@ -1,0 +1,3 @@
+[advisories]
+# Ignore RUSTSEC-2023-0071 (rsa timing attack) as we don't use MySQL
+ignore = ["RUSTSEC-2023-0071"]

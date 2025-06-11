@@ -1,0 +1,60 @@
+# SCIM Server Configuration
+# Environment variables can be embedded using ${VAR_NAME:-default_value} syntax
+
+server:
+  host: "127.0.0.1"
+  port: 3000
+
+backend:
+  type: "database"
+  database:
+    type: "sqlite"
+    url: "scim.db"
+
+tenants:
+  # Example Company - Absolute URL with OAuth 2.0 Bearer Token
+  - id: 1
+    url: "https://scim.example.com"
+    auth:
+      type: "bearer"
+      token: "${SCIM_SERVER_TOKEN:-sample-bearer-token}"
+
+  # ACME Corporation - Absolute URL with HTTP Basic Authentication
+  - id: 2
+    url: "https://acme.yourcompany.com/scim"
+    auth:
+      type: "basic"
+      basic:
+        username: "${ACME_USER:-admin}"
+        password: "${ACME_PASSWORD:-password}"
+
+  # Tenant using relative URL with Host header resolution
+  - id: 10
+    url: "/scim/tenant1"
+    host_resolution:
+      type: "host"
+    auth:
+      type: "bearer"
+      token: "${TENANT1_TOKEN:-tenant1-token}"
+
+  # Tenant using relative URL with Forwarded header resolution (behind proxy)
+  - id: 20
+    url: "/scim/tenant2"
+    host_resolution:
+      type: "forwarded"
+      trusted_proxies: ["192.168.1.100", "10.0.0.0/8"]
+    auth:
+      type: "basic"
+      basic:
+        username: "${TENANT2_USER:-tenant2user}"
+        password: "${TENANT2_PASS:-tenant2pass}"
+
+  # Tenant using relative URL with X-Forwarded headers (behind load balancer)
+  - id: 30
+    url: "/api/scim"
+    host_resolution:
+      type: "xforwarded"
+      trusted_proxies: ["172.16.0.0/12"]
+    auth:
+      type: "bearer"
+      token: "${API_TOKEN:-api-token}"

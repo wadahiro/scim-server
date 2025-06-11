@@ -1,229 +1,323 @@
-use axum::extract::Path;
 use axum::{
-    extract::State,
-    http::StatusCode,
-    routing::{get, post},
-    Json, Router,
+    middleware,
+    routing::{delete, get, patch, post, put},
+    Router,
 };
-use chrono::{DateTime, Utc}; // Import chrono
-use rusqlite::Connection;
-use scim_v2::models::user::{Email, Name, User}; // Import Email
-use scim_v2::models::{
-    scim_schema::Meta,
-    service_provider_config::{
-        AuthenticationScheme, Bulk, Filter, ServiceProviderConfig, Supported,
-    },
-};
-use serde_json::json;
-use std::{
-    net::SocketAddr,
-    sync::{Arc, Mutex},
-};
+use clap::Parser;
+use std::net::SocketAddr;
+use std::sync::Arc;
 use tokio::net::TcpListener;
-use uuid::Uuid;
 
-async fn service_provider_config() -> (StatusCode, Json<ServiceProviderConfig>) {
-    let config = ServiceProviderConfig {
-        documentation_uri: Some("https://example.com/scim/docs".to_string()),
-        patch: Supported { supported: true },
-        bulk: Bulk {
-            supported: true,
-            max_operations: 1000,
-            max_payload_size: 1048576,
-        },
-        filter: Filter {
-            supported: true,
-            max_results: 100,
-        },
-        change_password: Supported { supported: true },
-        sort: Supported { supported: true },
-        etag: Supported { supported: true },
-        authentication_schemes: vec![AuthenticationScheme {
-            name: "OAuth Bearer Token".to_string(),
-            type_: "oauthbearertoken".to_string(),
-            description: "Authentication scheme using the OAuth Bearer Token standard".to_string(),
-            spec_uri: "https://datatracker.ietf.org/doc/html/rfc6750".to_string(),
-            documentation_uri: Some("https://example.com/scim/docs".to_string()),
-            primary: Some(true),
-        }],
-        meta: Some(Meta {
-            resource_type: Some("ServiceProviderConfig".to_string()),
-            created: None,
-            last_modified: None,
-            version: None,
-            location: None,
-        }),
-    };
-    (StatusCode::OK, Json(config))
+mod auth;
+mod backend;
+mod config;
+mod error;
+mod models;
+mod parser;
+mod password;
+mod resource;
+mod schema;
+mod startup;
+
+use backend::database::DatabaseBackendConfig;
+use backend::{BackendFactory, ScimBackend};
+use config::AppConfig;
+
+#[derive(Parser, Debug)]
+#[command(name = "scim-server")]
+#[command(about = "A SCIM 2.0 server implementation")]
+struct Args {
+    /// Configuration file path
+    #[arg(short, long)]
+    config: Option<String>,
+
+    /// Port to listen on (overrides config file)
+    #[arg(short, long)]
+    port: Option<u16>,
+
+    /// Host to bind to (overrides config file)
+    #[arg(long)]
+    host: Option<String>,
 }
 
-async fn create_user(
-    State(state): State<Arc<Mutex<Connection>>>,
-    Json(payload): Json<User>,
-) -> Result<(StatusCode, Json<User>), (StatusCode, String)> {
-    // Basic validation (only userName is required)
-    if payload.user_name.is_empty() {
-        return Err((
-            StatusCode::BAD_REQUEST,
-            "Invalid user data: userName is required".to_string(),
-        ));
+async fn setup_backend(
+    app_config: &AppConfig,
+) -> Result<Arc<dyn ScimBackend>, Box<dyn std::error::Error>> {
+    // Create backend configuration from app config
+    if app_config.backend.backend_type != "database" {
+        return Err(format!(
+            "Unsupported backend type: {}",
+            app_config.backend.backend_type
+        )
+        .into());
     }
 
-    // Generate UUID
-    let user_id = Uuid::new_v4().to_string();
+    let database_config = app_config
+        .backend
+        .database
+        .as_ref()
+        .ok_or("Database configuration is required when backend type is 'database'")?;
 
-    // Create Meta
-    let meta = Meta {
-        resource_type: Some("User".to_string()),
-        created: Some(Utc::now().to_rfc3339()),
-        last_modified: Some(Utc::now().to_rfc3339()),
-        version: Some("W/\"1\"".to_string()), // Assuming versioning
-        location: Some(format!("/Users/{}", user_id)),
-    };
-
-    // Create a new User object with the ID and meta
-    let created_user = User {
-        id: Some(user_id.clone()),
-        meta: Some(meta),
-        ..payload
-    };
-
-    // Serialize the user to JSON
-    let json_string = serde_json::to_string(&created_user).map_err(|e| {
-        eprintln!("Error serializing user to JSON: {}", e);
-        (StatusCode::INTERNAL_SERVER_ERROR, e.to_string())
-    })?;
-
-    println!("Received user payload: {:?}", created_user); // Add this line
-
-    let result = {
-        let mut conn = state.lock().map_err(|e| {
-            eprintln!("Error locking database connection: {}", e);
-            (StatusCode::INTERNAL_SERVER_ERROR, e.to_string())
-        })?;
-        let mut tx = conn.transaction().map_err(|e| {
-            eprintln!("Error starting transaction: {}", e);
-            (StatusCode::INTERNAL_SERVER_ERROR, e.to_string())
-        })?;
-        let result = tx.execute(
-            "INSERT INTO users (id, data) VALUES (?1, ?2)",
-            [&user_id, &json_string],
-        );
-        match result {
-            Ok(result) => {
-                tx.commit().map_err(|e| {
-                    eprintln!("Error committing transaction: {}", e);
-                    (StatusCode::INTERNAL_SERVER_ERROR, e.to_string())
-                })?;
-                result
+    let backend_config = DatabaseBackendConfig {
+        database_type: match database_config.db_type.as_str() {
+            "postgresql" => backend::DatabaseType::PostgreSQL,
+            "sqlite" => backend::DatabaseType::SQLite,
+            _ => {
+                return Err(
+                    format!("Unsupported database type: {}", database_config.db_type).into(),
+                )
             }
-            Err(e) => {
-                tx.rollback().map_err(|e| {
-                    eprintln!("Error rolling back transaction: {}", e);
-                    (StatusCode::INTERNAL_SERVER_ERROR, e.to_string())
-                })?;
-                return Err((StatusCode::INTERNAL_SERVER_ERROR, e.to_string()));
-            }
-        }
+        },
+        connection_url: database_config.url.clone(),
+        max_connections: database_config.max_connections,
+        connection_timeout: 30,
+        options: std::collections::HashMap::new(),
     };
 
-    if result > 0 {
-        Ok((StatusCode::CREATED, Json(created_user)))
-    } else {
-        Err((
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "Failed to create user".to_string(),
-        ))
+    println!("Setting up {} backend...", database_config.db_type);
+
+    // Create backend instance
+    let backend = BackendFactory::create(&backend_config).await?;
+
+    // Initialize tenant schemas using the same backend instance
+    for tenant in &app_config.tenants {
+        backend.init_tenant(tenant.id).await?;
+        println!("✅ Initialized backend for tenant: {}", tenant.id);
     }
-}
 
-async fn get_user(
-    State(state): State<Arc<Mutex<Connection>>>,
-    Path(id): Path<String>, // Assuming id is a String (UUID)
-) -> Result<(StatusCode, Json<User>), (StatusCode, Json<serde_json::Value>)> {
-    let state_lock = state.lock().map_err(|e| {
-        eprintln!("Error locking database connection: {}", e);
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(json!({"error": e.to_string()})),
-        )
-    })?;
-
-    let mut stmt = state_lock
-        .prepare("SELECT data FROM users WHERE id = ?1")
-        .map_err(|e| {
-            eprintln!("Error preparing SQL statement: {}", e);
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({"error": e.to_string() })),
-            )
-        })?;
-
-    let mut rows = stmt.query(rusqlite::params![id]).map_err(|e| {
-        eprintln!("Error executing SQL query: {}", e);
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(json!({"error": e.to_string() })),
-        )
-    })?;
-
-    if let Some(row) = rows.next().map_err(|e| {
-        eprintln!("Error getting next row: {}", e);
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(json!({"error": e.to_string() })),
-        )
-    })? {
-        let data: String = row.get(0).map_err(|e| {
-            eprintln!("Error getting data from row: {}", e);
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({"error": e.to_string() })),
-            )
-        })?;
-        let user: User = serde_json::from_str(&data).map_err(|e| {
-            eprintln!("Error deserializing JSON: {}", e);
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({"error": e.to_string() })),
-            )
-        })?;
-        Ok((StatusCode::OK, Json(user)))
-    } else {
-        // User not found
-        Err((
-            StatusCode::NOT_FOUND,
-            Json(json!({"message": "User not found"})),
-        ))
-    }
+    Ok(backend)
 }
 
 #[tokio::main]
-async fn main() {
-    // initialize tracing
-    // tracing_subscriber::fmt::init();
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Parse command line arguments
+    let args = Args::parse();
 
-    let db_path = "scim.db";
-    let conn = Connection::open(db_path).unwrap();
-    let shared_conn = Arc::new(Mutex::new(conn));
+    // Initialize tracing for better debugging
+    tracing_subscriber::fmt::init();
 
-    shared_conn
-        .lock()
-        .unwrap()
-        .execute(
-            "CREATE TABLE IF NOT EXISTS users (id TEXT PRIMARY KEY, data TEXT)",
-            [],
-        )
-        .unwrap();
+    // Load configuration from specified file or use defaults
+    let (mut app_config, using_defaults) = if let Some(config_path) = &args.config {
+        let config = AppConfig::load_from_file(config_path)
+            .map_err(|e| format!("Failed to load configuration: {}", e))?;
+        (config, false)
+    } else {
+        println!("⚠️  No configuration file specified, using default configuration:");
+        println!("   - In-memory SQLite database");
+        println!("   - Anonymous access (no authentication)");
+        println!("   - Single tenant at /scim/v2");
+        println!("   🚀 Perfect for development and testing!\n");
+        (AppConfig::default_config(), true)
+    };
 
-    let app = Router::new()
-        .route("/scim/v2/ServiceProvider", get(service_provider_config))
-        .route("/Users", post(create_user))
-        .route("/Users/:id", get(get_user))
-        .with_state(shared_conn.clone());
+    // Override with command line arguments if provided
+    if let Some(port) = args.port {
+        app_config.server.port = port;
+    }
+    if let Some(host) = args.host {
+        app_config.server.host = host;
+    }
 
-    let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
-    println!("listening on {}", addr);
-    let listener = TcpListener::bind(&addr).await.unwrap();
-    axum::serve(listener, app).await.unwrap();
+    if !using_defaults {
+        println!("🔧 Configuration loaded:");
+        println!(
+            "   Server: {}:{}",
+            app_config.server.host, app_config.server.port
+        );
+        if let Some(db_config) = &app_config.backend.database {
+            println!(
+                "   Backend: database/{} ({})",
+                db_config.db_type, db_config.url
+            );
+        } else {
+            println!("   Backend: {}", app_config.backend.backend_type);
+        }
+        println!("   Tenants: {} configured", app_config.tenants.len());
+    }
+
+    // Setup backend
+    let backend = setup_backend(&app_config).await?;
+
+    // Use AppConfig directly
+    let app_config_arc = Arc::new(app_config.clone());
+
+    // Build our application with multi-tenant routes
+    // For tenants with host_resolution, we need to setup dynamic routing
+    // For tenants with simple URL paths, we can use static routing
+
+    let mut app = Router::new();
+    let mut has_host_resolution_tenants = false;
+
+    // Check if any tenant uses host_resolution
+    for tenant in &app_config.tenants {
+        if tenant.host_resolution.is_some() {
+            has_host_resolution_tenants = true;
+            break;
+        }
+    }
+
+    // Always use the existing handlers, but enhance them to support host resolution
+    // For now, let's use a unified approach that supports both static and dynamic routing
+
+    for tenant in &app_config.tenants {
+        // For tenants with host_resolution, we'll handle them dynamically in the handlers
+        // For simple URL tenants, we'll use static routing as before
+
+        let base_path = if tenant.url.starts_with("http://") || tenant.url.starts_with("https://") {
+            // Extract path from full URL
+            if let Ok(url) = url::Url::parse(&tenant.url) {
+                url.path().trim_end_matches('/').to_string()
+            } else {
+                "/scim".to_string() // fallback
+            }
+        } else {
+            // Already a path
+            tenant.url.trim_end_matches('/').to_string()
+        };
+
+        if tenant.host_resolution.is_some() {
+            println!(
+                "🔧 Setting up dynamic routing for tenant {} with host resolution",
+                tenant.id
+            );
+        } else {
+            println!(
+                "🔗 Setting up static routes for tenant {} at {}",
+                tenant.id, base_path
+            );
+        }
+
+        // ServiceProviderConfig routes
+        app = app.route(
+            &format!("{}/ServiceProviderConfig", base_path),
+            get(resource::service_provider::service_provider_config),
+        );
+
+        // Schema and ResourceType routes
+        app = app.route(
+            &format!("{}/Schemas", base_path),
+            get(resource::schema::schemas),
+        );
+        app = app.route(
+            &format!("{}/ResourceTypes", base_path),
+            get(resource::resource_type::resource_types),
+        );
+
+        // User routes
+        app = app.route(
+            &format!("{}/Users", base_path),
+            post(resource::user::create_user),
+        );
+        app = app.route(
+            &format!("{}/Users", base_path),
+            get(resource::user::search_users),
+        );
+        app = app.route(
+            &format!("{}/Users/:id", base_path),
+            get(resource::user::get_user),
+        );
+        app = app.route(
+            &format!("{}/Users/:id", base_path),
+            put(resource::user::update_user),
+        );
+        app = app.route(
+            &format!("{}/Users/:id", base_path),
+            patch(resource::user::patch_user),
+        );
+        app = app.route(
+            &format!("{}/Users/:id", base_path),
+            delete(resource::user::delete_user),
+        );
+
+        // Group routes
+        app = app.route(
+            &format!("{}/Groups", base_path),
+            post(resource::group::create_group),
+        );
+        app = app.route(
+            &format!("{}/Groups", base_path),
+            get(resource::group::search_groups),
+        );
+        app = app.route(
+            &format!("{}/Groups/:id", base_path),
+            get(resource::group::get_group),
+        );
+        app = app.route(
+            &format!("{}/Groups/:id", base_path),
+            put(resource::group::update_group),
+        );
+        app = app.route(
+            &format!("{}/Groups/:id", base_path),
+            patch(resource::group::patch_group),
+        );
+        app = app.route(
+            &format!("{}/Groups/:id", base_path),
+            delete(resource::group::delete_group),
+        );
+    }
+
+    let app = app
+        .layer(middleware::from_fn_with_state(
+            app_config_arc.clone(),
+            auth::auth_middleware,
+        ))
+        .with_state((backend, app_config_arc.clone()));
+
+    // Start the server
+    let host: std::net::IpAddr = app_config.server.host.parse().unwrap_or_else(|_| {
+        eprintln!(
+            "Invalid host address: {}, using 127.0.0.1",
+            app_config.server.host
+        );
+        [127, 0, 0, 1].into()
+    });
+    let addr = SocketAddr::from((host, app_config.server.port));
+    println!("🚀 SCIM Server listening on {}", addr);
+    println!("🏢 Configured tenants:");
+    for (index, tenant) in app_config.get_all_tenants().iter().enumerate() {
+        println!("  - Tenant {} (URL: {}):", index + 1, tenant.url);
+
+        // Display authentication info based on type
+        match tenant.auth.auth_type.as_str() {
+            "bearer" => {
+                if let Some(token) = &tenant.auth.token {
+                    println!(
+                        "    🔒 Authentication: OAuth 2.0 Bearer Token (***{})",
+                        &token[token.len().saturating_sub(3)..]
+                    );
+                }
+            }
+            "basic" => {
+                if let Some(basic) = &tenant.auth.basic {
+                    println!(
+                        "    🔒 Authentication: HTTP Basic (user: {})",
+                        basic.username
+                    );
+                }
+            }
+            "unauthenticated" => {
+                println!("    🔓 Authentication: Anonymous access (no authentication required)");
+            }
+            _ => {
+                println!(
+                    "    🔒 Authentication: Unknown type ({})",
+                    tenant.auth.auth_type
+                );
+            }
+        }
+
+        println!(
+            "    📖 ServiceProviderConfig: {}/ServiceProviderConfig",
+            tenant.url
+        );
+        println!("    📋 Schemas: {}/Schemas", tenant.url);
+        println!("    🏷️  ResourceTypes: {}/ResourceTypes", tenant.url);
+        println!("    👥 Users: {}/Users", tenant.url);
+        println!("    👥 Groups: {}/Groups", tenant.url);
+    }
+
+    let listener = TcpListener::bind(&addr).await?;
+    axum::serve(listener, app).await?;
+
+    Ok(())
 }

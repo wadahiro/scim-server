@@ -1,0 +1,52 @@
+version: '3.8'
+
+services:
+  scim-server:
+    build:
+      context: .
+      args:
+        FEATURES: "sqlite,postgresql"
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./config.yaml:/data/config.yaml:ro
+      - ./data:/data/db
+    environment:
+      - RUST_LOG=info
+    depends_on:
+      - postgres
+    networks:
+      - scim-network
+
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: scim
+      POSTGRES_USER: scim
+      POSTGRES_PASSWORD: scim_password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks:
+      - scim-network
+
+  # Optional: PostgreSQL admin interface
+  pgadmin:
+    image: dpage/pgadmin4
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@example.com
+      PGADMIN_DEFAULT_PASSWORD: admin
+    ports:
+      - "8080:80"
+    depends_on:
+      - postgres
+    networks:
+      - scim-network
+
+volumes:
+  postgres_data:
+
+networks:
+  scim-network:
+    driver: bridge
