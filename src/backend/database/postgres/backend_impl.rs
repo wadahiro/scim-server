@@ -309,9 +309,18 @@ impl GroupBackend for PostgresBackend {
         id: &str,
         patch_ops: &ScimPatchOp,
     ) -> AppResult<Option<Group>> {
-        self.group_read_ops
+        // Perform the patch using the group read ops
+        match self
+            .group_read_ops
             .patch_group(tenant_id, id, patch_ops)
-            .await
+            .await?
+        {
+            Some(_) => {
+                // After successful patch, fetch the group with members populated
+                self.group_read_ops.find_group_by_id(tenant_id, id).await
+            }
+            None => Ok(None),
+        }
     }
 
     async fn delete_group(&self, tenant_id: u32, id: &str) -> AppResult<bool> {

@@ -87,15 +87,16 @@ fn test_group_with_members_preparation() {
     let data_obj = prepared.data_orig.as_object().unwrap();
     if let Some(base_obj) = data_obj.get("base") {
         if let Some(base_obj) = base_obj.as_object() {
-            // Members should be None or null in the serialized data
+            // Members should be an empty array in the serialized data
             if let Some(members_value) = base_obj.get("members") {
                 assert!(
-                    members_value.is_null(),
-                    "Members should be null in JSON data, but was: {:?}",
+                    members_value.is_array() && members_value.as_array().unwrap().is_empty(),
+                    "Members should be an empty array in JSON data, but was: {:?}",
                     members_value
                 );
+            } else {
+                panic!("Members key should exist in JSON data");
             }
-            // If members key doesn't exist, that's also fine
         }
     }
 }
@@ -233,15 +234,16 @@ fn test_group_update_with_members() {
     let data_obj = prepared.data_orig.as_object().unwrap();
     if let Some(base_obj) = data_obj.get("base") {
         if let Some(base_obj) = base_obj.as_object() {
-            // Members should be None or null in the serialized data
+            // Members should be an empty array in the serialized data
             if let Some(members_value) = base_obj.get("members") {
                 assert!(
-                    members_value.is_null(),
-                    "Members should be null in JSON data, but was: {:?}",
+                    members_value.is_array() && members_value.as_array().unwrap().is_empty(),
+                    "Members should be an empty array in JSON data, but was: {:?}",
                     members_value
                 );
+            } else {
+                panic!("Members key should exist in JSON data");
             }
-            // If members key doesn't exist, that's also fine
         }
     }
 }

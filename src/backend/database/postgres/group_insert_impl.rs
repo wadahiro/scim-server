@@ -2,6 +2,8 @@ use async_trait::async_trait;
 use sqlx::PgPool;
 
 use super::super::group_insert::{GroupInserter, PreparedGroupData};
+use super::super::group_read::GroupReader;
+use super::group_read_impl::PostgresGroupReader;
 use crate::error::{AppError, AppResult};
 use crate::models::Group;
 
@@ -10,11 +12,15 @@ use crate::models::Group;
 /// This handles PostgreSQL's JSONB data types while using shared SQL generation.
 pub struct PostgresGroupInserter {
     pool: PgPool,
+    group_reader: PostgresGroupReader,
 }
 
 impl PostgresGroupInserter {
     pub fn new(pool: PgPool) -> Self {
-        Self { pool }
+        Self { 
+            group_reader: PostgresGroupReader::new(pool.clone()),
+            pool,
+        }
     }
 
     /// Check for case-insensitive duplicate displayName
@@ -115,7 +121,11 @@ impl GroupInserter for PostgresGroupInserter {
             crate::error::AppError::Database(format!("Failed to commit transaction: {}", e))
         })?;
 
-        Ok(data.group)
+        // Fetch the created group with properly populated members
+        match self.group_reader.find_group_by_id(tenant_id, &data.group.base.id).await? {
+            Some(group) => Ok(group),
+            None => Err(AppError::Database("Failed to fetch created group".to_string())),
+        }
     }
 }
 

@@ -256,9 +256,8 @@ async fn test_group_patch_operations() {
     response.assert_status(StatusCode::OK);
     let patched_group: Value = response.json();
     assert!(
-        patched_group["members"].is_null()
-            || (patched_group["members"].is_array()
-                && patched_group["members"].as_array().unwrap().is_empty())
+        patched_group["members"].is_array()
+            && patched_group["members"].as_array().unwrap().is_empty()
     );
 }
 

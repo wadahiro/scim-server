@@ -360,8 +360,8 @@ impl AttributeFilter {
                                 })
                                 .collect();
 
-                            // Only include non-empty arrays
-                            if !cleaned_array.is_empty() {
+                            // Special case: always include empty arrays for Group members field
+                            if key == "members" || !cleaned_array.is_empty() {
                                 filtered.insert(key.clone(), Value::Array(cleaned_array));
                             }
                         }

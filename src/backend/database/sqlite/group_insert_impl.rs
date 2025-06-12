@@ -3,6 +3,8 @@ use serde_json::Value;
 use sqlx::SqlitePool;
 
 use super::super::group_insert::{GroupInserter, PreparedGroupData};
+use super::super::group_read::GroupReader;
+use super::group_read_impl::SqliteGroupReader;
 use crate::error::{AppError, AppResult};
 use crate::models::Group;
 
@@ -11,11 +13,15 @@ use crate::models::Group;
 /// This handles SQLite's JSON TEXT storage while using shared SQL generation.
 pub struct SqliteGroupInserter {
     pool: SqlitePool,
+    group_reader: SqliteGroupReader,
 }
 
 impl SqliteGroupInserter {
     pub fn new(pool: SqlitePool) -> Self {
-        Self { pool }
+        Self { 
+            group_reader: SqliteGroupReader::new(pool.clone()),
+            pool,
+        }
     }
 
     /// Convert JSON Value to String for SQLite TEXT storage
@@ -122,7 +128,11 @@ impl GroupInserter for SqliteGroupInserter {
             .await
             .map_err(|e| AppError::Database(format!("Failed to commit transaction: {}", e)))?;
 
-        Ok(data.group)
+        // Fetch the created group with properly populated members
+        match self.group_reader.find_group_by_id(tenant_id, &data.group.base.id).await? {
+            Some(group) => Ok(group),
+            None => Err(AppError::Database("Failed to fetch created group".to_string())),
+        }
     }
 }
 

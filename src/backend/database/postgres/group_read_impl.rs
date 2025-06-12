@@ -110,11 +110,7 @@ impl PostgresGroupReader {
 
                 // Fetch members
                 let members = self.fetch_group_members(tenant_id, id).await?;
-                *group.members_mut() = if members.is_empty() {
-                    None
-                } else {
-                    Some(members)
-                };
+                *group.members_mut() = Some(members);
 
                 Ok(Some(group))
             }
