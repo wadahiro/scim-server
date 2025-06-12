@@ -26,6 +26,7 @@ use config::AppConfig;
 #[derive(Parser, Debug)]
 #[command(name = "scim-server")]
 #[command(about = "A SCIM 2.0 server implementation")]
+#[command(version = env!("CARGO_PKG_VERSION"))]
 struct Args {
     /// Configuration file path
     #[arg(short, long)]
@@ -272,7 +273,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         [127, 0, 0, 1].into()
     });
     let addr = SocketAddr::from((host, app_config.server.port));
-    println!("🚀 SCIM Server listening on {}", addr);
+    
+    // Display version and server info
+    println!("🚀 SCIM Server v{}", env!("CARGO_PKG_VERSION"));
+    println!("📍 Listening on {}", addr);
     println!("🏢 Configured tenants:");
     for (index, tenant) in app_config.get_all_tenants().iter().enumerate() {
         println!("  - Tenant {} (URL: {}):", index + 1, tenant.url);
