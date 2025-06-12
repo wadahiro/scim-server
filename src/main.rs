@@ -12,6 +12,7 @@ mod auth;
 mod backend;
 mod config;
 mod error;
+mod logging;
 mod models;
 mod parser;
 mod password;
@@ -258,6 +259,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     let app = app
+        .layer(middleware::from_fn(logging::logging_middleware))
         .layer(middleware::from_fn_with_state(
             app_config_arc.clone(),
             auth::auth_middleware,

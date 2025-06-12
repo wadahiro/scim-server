@@ -2,6 +2,7 @@ pub mod auth;
 pub mod backend;
 pub mod config;
 pub mod error;
+pub mod logging;
 pub mod models;
 pub mod parser;
 pub mod password;
