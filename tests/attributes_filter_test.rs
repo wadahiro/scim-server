@@ -126,12 +126,7 @@ async fn test_group_attributes_parameter() {
     // Create a test group
     let group_data = json!({
         "schemas": ["urn:ietf:params:scim:schemas:core:2.0:Group"],
-        "displayName": "Test Group",
-        "members": [{
-            "value": "user123",
-            "display": "Test User",
-            "type": "User"
-        }]
+        "displayName": "Test Group"
     });
 
     // Create the group

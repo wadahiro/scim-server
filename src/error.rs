@@ -58,6 +58,24 @@ impl From<std::sync::PoisonError<std::sync::MutexGuard<'_, rusqlite::Connection>
 
 pub type AppResult<T> = Result<T, AppError>;
 
+// SCIM 2.0 standard error response helper
+pub fn scim_error_response(
+    status_code: StatusCode,
+    scim_type: &str,
+    detail: &str,
+) -> (StatusCode, Json<serde_json::Value>) {
+    let status_str = status_code.as_u16().to_string();
+    (
+        status_code,
+        Json(json!({
+            "schemas": ["urn:ietf:params:scim:api:messages:2.0:Error"],
+            "detail": detail,
+            "status": status_str,
+            "scimType": scim_type
+        })),
+    )
+}
+
 // HTTPレスポンスへの変換
 impl AppError {
     pub fn to_response(self) -> (StatusCode, Json<serde_json::Value>) {

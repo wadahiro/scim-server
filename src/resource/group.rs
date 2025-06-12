@@ -11,6 +11,7 @@ use super::attribute_filter::AttributeFilter;
 use crate::auth::TenantInfo;
 use crate::backend::ScimBackend;
 use crate::config::AppConfig;
+use crate::error::scim_error_response;
 use crate::models::{Group, ScimListResponse, ScimPatchOp};
 use crate::parser::filter_parser::parse_filter;
 use crate::parser::{ResourceType, SortSpec};
@@ -131,6 +132,71 @@ fn fix_group_refs(tenant_info: &TenantInfo, group: &mut Group) {
     }
 }
 
+// Helper function to validate that all group members exist
+async fn validate_group_members(
+    backend: &Arc<dyn ScimBackend>,
+    tenant_id: u32,
+    members: &Option<Vec<scim_v2::models::group::Member>>,
+) -> Result<(), (StatusCode, Json<serde_json::Value>)> {
+    if let Some(members) = members {
+        for member in members {
+            if let Some(member_id) = &member.value {
+                // Check if the member type is User (default if not specified)
+                let member_type = member.type_.as_deref().unwrap_or("User");
+                
+                match member_type {
+                    "User" => {
+                        match backend.find_user_by_id(tenant_id, member_id).await {
+                            Ok(Some(_)) => continue, // User exists, continue
+                            Ok(None) => {
+                                return Err(scim_error_response(
+                                    StatusCode::BAD_REQUEST,
+                                    "invalidValue",
+                                    &format!("User with id '{}' does not exist.", member_id),
+                                ));
+                            }
+                            Err(e) => {
+                                eprintln!("Error checking user existence: {}", e);
+                                return Err((
+                                    StatusCode::INTERNAL_SERVER_ERROR,
+                                    Json(json!({"message": "Error validating member"})),
+                                ));
+                            }
+                        }
+                    }
+                    "Group" => {
+                        match backend.find_group_by_id(tenant_id, member_id).await {
+                            Ok(Some(_)) => continue, // Group exists, continue
+                            Ok(None) => {
+                                return Err(scim_error_response(
+                                    StatusCode::BAD_REQUEST,
+                                    "invalidValue",
+                                    &format!("Group with id '{}' does not exist.", member_id),
+                                ));
+                            }
+                            Err(e) => {
+                                eprintln!("Error checking group existence: {}", e);
+                                return Err((
+                                    StatusCode::INTERNAL_SERVER_ERROR,
+                                    Json(json!({"message": "Error validating member"})),
+                                ));
+                            }
+                        }
+                    }
+                    _ => {
+                        return Err(scim_error_response(
+                            StatusCode::BAD_REQUEST,
+                            "invalidValue",
+                            &format!("Invalid member type '{}'.", member_type),
+                        ));
+                    }
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
 // Helper function to apply attribute filtering to groups and create list response
 fn create_filtered_group_list_response(
     groups: Vec<Group>,
@@ -215,6 +281,9 @@ pub async fn create_group(
             group.base.members = Some(members);
         }
     }
+
+    // Validate that all group members exist before creating the group
+    validate_group_members(&backend, tenant_id, &group.base.members).await?;
 
     match backend.create_group(tenant_id, &group).await {
         Ok(mut created_group) => {
@@ -508,6 +577,9 @@ pub async fn update_group(
             group.base.members = Some(members);
         }
     }
+
+    // Validate that all group members exist before updating the group
+    validate_group_members(&backend, tenant_id, &group.base.members).await?;
 
     match backend.update_group(tenant_id, &id, &group).await {
         Ok(Some(mut updated_group)) => {
