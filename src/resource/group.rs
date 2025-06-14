@@ -40,26 +40,10 @@ fn build_resource_location(
     resource_type: &str,
     resource_id: &str,
 ) -> String {
-    let base_url = &tenant_info.base_url;
-    let tenant_path = if tenant_info.tenant_config.url.starts_with("http://")
-        || tenant_info.tenant_config.url.starts_with("https://")
-    {
-        if let Ok(url) = url::Url::parse(&tenant_info.tenant_config.url) {
-            url.path().trim_end_matches('/').to_string()
-        } else {
-            "/scim".to_string()
-        }
-    } else {
-        tenant_info
-            .tenant_config
-            .url
-            .trim_end_matches('/')
-            .to_string()
-    };
-
+    // The base_path already includes the tenant path, so we just append the resource type and ID
     format!(
-        "{}{}/{}/{}",
-        base_url, tenant_path, resource_type, resource_id
+        "{}/{}/{}",
+        tenant_info.base_path.trim_end_matches('/'), resource_type, resource_id
     )
 }
 
@@ -85,34 +69,15 @@ fn set_group_location(tenant_info: &TenantInfo, group: &mut Group) {
 
 // Helper function to fix group refs with base URL and tenant path
 fn fix_group_refs(tenant_info: &TenantInfo, group: &mut Group) {
-    let base_url = &tenant_info.base_url;
     let tenant_id = tenant_info.tenant_id;
-    // Get the correct path from tenant configuration
-    let tenant_path = if tenant_info.tenant_config.url.starts_with("http://")
-        || tenant_info.tenant_config.url.starts_with("https://")
-    {
-        if let Ok(url) = url::Url::parse(&tenant_info.tenant_config.url) {
-            url.path().trim_end_matches('/').to_string()
-        } else {
-            "/scim".to_string()
-        }
-    } else {
-        tenant_info
-            .tenant_config
-            .url
-            .trim_end_matches('/')
-            .to_string()
-    };
 
     // Fix meta location
     if let Some(ref mut meta) = group.base.meta {
         if let Some(ref mut location) = meta.location {
             if location.starts_with(&format!("/{}/", tenant_id)) {
-                // Replace tenant ID-based path with tenant path
-                *location =
-                    location.replace(&format!("/{}/", tenant_id), &format!("{}/", tenant_path));
-                // Add base_url prefix
-                *location = format!("{}{}", base_url, location);
+                // Replace tenant ID-based path with full base URL + resource path
+                let resource_path = location.replace(&format!("/{}/", tenant_id), "");
+                *location = format!("{}/{}", tenant_info.base_path.trim_end_matches('/'), resource_path);
             }
         }
     }
@@ -122,10 +87,9 @@ fn fix_group_refs(tenant_info: &TenantInfo, group: &mut Group) {
         for member in members {
             if let Some(ref mut ref_) = member.ref_ {
                 if ref_.starts_with(&format!("/{}/", tenant_id)) {
-                    // Replace tenant ID-based path with tenant path
-                    *ref_ = ref_.replace(&format!("/{}/", tenant_id), &format!("{}/", tenant_path));
-                    // Add base_url prefix
-                    *ref_ = format!("{}{}", base_url, ref_);
+                    // Replace tenant ID-based path with full base URL + resource path
+                    let resource_path = ref_.replace(&format!("/{}/", tenant_id), "");
+                    *ref_ = format!("{}/{}", tenant_info.base_path.trim_end_matches('/'), resource_path);
                 }
             }
         }

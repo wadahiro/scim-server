@@ -34,5 +34,8 @@ Thumbs.db
 .env
 .env.local
 
+# Cargo configuration (environment-specific)
+.cargo/
+
 # Claude local memory
 .claude_memory

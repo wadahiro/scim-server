@@ -12,34 +12,37 @@ backend:
     url: "scim.db"
 
 tenants:
-  # Example Company - Absolute URL with OAuth 2.0 Bearer Token
+  # Simple path-only tenant (matches any host) - OAuth 2.0 Bearer Token
   - id: 1
-    url: "https://scim.example.com"
+    path: "/scim/v2"
     auth:
       type: "bearer"
       token: "${SCIM_SERVER_TOKEN:-sample-bearer-token}"
 
-  # ACME Corporation - Absolute URL with HTTP Basic Authentication
+  # Host-specific tenant with default Host header resolution
   - id: 2
-    url: "https://acme.yourcompany.com/scim"
+    path: "/api/scim"
+    host: "api.example.com"
     auth:
       type: "basic"
       basic:
-        username: "${ACME_USER:-admin}"
-        password: "${ACME_PASSWORD:-password}"
+        username: "${API_USER:-admin}"
+        password: "${API_PASSWORD:-password}"
 
-  # Tenant using relative URL with Host header resolution
+  # Host-specific tenant with explicit Host header resolution
   - id: 10
-    url: "/scim/tenant1"
+    path: "/scim/tenant1"
+    host: "tenant1.company.com"
     host_resolution:
       type: "host"
     auth:
       type: "bearer"
       token: "${TENANT1_TOKEN:-tenant1-token}"
 
-  # Tenant using relative URL with Forwarded header resolution (behind proxy)
+  # Host-specific tenant with Forwarded header resolution (behind proxy)
   - id: 20
-    url: "/scim/tenant2"
+    path: "/scim/tenant2"
+    host: "tenant2.company.com"
     host_resolution:
       type: "forwarded"
       trusted_proxies: ["192.168.1.100", "10.0.0.0/8"]
@@ -49,12 +52,66 @@ tenants:
         username: "${TENANT2_USER:-tenant2user}"
         password: "${TENANT2_PASS:-tenant2pass}"
 
-  # Tenant using relative URL with X-Forwarded headers (behind load balancer)
+  # Token authentication tenant
+  - id: 25
+    path: "/scim/token"
+    host: "token.company.com"
+    auth:
+      type: "token"
+      token: "${TOKEN_SCIM_TOKEN:-token_xxxxxxxxxxxxxxxxxxxx}"
+
+  # Host-specific tenant with X-Forwarded headers (behind load balancer)
   - id: 30
-    url: "/api/scim"
+    path: "/api/scim"
+    host: "api.loadbalancer.com"
     host_resolution:
       type: "xforwarded"
       trusted_proxies: ["172.16.0.0/12"]
     auth:
       type: "bearer"
       token: "${API_TOKEN:-api-token}"
+
+  # Tenant with custom endpoints and override base URL
+  # override_base_url: Forces base URL override (for public-facing URLs in responses)
+  # If not set, auto-constructed from host resolution + path
+  - id: 40
+    path: "/scim/v2"
+    override_base_url: "https://public.example.com"  # Forces response URLs to use this base
+    auth:
+      type: "bearer"
+      token: "${CUSTOM_TOKEN:-custom-token}"
+    custom_endpoints:
+      # Static JSON response endpoint
+      - path: "/my/custom/static"
+        response: |
+          {
+            "message": "This is a custom static endpoint",
+            "version": "1.0.0",
+            "timestamp": "2024-01-01T00:00:00Z",
+            "data": {
+              "custom_field": "custom_value",
+              "nested": {
+                "array": [1, 2, 3],
+                "boolean": true
+              }
+            }
+          }
+        status_code: 200
+        content_type: "application/json"
+      
+      # Another custom endpoint with different content
+      - path: "/health/custom"
+        response: |
+          {
+            "status": "healthy",
+            "service": "SCIM Server Custom Endpoint",
+            "uptime": "24h"
+          }
+        status_code: 200
+        content_type: "application/json"
+      
+      # Plain text response example
+      - path: "/info/text"
+        response: "This is a plain text custom endpoint response"
+        status_code: 200
+        content_type: "text/plain"

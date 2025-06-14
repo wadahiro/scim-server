@@ -109,7 +109,7 @@ curl -L https://github.com/{owner}/scim-server/releases/download/v1.0.0/scim-ser
 This is a fully compliant SCIM 2.0 server with enterprise-grade architecture:
 
 - **RFC 7644 Compliance**: Complete SCIM 2.0 specification implementation
-- **Multi-tenant architecture**: URL-based tenant isolation with per-tenant auth
+- **Multi-tenant architecture**: Path-based tenant isolation with optional host routing and per-tenant auth
 - **Dual database support**: PostgreSQL (production) and SQLite (development)
 - **Advanced features**: Attribute filtering, complex queries, PATCH operations
 - **Zero-configuration mode**: Run without config.yaml for development/testing
@@ -154,14 +154,26 @@ backend:
     max_connections: 10
 
 tenants:
+  # Simple path-only tenant (matches any host)
   - id: 1
-    url: "https://acme.company.com/scim/v2"
+    path: "/scim/v2"
     auth:
       auth_type: "bearer"
       token: "${ACME_TOKEN}"
       
+  # Token authentication tenant
   - id: 2
-    url: "https://globex.company.com/api/scim/v2"
+    path: "/scim/token"
+    auth:
+      auth_type: "token"
+      token: "${TOKEN_SCIM_TOKEN}"
+      
+  # Host-specific tenant with explicit host resolution
+  - id: 3
+    path: "/api/scim/v2"
+    host: "globex.company.com"
+    host_resolution:
+      type: "host"
     auth:
       auth_type: "basic"
       basic:
@@ -169,13 +181,27 @@ tenants:
         password: "${GLOBEX_PASSWORD}"
         
   # Zero-configuration development tenant
-  - id: 3
-    url: "/scim/v2"
+  - id: 4
+    path: "/scim/v2"
     auth:
       auth_type: "unauthenticated"
-    host_resolution:
-      type: "host"
+      
+  # Tenant with override base URL for public-facing responses
+  - id: 5
+    path: "/internal/scim"
+    override_base_url: "https://api.public.company.com"  # Forces response URLs
+    auth:
+      auth_type: "bearer"
+      token: "${PUBLIC_API_TOKEN}"
 ```
+
+### Response URL Control (override_base_url)
+- **Auto-constructed URLs** (default): Uses host resolution + path configuration
+  - `host` mode: `http://resolved-host/path` (development/testing)
+  - `forwarded`/`xforwarded` modes: `https://resolved-host/path` (production)
+- **Override URLs** (optional): Forces specific base URL for all responses
+  - Example: `override_base_url: "https://api.public.com"` → responses use `https://api.public.com/path/*`
+  - Used for public-facing URLs when internal routing differs from external URLs
 
 ### Environment Variable Embedding
 - Use `${VAR_NAME}` or `${VAR_NAME:-default}` syntax in YAML
@@ -183,11 +209,12 @@ tenants:
 - Variables expanded at startup with comprehensive error handling
 
 ### Multi-Tenant Authentication
-- **Bearer Tokens**: OAuth 2.0 compliant (RFC 6750)
-- **HTTP Basic Auth**: RFC 7617 compliant username/password
+- **Bearer Tokens**: OAuth 2.0 compliant (RFC 6750) - `Authorization: Bearer <token>`
+- **Token Authentication**: Alternative token format - `Authorization: token <token>`
+- **HTTP Basic Auth**: RFC 7617 compliant username/password - `Authorization: Basic <base64>`
 - **Unauthenticated**: Anonymous access for development/testing
 - **Per-tenant configuration**: Each tenant can use different auth methods
-- **Authorization header validation**: Proper parsing and validation
+- **Authorization header validation**: Proper parsing and validation for all auth types
 
 ### Zero-Configuration Development Mode
 
@@ -208,11 +235,9 @@ backend:
 
 tenants:
   - id: 1
-    url: "/scim/v2"
+    path: "/scim/v2"
     auth:
       type: "unauthenticated"
-    host_resolution:
-      type: "host"
 ```
 
 **Benefits:**
@@ -234,7 +259,7 @@ tenants:
 
 **Advanced Query Support:**
 ```bash
-# Complex filtering (using configured URL paths)
+# Complex filtering (using configured path)
 GET /scim/v2/Users?filter=name.givenName eq "John" and emails[type eq "work"]
 
 # Attribute projection (NEW FEATURE)
@@ -265,14 +290,15 @@ GET /my-custom-path/Users?filter=userName eq "alice"
 
 ### 3. Multi-Tenant Architecture
 
-**URL-Based Tenant Routing:**
-- Each tenant URL configured in YAML is used exactly as specified
-- Example: `url: "/scim/v2"` → routes at `/scim/v2/*`
-- Example: `url: "https://acme.com/api/scim/v2"` → routes at `/api/scim/v2/*` 
+**Path-Based Tenant Routing with Optional Host Resolution:**
+- Each tenant path configured in YAML defines the route prefix
+- Example: `path: "/scim/v2"` → routes at `/scim/v2/*`
+- Example: `path: "/api/scim"` → routes at `/api/scim/*`
+- Optional host-based routing: `host: "api.example.com"` for multi-domain support
 - Complete data isolation via per-tenant table architecture
-- Tenant resolution from URL path with validation
+- Tenant resolution from path and optional host matching
 - Per-tenant authentication and authorization
-- **No hardcoded `/v2/` paths** - all paths use exact configuration
+- **Flexible routing** - path-only or path+host combinations
 
 **Database Schema Requirements:**
 ```sql

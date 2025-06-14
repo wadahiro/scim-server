@@ -39,10 +39,16 @@ fn default_max_connections() -> u32 {
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct TenantConfig {
     pub id: u32,
-    pub url: String,
-    pub auth: AuthConfig,
+    pub path: String,
+    #[serde(default)]
+    pub host: Option<String>,
     #[serde(default)]
     pub host_resolution: Option<HostResolutionConfig>,
+    pub auth: AuthConfig,
+    #[serde(default)]
+    pub override_base_url: Option<String>,
+    #[serde(default)]
+    pub custom_endpoints: Vec<CustomEndpoint>,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -58,6 +64,7 @@ pub struct HostResolutionConfig {
 pub enum HostResolutionType {
     Host,
     Forwarded,
+    #[serde(rename = "xforwarded")]
     XForwarded,
 }
 
@@ -94,49 +101,208 @@ pub struct BasicAuthConfig {
     pub password: String,
 }
 
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct CustomEndpoint {
+    pub path: String,
+    pub response: String,
+    #[serde(default = "default_status_code")]
+    pub status_code: u16,
+    #[serde(default = "default_content_type")]
+    pub content_type: String,
+    /// Optional authentication override for this specific endpoint
+    /// If not specified, inherits tenant's authentication settings
+    pub auth: Option<AuthConfig>,
+}
+
+fn default_status_code() -> u16 {
+    200
+}
+
+fn default_content_type() -> String {
+    "application/json".to_string()
+}
+
+impl CustomEndpoint {
+    /// Get the effective authentication config for this endpoint
+    /// Returns the endpoint's auth config if specified, otherwise the tenant's auth config
+    pub fn effective_auth_config<'a>(&'a self, tenant_auth: &'a AuthConfig) -> &'a AuthConfig {
+        self.auth.as_ref().unwrap_or(tenant_auth)
+    }
+}
+
 impl TenantConfig {
-    /// Check if this tenant configuration matches the given request
-    pub fn matches_request(&self, request_info: &RequestInfo) -> Option<ResolvedUrl> {
-        // First check if URL is absolute (has scheme)
-        if self.url.starts_with("http://") || self.url.starts_with("https://") {
-            // Absolute URL - parse and compare directly
-            if let Ok(parsed_url) = url::Url::parse(&self.url) {
-                let resolved = self.resolve_url_from_request(request_info)?;
-
-                // Compare host and path
-                if parsed_url.host_str() == Some(&resolved.host)
-                    && parsed_url.port() == resolved.port
-                    && parsed_url.path() == resolved.path
-                {
-                    return Some(ResolvedUrl {
-                        scheme: parsed_url.scheme().to_string(),
-                        host: parsed_url.host_str().unwrap().to_string(),
-                        port: parsed_url.port(),
-                        path: parsed_url.path().to_string(),
-                    });
-                }
-            }
+    /// Build the base URL for this tenant based on configuration and request
+    /// - If override_base_url is set: use override_base_url + path (forced override)
+    /// - If override_base_url is unset: use host resolution result + path (auto-constructed)
+    pub fn build_base_url(&self, request_info: &RequestInfo) -> String {
+        if let Some(override_url) = &self.override_base_url {
+            // Use configured override_base_url + path (forced override)
+            format!("{}{}", override_url.trim_end_matches('/'), &self.path)
         } else {
-            // Relative URL - resolve using host resolution method
-            let resolved = self.resolve_url_from_request(request_info)?;
-
-            // Check if path matches
-            if request_info.path.starts_with(&self.url) {
-                return Some(resolved);
+            // Auto-build from host resolution + path
+            if let Some(host) = &self.host {
+                // Host-specific tenant: use host resolution
+                let resolved = if let Some(host_resolution) = &self.host_resolution {
+                    self.resolve_url_from_request_with_resolution(request_info, host_resolution)
+                } else {
+                    // Default to Host header resolution
+                    self.resolve_from_host_header(request_info)
+                };
+                
+                if let Some(resolved_url) = resolved {
+                    let port_suffix = if let Some(port) = resolved_url.port {
+                        if (resolved_url.scheme == "https" && port != 443) || 
+                           (resolved_url.scheme == "http" && port != 80) {
+                            format!(":{}", port)
+                        } else {
+                            String::new()
+                        }
+                    } else {
+                        String::new()
+                    };
+                    
+                    format!("{}://{}{}{}", 
+                        resolved_url.scheme, 
+                        resolved_url.host, 
+                        port_suffix,
+                        &self.path
+                    )
+                } else {
+                    // Fallback to http + host + path
+                    format!("http://{}{}", host, &self.path)
+                }
+            } else {
+                // Path-only tenant: use http + host header + path
+                let host = request_info.host_header.unwrap_or("localhost");
+                format!("http://{}{}", host, &self.path)
             }
         }
+    }
 
+    /// Build the base URL without path for this tenant - returns just protocol://host:port
+    /// Used for constructing individual resource URLs where path is added separately
+    pub fn build_base_url_no_path(&self, request_info: &RequestInfo) -> String {
+        if let Some(override_url) = &self.override_base_url {
+            // Use configured override_base_url without path
+            override_url.trim_end_matches('/').to_string()
+        } else {
+            // Auto-build from host resolution without path
+            if let Some(host) = &self.host {
+                // Host-specific tenant: use host resolution
+                let resolved = if let Some(host_resolution) = &self.host_resolution {
+                    self.resolve_url_from_request_with_resolution(request_info, host_resolution)
+                } else {
+                    // Default to Host header resolution
+                    self.resolve_from_host_header(request_info)
+                };
+                
+                if let Some(resolved_url) = resolved {
+                    let port_suffix = if let Some(port) = resolved_url.port {
+                        if (resolved_url.scheme == "https" && port != 443) || 
+                           (resolved_url.scheme == "http" && port != 80) {
+                            format!(":{}", port)
+                        } else {
+                            String::new()
+                        }
+                    } else {
+                        String::new()
+                    };
+                    
+                    format!("{}://{}{}", 
+                        resolved_url.scheme, 
+                        resolved_url.host, 
+                        port_suffix
+                    )
+                } else {
+                    // Fallback to http + host
+                    format!("http://{}", host)
+                }
+            } else {
+                // Path-only tenant: use http + host header
+                let host = request_info.host_header.unwrap_or("localhost");
+                format!("http://{}", host)
+            }
+        }
+    }
+    /// Check if this tenant configuration matches the given request for SCIM endpoints
+    pub fn matches_request(&self, request_info: &RequestInfo) -> Option<ResolvedUrl> {
+        // First check if path matches
+        if !request_info.path.starts_with(&self.path) {
+            return None;
+        }
+
+        // If host is configured, check host matching
+        if let Some(expected_host) = &self.host {
+            // Determine how to resolve the host based on host_resolution config
+            let resolved = if let Some(host_resolution) = &self.host_resolution {
+                self.resolve_url_from_request_with_resolution(request_info, host_resolution)?
+            } else {
+                // Default to Host header resolution if host is specified but no resolution config
+                self.resolve_from_host_header(request_info)?
+            };
+            
+            // Check if the resolved host matches the expected host
+            if &resolved.host != expected_host {
+                return None;
+            }
+            
+            return Some(resolved);
+        } else {
+            // No host config - path matching is sufficient
+            return Some(ResolvedUrl {
+                scheme: "http".to_string(),
+                host: request_info.host_header.unwrap_or("localhost").to_string(),
+                port: None,
+                path: request_info.path.to_string(),
+            });
+        }
+    }
+
+    /// Check if this tenant has a custom endpoint matching the given path
+    pub fn matches_custom_endpoint(&self, request_info: &RequestInfo) -> Option<(&CustomEndpoint, ResolvedUrl)> {
+        for endpoint in &self.custom_endpoints {
+            if endpoint.path == request_info.path {
+                // If this tenant has host config, verify the host matches
+                if let Some(expected_host) = &self.host {
+                    // Determine how to resolve the host based on host_resolution config
+                    let resolved = if let Some(host_resolution) = &self.host_resolution {
+                        self.resolve_url_from_request_with_resolution(request_info, host_resolution)
+                    } else {
+                        // Default to Host header resolution if host is specified but no resolution config
+                        self.resolve_from_host_header(request_info)
+                    };
+                    
+                    if let Some(resolved) = resolved {
+                        // Check if the resolved host matches the expected host
+                        if &resolved.host == expected_host {
+                            return Some((endpoint, ResolvedUrl {
+                                scheme: resolved.scheme,
+                                host: resolved.host,
+                                port: resolved.port,
+                                path: endpoint.path.clone(),
+                            }));
+                        }
+                    }
+                } else {
+                    // No host config - custom endpoint matches
+                    return Some((endpoint, ResolvedUrl {
+                        scheme: "http".to_string(), // Default for non-host tenants
+                        host: request_info.host_header.unwrap_or("localhost").to_string(),
+                        port: None,
+                        path: endpoint.path.clone(),
+                    }));
+                }
+            }
+        }
         None
     }
 
     /// Resolve URL from request using configured host resolution method
-    fn resolve_url_from_request(&self, request_info: &RequestInfo) -> Option<ResolvedUrl> {
-        let host_resolution = self.host_resolution.as_ref()?;
-
+    fn resolve_url_from_request_with_resolution(&self, request_info: &RequestInfo, host_resolution: &HostResolutionConfig) -> Option<ResolvedUrl> {
         match host_resolution.resolution_type {
             HostResolutionType::Host => self.resolve_from_host_header(request_info),
-            HostResolutionType::Forwarded => self.resolve_from_forwarded_header(request_info),
-            HostResolutionType::XForwarded => self.resolve_from_x_forwarded_headers(request_info),
+            HostResolutionType::Forwarded => self.resolve_from_forwarded_header(request_info, host_resolution),
+            HostResolutionType::XForwarded => self.resolve_from_x_forwarded_headers(request_info, host_resolution),
         }
     }
 
@@ -158,7 +324,7 @@ impl TenantConfig {
         };
 
         Some(ResolvedUrl {
-            scheme: "https".to_string(), // Default to HTTPS
+            scheme: "http".to_string(), // Host mode: HTTP for development/testing
             host,
             port,
             path: request_info.path.to_string(),
@@ -166,8 +332,13 @@ impl TenantConfig {
     }
 
     /// Resolve URL from RFC 7239 Forwarded header
-    fn resolve_from_forwarded_header(&self, request_info: &RequestInfo) -> Option<ResolvedUrl> {
+    fn resolve_from_forwarded_header(&self, request_info: &RequestInfo, host_resolution: &HostResolutionConfig) -> Option<ResolvedUrl> {
         let forwarded_header = request_info.forwarded_header?;
+
+        // TODO: Check trusted_proxies if configured
+        if let Some(_trusted_proxies) = &host_resolution.trusted_proxies {
+            // Add proxy validation logic here
+        }
 
         // Parse Forwarded header (simplified implementation)
         // Format: Forwarded: for=192.0.2.60;proto=http;by=203.0.113.43;host=example.com
@@ -211,7 +382,12 @@ impl TenantConfig {
     }
 
     /// Resolve URL from X-Forwarded-* headers
-    fn resolve_from_x_forwarded_headers(&self, request_info: &RequestInfo) -> Option<ResolvedUrl> {
+    fn resolve_from_x_forwarded_headers(&self, request_info: &RequestInfo, host_resolution: &HostResolutionConfig) -> Option<ResolvedUrl> {
+        // TODO: Check trusted_proxies if configured
+        if let Some(_trusted_proxies) = &host_resolution.trusted_proxies {
+            // Add proxy validation logic here
+        }
+
         let scheme = request_info
             .x_forwarded_proto
             .unwrap_or("https")
@@ -288,13 +464,16 @@ impl AppConfig {
             },
             tenants: vec![TenantConfig {
                 id: 1,
-                url: "/scim/v2".to_string(),
+                path: "/scim/v2".to_string(),
+                host: None, // No host requirement for zero-config mode
+                host_resolution: None, // No host resolution for zero-config mode
                 auth: AuthConfig {
                     auth_type: "unauthenticated".to_string(),
                     token: None,
                     basic: None,
                 },
-                host_resolution: None, // Simple path-based routing for zero-config mode
+                override_base_url: None, // Use auto-constructed URL for zero-config mode
+                custom_endpoints: vec![],
             }],
         }
     }
@@ -381,9 +560,31 @@ impl AppConfig {
         &self,
         request_info: &RequestInfo,
     ) -> Option<(&TenantConfig, ResolvedUrl)> {
+        // First try to find a custom endpoint match
+        for tenant in &self.tenants {
+            if let Some((_, resolved_url)) = tenant.matches_custom_endpoint(request_info) {
+                return Some((tenant, resolved_url));
+            }
+        }
+
+        // If no custom endpoint matches, try regular SCIM endpoints
         for tenant in &self.tenants {
             if let Some(resolved_url) = tenant.matches_request(request_info) {
                 return Some((tenant, resolved_url));
+            }
+        }
+
+        None
+    }
+
+    /// Find custom endpoint that matches the given path
+    /// Note: This method is deprecated in favor of find_tenant_by_request which handles both SCIM and custom endpoints.
+    pub fn find_custom_endpoint(&self, path: &str) -> Option<(&TenantConfig, &CustomEndpoint)> {
+        for tenant in &self.tenants {
+            for endpoint in &tenant.custom_endpoints {
+                if path == endpoint.path {
+                    return Some((tenant, endpoint));
+                }
             }
         }
         None
@@ -441,23 +642,29 @@ mod tests {
             tenants: vec![
                 TenantConfig {
                     id: 1,
-                    url: "https://scim.example.com".to_string(),
+                    path: "https://scim.example.com".to_string(),
+                    host: None,
+                    host_resolution: None,
                     auth: AuthConfig {
                         auth_type: "bearer".to_string(),
                         token: Some("example_token_123".to_string()),
                         basic: None,
                     },
-                    host_resolution: None,
+                    override_base_url: None,
+                    custom_endpoints: vec![],
                 },
                 TenantConfig {
                     id: 2,
-                    url: "https://acme.yourcompany.com/scim".to_string(),
+                    path: "https://acme.yourcompany.com/scim".to_string(),
+                    host: None,
+                    host_resolution: None,
                     auth: AuthConfig {
                         auth_type: "bearer".to_string(),
                         token: Some("acme_scim_token_456".to_string()),
                         basic: None,
                     },
-                    host_resolution: None,
+                    override_base_url: None,
+                    custom_endpoints: vec![],
                 },
             ],
         };
@@ -481,7 +688,7 @@ backend:
 
 tenants:
   - id: 1
-    url: "https://test.example.com"
+    path: "https://test.example.com"
     auth:
       type: "bearer"
       token: "${TEST_TOKEN:-secret_token_123}"
@@ -503,7 +710,7 @@ tenants:
         assert_eq!(db_config.db_type, "postgresql");
         assert_eq!(db_config.url, "postgres://test:pass@localhost/scim");
         assert_eq!(config.tenants.len(), 1);
-        assert_eq!(config.tenants[0].url, "https://test.example.com");
+        assert_eq!(config.tenants[0].path, "https://test.example.com");
         assert_eq!(config.tenants[0].auth.auth_type, "bearer");
         assert_eq!(
             config.tenants[0].auth.token,
@@ -533,7 +740,9 @@ tenants:
             },
             tenants: vec![TenantConfig {
                 id: 3,
-                url: "https://basic.example.com".to_string(),
+                path: "https://basic.example.com".to_string(),
+                host: None,
+                host_resolution: None,
                 auth: AuthConfig {
                     auth_type: "basic".to_string(),
                     token: None,
@@ -542,7 +751,8 @@ tenants:
                         password: "testpass".to_string(),
                     }),
                 },
-                host_resolution: None,
+                override_base_url: None,
+                custom_endpoints: vec![],
             }],
         };
 
@@ -581,12 +791,13 @@ tenants:
         assert_eq!(config.tenants.len(), 1);
         let tenant = &config.tenants[0];
         assert_eq!(tenant.id, 1);
-        assert_eq!(tenant.url, "/scim/v2");
+        assert_eq!(tenant.path, "/scim/v2");
         assert_eq!(tenant.auth.auth_type, "unauthenticated");
         assert!(tenant.auth.token.is_none());
         assert!(tenant.auth.basic.is_none());
 
         // Check host resolution settings (should be None for zero-config mode)
+        assert!(tenant.host.is_none());
         assert!(tenant.host_resolution.is_none());
     }
 
@@ -644,7 +855,7 @@ tenants: []
     }
 
     #[test]
-    fn test_relative_url_with_host_resolution() {
+    fn test_relative_path_with_host() {
         let config_content = r#"
 server:
   host: "127.0.0.1"
@@ -658,7 +869,8 @@ backend:
 
 tenants:
   - id: 1
-    url: "/scim/tenant1"
+    path: "/scim/tenant1"
+    host: "example.com"
     host_resolution:
       type: "host"
     auth:
@@ -666,13 +878,14 @@ tenants:
       token: "test_token_123"
 "#;
 
-        let temp_file = "/tmp/relative_url_config.yaml";
+        let temp_file = "/tmp/relative_path_config.yaml";
         std::fs::write(temp_file, config_content).unwrap();
 
         let config = AppConfig::load_from_file(temp_file).unwrap();
 
         assert_eq!(config.tenants.len(), 1);
-        assert_eq!(config.tenants[0].url, "/scim/tenant1");
+        assert_eq!(config.tenants[0].path, "/scim/tenant1");
+        assert_eq!(config.tenants[0].host, Some("example.com".to_string()));
         assert!(config.tenants[0].host_resolution.is_some());
 
         let host_resolution = config.tenants[0].host_resolution.as_ref().unwrap();
@@ -693,7 +906,7 @@ tenants:
         assert!(resolved.is_some());
 
         let resolved_url = resolved.unwrap();
-        assert_eq!(resolved_url.scheme, "https");
+        assert_eq!(resolved_url.scheme, "http"); // Host mode uses HTTP for development/testing
         assert_eq!(resolved_url.host, "example.com");
         assert_eq!(resolved_url.path, "/scim/tenant1/v2/Users");
 
@@ -717,16 +930,19 @@ tenants:
             },
             tenants: vec![TenantConfig {
                 id: 4,
-                url: "/api/scim".to_string(),
+                path: "/api/scim".to_string(),
+                host: Some("api.example.com".to_string()),
+                host_resolution: Some(HostResolutionConfig {
+                    resolution_type: HostResolutionType::Forwarded,
+                    trusted_proxies: Some(vec!["192.168.1.100".to_string()]),
+                }),
                 auth: AuthConfig {
                     auth_type: "bearer".to_string(),
                     token: Some("forwarded_token".to_string()),
                     basic: None,
                 },
-                host_resolution: Some(HostResolutionConfig {
-                    resolution_type: HostResolutionType::Forwarded,
-                    trusted_proxies: Some(vec!["192.168.1.100".to_string()]),
-                }),
+                override_base_url: None,
+                custom_endpoints: vec![],
             }],
         };
 
@@ -742,7 +958,7 @@ tenants:
 
         let (tenant, resolved_url) = config.find_tenant_by_request(&request_info).unwrap();
 
-        assert_eq!(tenant.url, "/api/scim");
+        assert_eq!(tenant.path, "/api/scim");
         assert_eq!(resolved_url.scheme, "https");
         assert_eq!(resolved_url.host, "api.example.com");
         assert_eq!(resolved_url.port, Some(443));
@@ -766,7 +982,12 @@ tenants:
             },
             tenants: vec![TenantConfig {
                 id: 5,
-                url: "/scim".to_string(),
+                path: "/scim".to_string(),
+                host: Some("secure.example.com".to_string()),
+                host_resolution: Some(HostResolutionConfig {
+                    resolution_type: HostResolutionType::XForwarded,
+                    trusted_proxies: Some(vec!["172.16.0.0/12".to_string()]),
+                }),
                 auth: AuthConfig {
                     auth_type: "basic".to_string(),
                     token: None,
@@ -775,10 +996,8 @@ tenants:
                         password: "xfwd_pass".to_string(),
                     }),
                 },
-                host_resolution: Some(HostResolutionConfig {
-                    resolution_type: HostResolutionType::XForwarded,
-                    trusted_proxies: Some(vec!["172.16.0.0/12".to_string()]),
-                }),
+                override_base_url: None,
+                custom_endpoints: vec![],
             }],
         };
 
@@ -794,10 +1013,221 @@ tenants:
 
         let (tenant, resolved_url) = config.find_tenant_by_request(&request_info).unwrap();
 
-        assert_eq!(tenant.url, "/scim");
+        assert_eq!(tenant.path, "/scim");
         assert_eq!(resolved_url.scheme, "https");
         assert_eq!(resolved_url.host, "secure.example.com");
         assert_eq!(resolved_url.port, Some(443));
         assert_eq!(resolved_url.path, "/scim/v2/Groups");
+    }
+
+    #[test]
+    fn test_new_config_design_functionality() {
+        // Test the new config.yaml design with path field and optional host/host_resolution
+        let config_content = r#"
+server:
+  host: "127.0.0.1"
+  port: 3000
+
+backend:
+  type: "database"
+  database:
+    type: "sqlite"
+    url: ":memory:"
+
+tenants:
+  # Path-only tenant (no host requirements) 
+  - id: 1
+    path: "/scim/v2"
+    auth:
+      type: "unauthenticated"
+
+  # Host-specific tenant with default host resolution (Host header)
+  - id: 2
+    path: "/api/scim"
+    host: "api.example.com"
+    auth:
+      type: "bearer"
+      token: "secret123"
+"#;
+
+        let temp_file = "/tmp/new_config_test.yaml";
+        std::fs::write(temp_file, config_content).unwrap();
+
+        let config = AppConfig::load_from_file(temp_file).unwrap();
+
+        // Verify tenant structure
+        assert_eq!(config.tenants.len(), 2);
+
+        // Test tenant 1: path-only matching
+        let tenant1 = &config.tenants[0];
+        assert_eq!(tenant1.path, "/scim/v2");
+        assert!(tenant1.host.is_none());
+        assert!(tenant1.host_resolution.is_none());
+
+        // Test tenant 2: host with default resolution
+        let tenant2 = &config.tenants[1];
+        assert_eq!(tenant2.path, "/api/scim");
+        assert_eq!(tenant2.host, Some("api.example.com".to_string()));
+        assert!(tenant2.host_resolution.is_none()); // Default resolution
+
+        // Test request matching scenarios
+        
+        // Scenario 1: Path-only tenant (should match any host)
+        let request_info1 = RequestInfo {
+            path: "/scim/v2/Users",
+            host_header: Some("any.host.com"),
+            forwarded_header: None,
+            x_forwarded_proto: None,
+            x_forwarded_host: None,
+            x_forwarded_port: None,
+            client_ip: None,
+        };
+        
+        let (matched_tenant, _) = config.find_tenant_by_request(&request_info1).unwrap();
+        assert_eq!(matched_tenant.id, 1);
+
+        // Scenario 2: Host-specific tenant with matching host
+        let request_info2 = RequestInfo {
+            path: "/api/scim/Users",
+            host_header: Some("api.example.com"),
+            forwarded_header: None,
+            x_forwarded_proto: None,
+            x_forwarded_host: None,
+            x_forwarded_port: None,
+            client_ip: None,
+        };
+        
+        let (matched_tenant, _) = config.find_tenant_by_request(&request_info2).unwrap();
+        assert_eq!(matched_tenant.id, 2);
+
+        // Scenario 3: Host-specific tenant with non-matching host (should not match)
+        let request_info3 = RequestInfo {
+            path: "/api/scim/Users",
+            host_header: Some("wrong.host.com"),
+            forwarded_header: None,
+            x_forwarded_proto: None,
+            x_forwarded_host: None,
+            x_forwarded_port: None,
+            client_ip: None,
+        };
+        
+        let result3 = config.find_tenant_by_request(&request_info3);
+        assert!(result3.is_none(), "Should not match tenant with wrong host");
+
+        // Clean up
+        std::fs::remove_file(temp_file).unwrap();
+    }
+
+    #[test]
+    fn test_build_base_url_functionality() {
+        // Test the new build_base_url method with different configurations
+        
+        // Test case 1: override_base_url is set (forced override)
+        let tenant_with_override = TenantConfig {
+            id: 1,
+            path: "/scim/v2".to_string(),
+            host: None,
+            host_resolution: None,
+            auth: AuthConfig {
+                auth_type: "unauthenticated".to_string(),
+                token: None,
+                basic: None,
+            },
+            override_base_url: Some("https://custom.example.com".to_string()),
+            custom_endpoints: vec![],
+        };
+
+        let request_info = RequestInfo {
+            path: "/scim/v2/Users",
+            host_header: Some("localhost:3000"),
+            forwarded_header: None,
+            x_forwarded_proto: None,
+            x_forwarded_host: None,
+            x_forwarded_port: None,
+            client_ip: None,
+        };
+
+        let result = tenant_with_override.build_base_url(&request_info);
+        assert_eq!(result, "https://custom.example.com/scim/v2");
+
+        // Test case 2: No override_base_url, path-only tenant (auto-constructed)
+        let tenant_path_only = TenantConfig {
+            id: 2,
+            path: "/api/scim".to_string(),
+            host: None,
+            host_resolution: None,
+            auth: AuthConfig {
+                auth_type: "bearer".to_string(),
+                token: Some("token123".to_string()),
+                basic: None,
+            },
+            override_base_url: None,
+            custom_endpoints: vec![],
+        };
+
+        let result = tenant_path_only.build_base_url(&request_info);
+        assert_eq!(result, "http://localhost:3000/api/scim");
+
+        // Test case 3: No override_base_url, host-specific tenant with default resolution
+        let tenant_with_host = TenantConfig {
+            id: 3,
+            path: "/tenant/scim".to_string(),
+            host: Some("tenant.example.com".to_string()),
+            host_resolution: None, // Default to Host header resolution
+            auth: AuthConfig {
+                auth_type: "basic".to_string(),
+                token: None,
+                basic: Some(BasicAuthConfig {
+                    username: "admin".to_string(),
+                    password: "pass".to_string(),
+                }),
+            },
+            override_base_url: None,
+            custom_endpoints: vec![],
+        };
+
+        let request_info_with_matching_host = RequestInfo {
+            path: "/tenant/scim/Users",
+            host_header: Some("tenant.example.com"),
+            forwarded_header: None,
+            x_forwarded_proto: None,
+            x_forwarded_host: None,
+            x_forwarded_port: None,
+            client_ip: None,
+        };
+
+        let result = tenant_with_host.build_base_url(&request_info_with_matching_host);
+        assert_eq!(result, "http://tenant.example.com/tenant/scim");
+
+        // Test case 4: No override_base_url, host-specific tenant with forwarded resolution
+        let tenant_with_forwarded = TenantConfig {
+            id: 4,
+            path: "/secure/scim".to_string(),
+            host: Some("secure.example.com".to_string()),
+            host_resolution: Some(HostResolutionConfig {
+                resolution_type: HostResolutionType::Forwarded,
+                trusted_proxies: None,
+            }),
+            auth: AuthConfig {
+                auth_type: "bearer".to_string(),
+                token: Some("secure_token".to_string()),
+                basic: None,
+            },
+            override_base_url: None,
+            custom_endpoints: vec![],
+        };
+
+        let request_info_forwarded = RequestInfo {
+            path: "/secure/scim/Groups",
+            host_header: Some("localhost:3000"),
+            forwarded_header: Some("for=192.0.2.60;proto=https;host=secure.example.com:443"),
+            x_forwarded_proto: None,
+            x_forwarded_host: None,
+            x_forwarded_port: None,
+            client_ip: None,
+        };
+
+        let result = tenant_with_forwarded.build_base_url(&request_info_forwarded);
+        assert_eq!(result, "https://secure.example.com/secure/scim");
     }
 }

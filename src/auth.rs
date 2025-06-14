@@ -8,14 +8,14 @@ use axum::{
 use serde_json::json;
 use std::sync::Arc;
 
-use crate::config::{AppConfig, RequestInfo, TenantConfig};
+use crate::config::{AppConfig, AuthConfig, RequestInfo, TenantConfig};
 
 /// Tenant information extracted from request
 #[derive(Debug, Clone)]
 pub struct TenantInfo {
     pub tenant_id: u32,
     pub tenant_config: TenantConfig,
-    pub base_url: String, // Resolved absolute base URL for this tenant
+    pub base_path: String, // Resolved absolute base URL for this tenant
 }
 
 /// Authentication middleware for SCIM endpoints
@@ -63,6 +63,7 @@ fn resolve_tenant_and_authenticate(
     uri: &Uri,
     headers: &HeaderMap,
 ) -> Result<TenantInfo, StatusCode> {
+    let path = uri.path();
     let tenant_id = resolve_tenant_id_from_request(app_config, uri, headers)?;
 
     // Find the tenant configuration
@@ -76,8 +77,17 @@ fn resolve_tenant_and_authenticate(
     // Extract Authorization header
     let auth_header = headers.get("authorization").and_then(|h| h.to_str().ok());
 
-    // Validate authentication for this tenant
-    validate_tenant_authentication(&tenant, auth_header)?;
+    // Check if this is a custom endpoint with specific auth config
+    let auth_config = if let Some(custom_endpoint) = tenant.custom_endpoints.iter().find(|ep| ep.path == path) {
+        // Use custom endpoint's auth config if available, otherwise tenant's auth config
+        custom_endpoint.effective_auth_config(&tenant.auth)
+    } else {
+        // Regular SCIM endpoint - use tenant's auth config
+        &tenant.auth
+    };
+
+    // Validate authentication using the effective auth config
+    validate_authentication(auth_config, auth_header)?;
 
     // Resolve the absolute base URL for this tenant
     let base_url = resolve_tenant_base_url(app_config, &tenant, uri, headers);
@@ -85,7 +95,7 @@ fn resolve_tenant_and_authenticate(
     Ok(TenantInfo {
         tenant_id,
         tenant_config: tenant,
-        base_url,
+        base_path: base_url,
     })
 }
 
@@ -97,7 +107,7 @@ fn resolve_tenant_id_from_request(
 ) -> Result<u32, StatusCode> {
     let path = uri.path();
 
-    // Create RequestInfo from headers for host resolution
+    // Create RequestInfo from headers
     let request_info = RequestInfo {
         path,
         host_header: headers.get("host").and_then(|h| h.to_str().ok()),
@@ -114,46 +124,20 @@ fn resolve_tenant_id_from_request(
         client_ip: None, // For now, we don't need the client IP for tenant resolution
     };
 
-    // First try to use host resolution for tenants that support it
+    // Use the unified find_tenant_by_request method that handles both SCIM and custom endpoints
     if let Some((tenant, _resolved_url)) = app_config.find_tenant_by_request(&request_info) {
         return Ok(tenant.id);
-    }
-
-    // Fallback to simple path matching for tenants without host resolution
-    for tenant in &app_config.tenants {
-        // Skip tenants with host resolution - they were handled above
-        if tenant.host_resolution.is_some() {
-            continue;
-        }
-
-        // Extract expected base path from tenant URL
-        let base_path = if tenant.url.starts_with("http://") || tenant.url.starts_with("https://") {
-            // Extract path from full URL
-            if let Ok(url) = url::Url::parse(&tenant.url) {
-                url.path().trim_end_matches('/').to_string()
-            } else {
-                "/scim".to_string() // fallback
-            }
-        } else {
-            // Already a path
-            tenant.url.trim_end_matches('/').to_string()
-        };
-
-        // Check if the request path starts with this tenant's base path
-        if path.starts_with(&base_path) {
-            return Ok(tenant.id);
-        }
     }
 
     Err(StatusCode::NOT_FOUND)
 }
 
-/// Helper function to validate authentication for a tenant
-fn validate_tenant_authentication(
-    tenant: &TenantConfig,
+/// Helper function to validate authentication using auth config
+fn validate_authentication(
+    auth_config: &AuthConfig,
     auth_header: Option<&str>,
 ) -> Result<(), StatusCode> {
-    match tenant.auth.auth_type.as_str() {
+    match auth_config.auth_type.as_str() {
         "unauthenticated" => {
             // No authentication required - always allow
             Ok(())
@@ -168,7 +152,28 @@ fn validate_tenant_authentication(
 
             let provided_token = &auth_header[7..]; // Remove "Bearer " prefix
 
-            match &tenant.auth.token {
+            match &auth_config.token {
+                Some(expected_token) => {
+                    if provided_token == expected_token {
+                        Ok(())
+                    } else {
+                        Err(StatusCode::UNAUTHORIZED)
+                    }
+                }
+                None => Err(StatusCode::UNAUTHORIZED), // No token configured
+            }
+        }
+        "token" => {
+            // Validate token authentication
+            let auth_header = auth_header.ok_or(StatusCode::UNAUTHORIZED)?;
+
+            if !auth_header.starts_with("token ") {
+                return Err(StatusCode::UNAUTHORIZED);
+            }
+
+            let provided_token = &auth_header[6..]; // Remove "token " prefix
+
+            match &auth_config.token {
                 Some(expected_token) => {
                     if provided_token == expected_token {
                         Ok(())
@@ -205,7 +210,7 @@ fn validate_tenant_authentication(
 
             let (provided_username, provided_password) = (parts[0], parts[1]);
 
-            match &tenant.auth.basic {
+            match &auth_config.basic {
                 Some(basic_config) => {
                     if provided_username == basic_config.username
                         && provided_password == basic_config.password
@@ -227,8 +232,8 @@ fn validate_tenant_authentication(
 
 /// Helper function to resolve the absolute base URL for a tenant
 fn resolve_tenant_base_url(
-    app_config: &AppConfig,
-    _tenant: &TenantConfig,
+    _app_config: &AppConfig,
+    tenant: &TenantConfig,
     uri: &Uri,
     headers: &HeaderMap,
 ) -> String {
@@ -249,27 +254,6 @@ fn resolve_tenant_base_url(
         client_ip: None,
     };
 
-    // Try to resolve using host resolution if configured
-    if let Some((_matched_tenant, resolved_url)) = app_config.find_tenant_by_request(&request_info)
-    {
-        return format!(
-            "{}://{}{}",
-            resolved_url.scheme, resolved_url.host, resolved_url.path
-        );
-    }
-
-    // Fallback: use Host header or default for simple path-based tenants
-    let scheme = headers
-        .get("x-forwarded-proto")
-        .and_then(|h| h.to_str().ok())
-        .unwrap_or("http");
-
-    let host = headers
-        .get("host")
-        .and_then(|h| h.to_str().ok())
-        .unwrap_or("localhost:3000");
-
-    // Return just the scheme and host (without tenant path)
-    // The fix functions will handle adding the correct path
-    format!("{}://{}", scheme, host)
+    // Use the new build_base_url method that handles override_base_url and auto-construction
+    tenant.build_base_url(&request_info)
 }

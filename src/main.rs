@@ -70,7 +70,7 @@ async fn setup_backend(
                 )
             }
         },
-        connection_url: database_config.url.clone(),
+        connection_path: database_config.url.clone(),
         max_connections: database_config.max_connections,
         connection_timeout: 30,
         options: std::collections::HashMap::new(),
@@ -144,17 +144,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let app_config_arc = Arc::new(app_config.clone());
 
     // Build our application with multi-tenant routes
-    // For tenants with host_resolution, we need to setup dynamic routing
-    // For tenants with simple URL paths, we can use static routing
-
     let mut app = Router::new();
-    let mut has_host_resolution_tenants = false;
 
-    // Check if any tenant uses host_resolution
+    // Add custom endpoints first (before SCIM routes)
+    // Custom endpoints are routed as absolute paths, not under tenant URLs
     for tenant in &app_config.tenants {
-        if tenant.host_resolution.is_some() {
-            has_host_resolution_tenants = true;
-            break;
+        for endpoint in &tenant.custom_endpoints {
+            println!(
+                "🔗 Setting up custom endpoint for tenant {} at {}",
+                tenant.id, endpoint.path
+            );
+            app = app.route(
+                &endpoint.path,
+                get(resource::custom::handle_custom_endpoint),
+            );
         }
     }
 
@@ -162,29 +165,29 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // For now, let's use a unified approach that supports both static and dynamic routing
 
     for tenant in &app_config.tenants {
-        // For tenants with host_resolution, we'll handle them dynamically in the handlers
+        // For tenants with route, we'll handle them dynamically in the handlers
         // For simple URL tenants, we'll use static routing as before
 
-        let base_path = if tenant.url.starts_with("http://") || tenant.url.starts_with("https://") {
+        let base_path = if tenant.path.starts_with("http://") || tenant.path.starts_with("https://") {
             // Extract path from full URL
-            if let Ok(url) = url::Url::parse(&tenant.url) {
+            if let Ok(url) = url::Url::parse(&tenant.path) {
                 url.path().trim_end_matches('/').to_string()
             } else {
                 "/scim".to_string() // fallback
             }
         } else {
             // Already a path
-            tenant.url.trim_end_matches('/').to_string()
+            tenant.path.trim_end_matches('/').to_string()
         };
 
-        if tenant.host_resolution.is_some() {
+        if tenant.host.is_some() {
             println!(
-                "🔧 Setting up dynamic routing for tenant {} with host resolution",
-                tenant.id
+                "🔧 Setting up host-based routing for tenant {} (host: {})",
+                tenant.id, tenant.host.as_ref().unwrap_or(&"unspecified".to_string())
             );
         } else {
             println!(
-                "🔗 Setting up static routes for tenant {} at {}",
+                "🔗 Setting up path-only routes for tenant {} at {}",
                 tenant.id, base_path
             );
         }
@@ -281,14 +284,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("📍 Listening on {}", addr);
     println!("🏢 Configured tenants:");
     for (index, tenant) in app_config.get_all_tenants().iter().enumerate() {
-        println!("  - Tenant {} (URL: {}):", index + 1, tenant.url);
+        println!("  - Tenant {} (Path: {}):", index + 1, tenant.path);
 
         // Display authentication info based on type
         match tenant.auth.auth_type.as_str() {
             "bearer" => {
                 if let Some(token) = &tenant.auth.token {
                     println!(
-                        "    🔒 Authentication: OAuth 2.0 Bearer Token (***{})",
+                        "    🔒 Authentication: Bearer Token (***{})",
+                        &token[token.len().saturating_sub(3)..]
+                    );
+                }
+            }
+            "token" => {
+                if let Some(token) = &tenant.auth.token {
+                    println!(
+                        "    🔒 Authentication: Token (***{})",
                         &token[token.len().saturating_sub(3)..]
                     );
                 }
@@ -314,27 +325,68 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         println!(
             "    📖 ServiceProviderConfig: {}/ServiceProviderConfig",
-            tenant.url
+            tenant.path
         );
-        println!("    📋 Schemas: {}/Schemas", tenant.url);
-        println!("    🏷️  ResourceTypes: {}/ResourceTypes", tenant.url);
-        println!("    👥 Users: {}/Users", tenant.url);
-        println!("    👥 Groups: {}/Groups", tenant.url);
+        println!("    📋 Schemas: {}/Schemas", tenant.path);
+        println!("    🏷️ ResourceTypes: {}/ResourceTypes", tenant.path);
+        println!("    👥 Users: {}/Users", tenant.path);
+        println!("    👥 Groups: {}/Groups", tenant.path);
+        
+        // Display custom endpoints if any
+        if !tenant.custom_endpoints.is_empty() {
+            println!("    🎯 Custom endpoints:");
+            for endpoint in &tenant.custom_endpoints {
+                println!("      - {} ({})", endpoint.path, endpoint.content_type);
+            }
+        }
     }
 
     let listener = TcpListener::bind(&addr).await?;
     
-    // Enable graceful shutdown on Ctrl+C
-    axum::serve(listener, app)
-        .with_graceful_shutdown(shutdown_signal())
-        .await?;
-
+    // Enable graceful shutdown with proper cleanup
+    let shutdown_future = shutdown_signal();
+    let server_future = axum::serve(listener, app).with_graceful_shutdown(shutdown_future);
+    
+    // Run server and handle shutdown
+    let result = server_future.await;
+    
+    // Perform cleanup
+    println!("🧹 Performing cleanup...");
+    
+    // Note: Backend cleanup would be implemented here if needed
+    // Currently SQLite/PostgreSQL connections are automatically cleaned up
+    // when the connection pools are dropped
+    
+    println!("✅ Cleanup completed, server stopped");
+    
+    result?;
     Ok(())
 }
 
 async fn shutdown_signal() {
-    tokio::signal::ctrl_c()
-        .await
-        .expect("failed to install Ctrl+C handler");
-    println!("\n📛 Shutdown signal received, stopping server...");
+    let ctrl_c = async {
+        tokio::signal::ctrl_c()
+            .await
+            .expect("failed to install Ctrl+C handler");
+    };
+
+    #[cfg(unix)]
+    let terminate = async {
+        tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+            .expect("failed to install signal handler")
+            .recv()
+            .await;
+    };
+
+    #[cfg(not(unix))]
+    let terminate = std::future::pending::<()>();
+
+    tokio::select! {
+        _ = ctrl_c => {
+            println!("\n📛 Received Ctrl+C, initiating graceful shutdown...");
+        },
+        _ = terminate => {
+            println!("\n📛 Received SIGTERM, initiating graceful shutdown...");
+        },
+    }
 }

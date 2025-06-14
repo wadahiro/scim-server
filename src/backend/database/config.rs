@@ -15,7 +15,7 @@ pub struct DatabaseBackendConfig {
     /// Examples:
     /// - PostgreSQL: "postgresql://user:pass@localhost/dbname"
     /// - SQLite: "sqlite:./scim.db" or "sqlite::memory:"
-    pub connection_url: String,
+    pub connection_path: String,
 
     /// Maximum number of connections in the pool
     pub max_connections: u32,
@@ -31,10 +31,10 @@ pub struct DatabaseBackendConfig {
 
 impl DatabaseBackendConfig {
     /// Create a new storage configuration
-    pub fn new(database_type: DatabaseType, connection_url: String) -> Self {
+    pub fn new(database_type: DatabaseType, connection_path: String) -> Self {
         Self {
             database_type,
-            connection_url,
+            connection_path,
             max_connections: 10,
             connection_timeout: 30,
             options: HashMap::new(),
@@ -42,13 +42,13 @@ impl DatabaseBackendConfig {
     }
 
     /// Create a PostgreSQL configuration
-    pub fn postgres(connection_url: String) -> Self {
-        Self::new(DatabaseType::PostgreSQL, connection_url)
+    pub fn postgres(connection_path: String) -> Self {
+        Self::new(DatabaseType::PostgreSQL, connection_path)
     }
 
     /// Create a SQLite configuration
-    pub fn sqlite(connection_url: String) -> Self {
-        Self::new(DatabaseType::SQLite, connection_url)
+    pub fn sqlite(connection_path: String) -> Self {
+        Self::new(DatabaseType::SQLite, connection_path)
     }
 
     /// Create an in-memory SQLite configuration for testing
@@ -81,7 +81,7 @@ impl DatabaseBackendConfig {
 
     /// Check if this is an in-memory database
     pub fn is_memory_database(&self) -> bool {
-        self.connection_url == ":memory:"
+        self.connection_path == ":memory:"
     }
 
     /// Get the table name for a specific resource and tenant
@@ -93,7 +93,7 @@ impl DatabaseBackendConfig {
 
     /// Validate the configuration
     pub fn validate(&self) -> Result<(), String> {
-        if self.connection_url.is_empty() {
+        if self.connection_path.is_empty() {
             return Err("Connection URL cannot be empty".to_string());
         }
 
@@ -103,17 +103,17 @@ impl DatabaseBackendConfig {
 
         match self.database_type {
             DatabaseType::PostgreSQL => {
-                if !self.connection_url.starts_with("postgres://")
-                    && !self.connection_url.starts_with("postgresql://")
+                if !self.connection_path.starts_with("postgres://")
+                    && !self.connection_path.starts_with("postgresql://")
                 {
                     return Err("PostgreSQL connection URL must start with 'postgres://' or 'postgresql://'".to_string());
                 }
             }
             DatabaseType::SQLite => {
-                if !self.connection_url.starts_with("sqlite:")
-                    && self.connection_url != ":memory:"
-                    && !self.connection_url.ends_with(".db")
-                    && !self.connection_url.ends_with(".sqlite")
+                if !self.connection_path.starts_with("sqlite:")
+                    && self.connection_path != ":memory:"
+                    && !self.connection_path.ends_with(".db")
+                    && !self.connection_path.ends_with(".sqlite")
                 {
                     return Err("SQLite connection URL must start with 'sqlite:', be ':memory:', or end with '.db' or '.sqlite'".to_string());
                 }
@@ -175,10 +175,10 @@ mod tests {
         let mut config = DatabaseBackendConfig::postgres("".to_string());
         assert!(config.validate().is_err());
 
-        config.connection_url = "invalid://url".to_string();
+        config.connection_path = "invalid://url".to_string();
         assert!(config.validate().is_err());
 
-        config.connection_url = "postgresql://valid".to_string();
+        config.connection_path = "postgresql://valid".to_string();
         assert!(config.validate().is_ok());
     }
 }

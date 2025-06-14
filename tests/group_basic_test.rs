@@ -328,7 +328,7 @@ async fn test_user_groups_attribute() {
     );
 
     // Verify $ref contains full URL with numeric tenant ID 3 (which "scim" resolves to)
-    let expected_group_ref = format!("http://localhost:3000/scim/v2/Groups/{}", group_id);
+    let expected_group_ref = format!("http://localhost/scim/v2/Groups/{}", group_id);
     assert_eq!(user_with_groups["groups"][0]["$ref"], expected_group_ref);
 }
 
@@ -450,6 +450,6 @@ async fn test_group_to_group_membership() {
     assert_eq!(patched_parent["members"][0]["display"], "Child Group");
 
     // Verify the $ref is correctly set for Group type with full URL with numeric tenant ID 3
-    let expected_ref = format!("http://localhost:3000/scim/v2/Groups/{}", child_group_id);
+    let expected_ref = format!("http://localhost/scim/v2/Groups/{}", child_group_id);
     assert_eq!(patched_parent["members"][0]["$ref"], expected_ref);
 }

@@ -80,21 +80,11 @@ pub async fn service_provider_config(
     let _tenant_id = tenant_info.tenant_id;
 
     // Get the correct path from tenant configuration
-    let tenant_path = if tenant_info.tenant_config.url.starts_with("http://")
-        || tenant_info.tenant_config.url.starts_with("https://")
-    {
-        if let Ok(url) = url::Url::parse(&tenant_info.tenant_config.url) {
-            url.path().trim_end_matches('/').to_string()
-        } else {
-            "/scim".to_string()
-        }
-    } else {
-        tenant_info
-            .tenant_config
-            .url
-            .trim_end_matches('/')
-            .to_string()
-    };
+    let tenant_path = tenant_info
+        .tenant_config
+        .path
+        .trim_end_matches('/')
+        .to_string();
 
     // Create auth schemes based on the specific tenant
     let auth_schemes = create_authentication_schemes_for_tenant(&tenant_info);
@@ -119,7 +109,7 @@ pub async fn service_provider_config(
             last_modified: None,
             location: Some(format!(
                 "{}{}/ServiceProviderConfig",
-                tenant_info.base_url, tenant_path
+                tenant_info.base_path, tenant_path
             )),
             version: None,
         }),

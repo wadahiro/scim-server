@@ -112,7 +112,7 @@ impl Backend for SqliteBackend {
         let pool = SqlitePoolOptions::new()
             .max_connections(config.max_connections)
             .acquire_timeout(Duration::from_secs(config.connection_timeout))
-            .connect(&config.connection_url)
+            .connect(&config.connection_path)
             .await
             .map_err(|e| AppError::Database(format!("Failed to connect to SQLite: {}", e)))?;
 

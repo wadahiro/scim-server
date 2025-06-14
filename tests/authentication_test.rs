@@ -29,13 +29,16 @@ async fn test_unauthenticated_access() {
         },
         tenants: vec![TenantConfig {
             id: 1,
-            url: "/scim/v2".to_string(),
+            path: "/scim/v2".to_string(),
             auth: AuthConfig {
                 auth_type: "unauthenticated".to_string(),
                 token: None,
                 basic: None,
             },
+            host: None,
             host_resolution: None,
+            override_base_url: None,
+            custom_endpoints: vec![],
         }],
     };
 
@@ -73,13 +76,16 @@ async fn test_bearer_token_authentication_success() {
         },
         tenants: vec![TenantConfig {
             id: 1,
-            url: "/scim/v2".to_string(),
+            path: "/scim/v2".to_string(),
             auth: AuthConfig {
                 auth_type: "bearer".to_string(),
                 token: Some("test-secret-token-123".to_string()),
                 basic: None,
             },
+            host: None,
             host_resolution: None,
+            override_base_url: None,
+            custom_endpoints: vec![],
         }],
     };
 
@@ -118,13 +124,16 @@ async fn test_bearer_token_authentication_failure() {
         },
         tenants: vec![TenantConfig {
             id: 1,
-            url: "/scim/v2".to_string(),
+            path: "/scim/v2".to_string(),
             auth: AuthConfig {
                 auth_type: "bearer".to_string(),
                 token: Some("test-secret-token-123".to_string()),
                 basic: None,
             },
+            host: None,
             host_resolution: None,
+            override_base_url: None,
+            custom_endpoints: vec![],
         }],
     };
 
@@ -163,13 +172,16 @@ async fn test_bearer_token_missing_header() {
         },
         tenants: vec![TenantConfig {
             id: 1,
-            url: "/scim/v2".to_string(),
+            path: "/scim/v2".to_string(),
             auth: AuthConfig {
                 auth_type: "bearer".to_string(),
                 token: Some("test-secret-token-123".to_string()),
                 basic: None,
             },
+            host: None,
             host_resolution: None,
+            override_base_url: None,
+            custom_endpoints: vec![],
         }],
     };
 
@@ -207,7 +219,7 @@ async fn test_basic_authentication_success() {
         },
         tenants: vec![TenantConfig {
             id: 1,
-            url: "/scim/v2".to_string(),
+            path: "/scim/v2".to_string(),
             auth: AuthConfig {
                 auth_type: "basic".to_string(),
                 token: None,
@@ -216,7 +228,10 @@ async fn test_basic_authentication_success() {
                     password: "testpass".to_string(),
                 }),
             },
+            host: None,
             host_resolution: None,
+            override_base_url: None,
+            custom_endpoints: vec![],
         }],
     };
 
@@ -259,7 +274,7 @@ async fn test_basic_authentication_failure() {
         },
         tenants: vec![TenantConfig {
             id: 1,
-            url: "/scim/v2".to_string(),
+            path: "/scim/v2".to_string(),
             auth: AuthConfig {
                 auth_type: "basic".to_string(),
                 token: None,
@@ -268,7 +283,10 @@ async fn test_basic_authentication_failure() {
                     password: "testpass".to_string(),
                 }),
             },
+            host: None,
             host_resolution: None,
+            override_base_url: None,
+            custom_endpoints: vec![],
         }],
     };
 
@@ -312,17 +330,20 @@ async fn test_multi_tenant_authentication() {
         tenants: vec![
             TenantConfig {
                 id: 1,
-                url: "/tenant-a/scim/v2".to_string(),
+                path: "/tenant-a/scim/v2".to_string(),
                 auth: AuthConfig {
                     auth_type: "bearer".to_string(),
                     token: Some("tenant-a-token".to_string()),
                     basic: None,
                 },
-                host_resolution: None,
+                host: None,
+            host_resolution: None,
+            override_base_url: None,
+                custom_endpoints: vec![],
             },
             TenantConfig {
                 id: 2,
-                url: "/tenant-b/scim/v2".to_string(),
+                path: "/tenant-b/scim/v2".to_string(),
                 auth: AuthConfig {
                     auth_type: "basic".to_string(),
                     token: None,
@@ -331,7 +352,10 @@ async fn test_multi_tenant_authentication() {
                         password: "tenant-b-pass".to_string(),
                     }),
                 },
-                host_resolution: None,
+                host: None,
+            host_resolution: None,
+            override_base_url: None,
+                custom_endpoints: vec![],
             },
         ],
     };
@@ -388,13 +412,16 @@ async fn test_tenant_not_found() {
         },
         tenants: vec![TenantConfig {
             id: 1,
-            url: "/scim/v2".to_string(),
+            path: "/scim/v2".to_string(),
             auth: AuthConfig {
                 auth_type: "unauthenticated".to_string(),
                 token: None,
                 basic: None,
             },
+            host: None,
             host_resolution: None,
+            override_base_url: None,
+            custom_endpoints: vec![],
         }],
     };
 

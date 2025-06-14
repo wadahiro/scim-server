@@ -29,7 +29,7 @@ pub async fn initialize_tenant_schemas(config: &AppConfig) -> AppResult<()> {
                 )))
             }
         },
-        connection_url: database_config.url.clone(),
+        connection_path: database_config.url.clone(),
         max_connections: database_config.max_connections,
         connection_timeout: 30,
         options: std::collections::HashMap::new(),

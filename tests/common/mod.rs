@@ -8,6 +8,7 @@ use scim_server::backend::{BackendFactory, DatabaseType, ScimBackend};
 use scim_server::config::{
     AppConfig, AuthConfig, BackendConfig, DatabaseConfig, ServerConfig, TenantConfig,
 };
+use url::Url;
 use serde_json::json;
 use std::sync::Arc;
 #[cfg(test)]
@@ -31,7 +32,7 @@ pub struct TestDatabase {
 pub async fn setup_test_database() -> Result<Arc<dyn ScimBackend>, Box<dyn std::error::Error>> {
     let backend_config = DatabaseBackendConfig {
         database_type: DatabaseType::SQLite,
-        connection_url: ":memory:".to_string(),
+        connection_path: ":memory:".to_string(),
         max_connections: 1,
         connection_timeout: 30,
         options: std::collections::HashMap::new(),
@@ -67,7 +68,7 @@ pub async fn setup_postgres_test_database(
 
     let backend_config = DatabaseBackendConfig {
         database_type: DatabaseType::PostgreSQL,
-        connection_url: connection_string,
+        connection_path: connection_string,
         max_connections: 5,
         connection_timeout: 30,
         options: std::collections::HashMap::new(),
@@ -93,20 +94,30 @@ pub async fn setup_test_app(app_config: AppConfig) -> Result<Router, Box<dyn std
 
     // Build our application with multi-tenant routes based on tenant configuration
     let mut app = Router::new();
+    
+    // Add custom endpoints first (before SCIM routes)
+    for tenant in &app_config.tenants {
+        for endpoint in &tenant.custom_endpoints {
+            app = app.route(
+                &endpoint.path,
+                get(scim_server::resource::custom::handle_custom_endpoint),
+            );
+        }
+    }
 
     // Add routes for each tenant based on their configured URL path
     for tenant in &app_config.tenants {
-        // Extract path from tenant URL (remove protocol and host if present)
-        let base_path = if tenant.url.starts_with("http://") || tenant.url.starts_with("https://") {
+        // Extract path from tenant path (remove protocol and host if present)
+        let base_path = if tenant.path.starts_with("http://") || tenant.path.starts_with("https://") {
             // Extract path from full URL
-            if let Ok(url) = url::Url::parse(&tenant.url) {
+            if let Ok(url) = Url::parse(&tenant.path) {
                 url.path().trim_end_matches('/').to_string()
             } else {
                 "/scim".to_string() // fallback
             }
         } else {
             // Already a path
-            tenant.url.trim_end_matches('/').to_string()
+            tenant.path.trim_end_matches('/').to_string()
         };
 
         // ServiceProviderConfig routes
@@ -199,20 +210,30 @@ pub async fn setup_postgres_test_app(
 
     // Build our application with multi-tenant routes based on tenant configuration
     let mut app = Router::new();
+    
+    // Add custom endpoints first (before SCIM routes)
+    for tenant in &app_config.tenants {
+        for endpoint in &tenant.custom_endpoints {
+            app = app.route(
+                &endpoint.path,
+                get(scim_server::resource::custom::handle_custom_endpoint),
+            );
+        }
+    }
 
     // Add routes for each tenant based on their configured URL path
     for tenant in &app_config.tenants {
-        // Extract path from tenant URL (remove protocol and host if present)
-        let base_path = if tenant.url.starts_with("http://") || tenant.url.starts_with("https://") {
+        // Extract path from tenant path (remove protocol and host if present)
+        let base_path = if tenant.path.starts_with("http://") || tenant.path.starts_with("https://") {
             // Extract path from full URL
-            if let Ok(url) = url::Url::parse(&tenant.url) {
+            if let Ok(url) = Url::parse(&tenant.path) {
                 url.path().trim_end_matches('/').to_string()
             } else {
                 "/scim".to_string() // fallback
             }
         } else {
             // Already a path
-            tenant.url.trim_end_matches('/').to_string()
+            tenant.path.trim_end_matches('/').to_string()
         };
 
         // ServiceProviderConfig routes
@@ -349,33 +370,42 @@ pub fn create_test_app_config() -> AppConfig {
         tenants: vec![
             TenantConfig {
                 id: 1,
-                url: "/tenant-a/scim/v2".to_string(),
+                path: "/tenant-a/scim/v2".to_string(),
                 auth: AuthConfig {
                     auth_type: "unauthenticated".to_string(),
                     token: None,
                     basic: None,
                 },
+                host: None,
                 host_resolution: None,
+                override_base_url: None,
+                custom_endpoints: vec![],
             },
             TenantConfig {
                 id: 2,
-                url: "/tenant-b/scim/v2".to_string(),
+                path: "/tenant-b/scim/v2".to_string(),
                 auth: AuthConfig {
                     auth_type: "unauthenticated".to_string(),
                     token: None,
                     basic: None,
                 },
+                host: None,
                 host_resolution: None,
+                override_base_url: None,
+                custom_endpoints: vec![],
             },
             TenantConfig {
                 id: 3,
-                url: "/scim/v2".to_string(),
+                path: "/scim/v2".to_string(),
                 auth: AuthConfig {
                     auth_type: "unauthenticated".to_string(),
                     token: None,
                     basic: None,
                 },
+                host: None,
                 host_resolution: None,
+                override_base_url: None,
+                custom_endpoints: vec![],
             },
         ],
     }
@@ -383,6 +413,66 @@ pub fn create_test_app_config() -> AppConfig {
 
 /// Helper function to create a test user JSON payload
 #[allow(dead_code)]
+pub fn create_token_auth_config() -> AppConfig {
+    AppConfig {
+        server: ServerConfig {
+            host: "127.0.0.1".to_string(),
+            port: 3000,
+        },
+        backend: BackendConfig {
+            backend_type: "database".to_string(),
+            database: Some(DatabaseConfig {
+                db_type: "sqlite".to_string(),
+                url: ":memory:".to_string(),
+                max_connections: 10,
+            }),
+        },
+        tenants: vec![TenantConfig {
+            id: 1,
+            path: "/scim/v2".to_string(),
+            host: None,
+            host_resolution: None,
+            auth: AuthConfig {
+                auth_type: "token".to_string(),
+                token: Some("test-token-123".to_string()),
+                basic: None,
+            },
+            override_base_url: None,
+            custom_endpoints: vec![],
+        }],
+    }
+}
+
+pub fn create_bearer_auth_config() -> AppConfig {
+    AppConfig {
+        server: ServerConfig {
+            host: "127.0.0.1".to_string(),
+            port: 3000,
+        },
+        backend: BackendConfig {
+            backend_type: "database".to_string(),
+            database: Some(DatabaseConfig {
+                db_type: "sqlite".to_string(),
+                url: ":memory:".to_string(),
+                max_connections: 10,
+            }),
+        },
+        tenants: vec![TenantConfig {
+            id: 1,
+            path: "/scim/v2".to_string(),
+            host: None,
+            host_resolution: None,
+            auth: AuthConfig {
+                auth_type: "bearer".to_string(),
+                token: Some("test-token-123".to_string()),
+                basic: None,
+            },
+            override_base_url: None,
+            custom_endpoints: vec![],
+        }],
+    }
+}
+
 pub fn create_test_user_json(
     username: &str,
     given_name: &str,

@@ -72,8 +72,8 @@ cargo run -- -c config.yaml
 
 # Optional: Override default values with environment variables
 export SCIM_SERVER_TOKEN="your-bearer-token"
-export ACME_USER="admin"
-export ACME_PASSWORD="password"
+export API_USER="admin"
+export API_PASSWORD="password"
 export TENANT1_TOKEN="tenant1-bearer-token"
 # ... other variables as needed
 cargo run -- -c config.yaml
@@ -97,30 +97,40 @@ backend:
     url: "scim.db"
 
 tenants:
-  # Example Company - OAuth 2.0 Bearer Token
+  # Simple path-only tenant (matches any host) - OAuth 2.0 Bearer Token
   - id: 1
-    url: "https://scim.example.com"
+    path: "/scim/v2"
     auth:
       type: "bearer"
       token: "${SCIM_SERVER_TOKEN:-sample-bearer-token}"
 
-  # ACME Corporation - HTTP Basic Authentication
+  # Host-specific tenant with default Host header resolution
   - id: 2
-    url: "https://acme.yourcompany.com/scim"
+    path: "/api/scim"
+    host: "api.example.com"
     auth:
       type: "basic"
       basic:
-        username: "${ACME_USER:-admin}"
-        password: "${ACME_PASSWORD:-password}"
+        username: "${API_USER:-admin}"
+        password: "${API_PASSWORD:-password}"
 
-  # Tenant with Host header resolution
+  # Host-specific tenant with explicit Host header resolution
   - id: 10
-    url: "/scim/tenant1"
+    path: "/scim/tenant1"
+    host: "tenant1.company.com"
     host_resolution:
       type: "host"
     auth:
       type: "bearer"
       token: "${TENANT1_TOKEN:-tenant1-token}"
+
+  # Tenant with override base URL for public-facing responses
+  - id: 20
+    path: "/internal/scim"
+    override_base_url: "https://api.public.com"  # Forces response URLs
+    auth:
+      type: "bearer"
+      token: "${PUBLIC_API_TOKEN:-public-token}"
 ```
 
 ### Environment Variables
@@ -129,8 +139,8 @@ Environment variables are embedded in YAML using `${VAR_NAME:-default}` syntax:
 
 ```bash
 export SCIM_SERVER_TOKEN="your-bearer-token"
-export ACME_USER="admin"
-export ACME_PASSWORD="secret"
+export API_USER="admin"
+export API_PASSWORD="secret"
 export TENANT1_TOKEN="tenant1-bearer-token"
 
 cargo run
@@ -143,8 +153,8 @@ cargo run
 Each configured tenant gets dedicated SCIM endpoints using their configured URL path:
 
 ```
-# For tenant with url: "https://acme.company.com/scim/v2"
-# Routes registered at: /scim/v2/*
+# For tenant with path: "/scim/v2"
+# Routes available at: /scim/v2/*
 
 # Users
 GET    /scim/v2/Users              # List users
@@ -168,7 +178,7 @@ GET    /scim/v2/Schemas                # SCIM schemas
 GET    /scim/v2/ResourceTypes          # Resource types
 ```
 
-**Note**: The actual endpoint paths depend on your tenant configuration. If a tenant is configured with `url: "/my-custom-path"`, all endpoints will be available under `/my-custom-path/*`.
+**Note**: The actual endpoint paths depend on your tenant configuration. If a tenant is configured with `path: "/my-custom-path"`, all endpoints will be available under `/my-custom-path/*`.
 
 ### Query Parameters
 

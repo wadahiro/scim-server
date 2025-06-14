@@ -55,6 +55,9 @@ WORKDIR /data
 # Expose port
 EXPOSE 3000
 
+# Configure signal handling for proper Docker shutdown
+STOPSIGNAL SIGTERM
+
 # Set entrypoint
 ENTRYPOINT ["scim-server"]
 
