@@ -198,11 +198,12 @@ impl TenantConfig {
                     // Default to Host header resolution
                     self.resolve_from_host_header(request_info)
                 };
-                
+
                 if let Some(resolved_url) = resolved {
                     let port_suffix = if let Some(port) = resolved_url.port {
-                        if (resolved_url.scheme == "https" && port != 443) || 
-                           (resolved_url.scheme == "http" && port != 80) {
+                        if (resolved_url.scheme == "https" && port != 443)
+                            || (resolved_url.scheme == "http" && port != 80)
+                        {
                             format!(":{}", port)
                         } else {
                             String::new()
@@ -210,12 +211,10 @@ impl TenantConfig {
                     } else {
                         String::new()
                     };
-                    
-                    format!("{}://{}{}{}", 
-                        resolved_url.scheme, 
-                        resolved_url.host, 
-                        port_suffix,
-                        &self.path
+
+                    format!(
+                        "{}://{}{}{}",
+                        resolved_url.scheme, resolved_url.host, port_suffix, &self.path
                     )
                 } else {
                     // Fallback to http + host + path
@@ -245,11 +244,12 @@ impl TenantConfig {
                     // Default to Host header resolution
                     self.resolve_from_host_header(request_info)
                 };
-                
+
                 if let Some(resolved_url) = resolved {
                     let port_suffix = if let Some(port) = resolved_url.port {
-                        if (resolved_url.scheme == "https" && port != 443) || 
-                           (resolved_url.scheme == "http" && port != 80) {
+                        if (resolved_url.scheme == "https" && port != 443)
+                            || (resolved_url.scheme == "http" && port != 80)
+                        {
                             format!(":{}", port)
                         } else {
                             String::new()
@@ -257,11 +257,10 @@ impl TenantConfig {
                     } else {
                         String::new()
                     };
-                    
-                    format!("{}://{}{}", 
-                        resolved_url.scheme, 
-                        resolved_url.host, 
-                        port_suffix
+
+                    format!(
+                        "{}://{}{}",
+                        resolved_url.scheme, resolved_url.host, port_suffix
                     )
                 } else {
                     // Fallback to http + host
@@ -290,12 +289,12 @@ impl TenantConfig {
                 // Default to Host header resolution if host is specified but no resolution config
                 self.resolve_from_host_header(request_info)?
             };
-            
+
             // Check if the resolved host matches the expected host
             if &resolved.host != expected_host {
                 return None;
             }
-            
+
             return Some(resolved);
         } else {
             // No host config - path matching is sufficient
@@ -309,7 +308,10 @@ impl TenantConfig {
     }
 
     /// Check if this tenant has a custom endpoint matching the given path
-    pub fn matches_custom_endpoint(&self, request_info: &RequestInfo) -> Option<(&CustomEndpoint, ResolvedUrl)> {
+    pub fn matches_custom_endpoint(
+        &self,
+        request_info: &RequestInfo,
+    ) -> Option<(&CustomEndpoint, ResolvedUrl)> {
         for endpoint in &self.custom_endpoints {
             if endpoint.path == request_info.path {
                 // If this tenant has host config, verify the host matches
@@ -321,26 +323,32 @@ impl TenantConfig {
                         // Default to Host header resolution if host is specified but no resolution config
                         self.resolve_from_host_header(request_info)
                     };
-                    
+
                     if let Some(resolved) = resolved {
                         // Check if the resolved host matches the expected host
                         if &resolved.host == expected_host {
-                            return Some((endpoint, ResolvedUrl {
-                                scheme: resolved.scheme,
-                                host: resolved.host,
-                                port: resolved.port,
-                                path: endpoint.path.clone(),
-                            }));
+                            return Some((
+                                endpoint,
+                                ResolvedUrl {
+                                    scheme: resolved.scheme,
+                                    host: resolved.host,
+                                    port: resolved.port,
+                                    path: endpoint.path.clone(),
+                                },
+                            ));
                         }
                     }
                 } else {
                     // No host config - custom endpoint matches
-                    return Some((endpoint, ResolvedUrl {
-                        scheme: "http".to_string(), // Default for non-host tenants
-                        host: request_info.host_header.unwrap_or("localhost").to_string(),
-                        port: None,
-                        path: endpoint.path.clone(),
-                    }));
+                    return Some((
+                        endpoint,
+                        ResolvedUrl {
+                            scheme: "http".to_string(), // Default for non-host tenants
+                            host: request_info.host_header.unwrap_or("localhost").to_string(),
+                            port: None,
+                            path: endpoint.path.clone(),
+                        },
+                    ));
                 }
             }
         }
@@ -348,11 +356,19 @@ impl TenantConfig {
     }
 
     /// Resolve URL from request using configured host resolution method
-    fn resolve_url_from_request_with_resolution(&self, request_info: &RequestInfo, host_resolution: &HostResolutionConfig) -> Option<ResolvedUrl> {
+    fn resolve_url_from_request_with_resolution(
+        &self,
+        request_info: &RequestInfo,
+        host_resolution: &HostResolutionConfig,
+    ) -> Option<ResolvedUrl> {
         match host_resolution.resolution_type {
             HostResolutionType::Host => self.resolve_from_host_header(request_info),
-            HostResolutionType::Forwarded => self.resolve_from_forwarded_header(request_info, host_resolution),
-            HostResolutionType::XForwarded => self.resolve_from_x_forwarded_headers(request_info, host_resolution),
+            HostResolutionType::Forwarded => {
+                self.resolve_from_forwarded_header(request_info, host_resolution)
+            }
+            HostResolutionType::XForwarded => {
+                self.resolve_from_x_forwarded_headers(request_info, host_resolution)
+            }
         }
     }
 
@@ -382,7 +398,11 @@ impl TenantConfig {
     }
 
     /// Resolve URL from RFC 7239 Forwarded header
-    fn resolve_from_forwarded_header(&self, request_info: &RequestInfo, host_resolution: &HostResolutionConfig) -> Option<ResolvedUrl> {
+    fn resolve_from_forwarded_header(
+        &self,
+        request_info: &RequestInfo,
+        host_resolution: &HostResolutionConfig,
+    ) -> Option<ResolvedUrl> {
         let forwarded_header = request_info.forwarded_header?;
 
         // TODO: Check trusted_proxies if configured
@@ -432,7 +452,11 @@ impl TenantConfig {
     }
 
     /// Resolve URL from X-Forwarded-* headers
-    fn resolve_from_x_forwarded_headers(&self, request_info: &RequestInfo, host_resolution: &HostResolutionConfig) -> Option<ResolvedUrl> {
+    fn resolve_from_x_forwarded_headers(
+        &self,
+        request_info: &RequestInfo,
+        host_resolution: &HostResolutionConfig,
+    ) -> Option<ResolvedUrl> {
         // TODO: Check trusted_proxies if configured
         if let Some(_trusted_proxies) = &host_resolution.trusted_proxies {
             // Add proxy validation logic here
@@ -516,7 +540,7 @@ impl AppConfig {
             tenants: vec![TenantConfig {
                 id: 1,
                 path: "/scim/v2".to_string(),
-                host: None, // No host requirement for zero-config mode
+                host: None,            // No host requirement for zero-config mode
                 host_resolution: None, // No host resolution for zero-config mode
                 auth: AuthConfig {
                     auth_type: "unauthenticated".to_string(),
@@ -643,7 +667,7 @@ impl AppConfig {
     }
 
     /// Get effective compatibility configuration for a tenant
-    /// 
+    ///
     /// Tenant-specific settings override global settings.
     /// If no tenant-specific settings exist, use global settings.
     pub fn get_effective_compatibility(&self, tenant_id: u32) -> &CompatibilityConfig {
@@ -1145,7 +1169,7 @@ tenants:
         assert!(tenant2.host_resolution.is_none()); // Default resolution
 
         // Test request matching scenarios
-        
+
         // Scenario 1: Path-only tenant (should match any host)
         let request_info1 = RequestInfo {
             path: "/scim/v2/Users",
@@ -1156,7 +1180,7 @@ tenants:
             x_forwarded_port: None,
             client_ip: None,
         };
-        
+
         let (matched_tenant, _) = config.find_tenant_by_request(&request_info1).unwrap();
         assert_eq!(matched_tenant.id, 1);
 
@@ -1170,7 +1194,7 @@ tenants:
             x_forwarded_port: None,
             client_ip: None,
         };
-        
+
         let (matched_tenant, _) = config.find_tenant_by_request(&request_info2).unwrap();
         assert_eq!(matched_tenant.id, 2);
 
@@ -1184,7 +1208,7 @@ tenants:
             x_forwarded_port: None,
             client_ip: None,
         };
-        
+
         let result3 = config.find_tenant_by_request(&request_info3);
         assert!(result3.is_none(), "Should not match tenant with wrong host");
 
@@ -1195,7 +1219,7 @@ tenants:
     #[test]
     fn test_build_base_url_functionality() {
         // Test the new build_base_url method with different configurations
-        
+
         // Test case 1: override_base_url is set (forced override)
         let tenant_with_override = TenantConfig {
             id: 1,

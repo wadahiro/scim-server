@@ -1,8 +1,8 @@
 use axum::http::StatusCode;
 use axum_test::TestServer;
 use scim_server::config::{
-    AppConfig, AuthConfig, BackendConfig, BasicAuthConfig, CompatibilityConfig, CustomEndpoint, DatabaseConfig,
-    ServerConfig, TenantConfig,
+    AppConfig, AuthConfig, BackendConfig, BasicAuthConfig, CompatibilityConfig, CustomEndpoint,
+    DatabaseConfig, ServerConfig, TenantConfig,
 };
 use serde_json::json;
 
@@ -37,7 +37,8 @@ async fn test_custom_endpoint_auth_override_from_tenant_to_unauthenticated() {
             override_base_url: None,
             custom_endpoints: vec![CustomEndpoint {
                 path: "/api/public".to_string(),
-                response: json!({"message": "This endpoint overrides tenant auth to be public"}).to_string(),
+                response: json!({"message": "This endpoint overrides tenant auth to be public"})
+                    .to_string(),
                 status_code: 200,
                 content_type: "application/json".to_string(),
                 auth: Some(AuthConfig {
@@ -185,7 +186,9 @@ async fn test_custom_endpoint_auth_override_from_bearer_to_basic() {
             override_base_url: None,
             custom_endpoints: vec![CustomEndpoint {
                 path: "/api/basic-auth".to_string(),
-                response: json!({"message": "This endpoint overrides tenant auth to use basic auth"}).to_string(),
+                response:
+                    json!({"message": "This endpoint overrides tenant auth to use basic auth"})
+                        .to_string(),
                 status_code: 200,
                 content_type: "application/json".to_string(),
                 auth: Some(AuthConfig {

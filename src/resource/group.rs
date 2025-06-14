@@ -7,6 +7,8 @@ use axum::{
 use serde_json::json;
 use std::{collections::HashMap, sync::Arc};
 
+use crate::extractors::ScimJson;
+
 use super::attribute_filter::AttributeFilter;
 use crate::auth::TenantInfo;
 use crate::backend::ScimBackend;
@@ -43,7 +45,9 @@ fn build_resource_location(
     // The base_path already includes the tenant path, so we just append the resource type and ID
     format!(
         "{}/{}/{}",
-        tenant_info.base_path.trim_end_matches('/'), resource_type, resource_id
+        tenant_info.base_path.trim_end_matches('/'),
+        resource_type,
+        resource_id
     )
 }
 
@@ -76,7 +80,11 @@ fn fix_group_refs(tenant_info: &TenantInfo, group: &mut Group) {
             if location.starts_with(&format!("/{}/", tenant_id)) {
                 // Replace tenant ID-based path with full base URL + resource path
                 let resource_path = location.replace(&format!("/{}/", tenant_id), "");
-                *location = format!("{}/{}", tenant_info.base_path.trim_end_matches('/'), resource_path);
+                *location = format!(
+                    "{}/{}",
+                    tenant_info.base_path.trim_end_matches('/'),
+                    resource_path
+                );
             }
         }
     }
@@ -88,7 +96,11 @@ fn fix_group_refs(tenant_info: &TenantInfo, group: &mut Group) {
                 if ref_.starts_with(&format!("/{}/", tenant_id)) {
                     // Replace tenant ID-based path with full base URL + resource path
                     let resource_path = ref_.replace(&format!("/{}/", tenant_id), "");
-                    *ref_ = format!("{}/{}", tenant_info.base_path.trim_end_matches('/'), resource_path);
+                    *ref_ = format!(
+                        "{}/{}",
+                        tenant_info.base_path.trim_end_matches('/'),
+                        resource_path
+                    );
                 }
             }
         }
@@ -106,7 +118,7 @@ async fn validate_group_members(
             if let Some(member_id) = &member.value {
                 // Check if the member type is User (default if not specified)
                 let member_type = member.type_.as_deref().unwrap_or("User");
-                
+
                 match member_type {
                     "User" => {
                         match backend.find_user_by_id(tenant_id, member_id).await {
@@ -193,7 +205,7 @@ fn create_filtered_group_list_response(
 pub async fn create_group(
     State((backend, app_config)): State<AppState>,
     Extension(tenant_info): Extension<TenantInfo>,
-    Json(payload): Json<serde_json::Value>,
+    ScimJson(payload): ScimJson<serde_json::Value>,
 ) -> Result<Response, (StatusCode, Json<serde_json::Value>)> {
     let tenant_id = tenant_info.tenant_id;
 
@@ -257,8 +269,14 @@ pub async fn create_group(
 
             // Apply compatibility transformations based on tenant settings
             let compatibility = app_config.get_effective_compatibility(tenant_id);
-            created_group = crate::utils::convert_group_datetime_for_response(created_group, &compatibility.meta_datetime_format);
-            created_group = crate::utils::handle_group_empty_members_for_response(created_group, compatibility.show_empty_groups_members);
+            created_group = crate::utils::convert_group_datetime_for_response(
+                created_group,
+                &compatibility.meta_datetime_format,
+            );
+            created_group = crate::utils::handle_group_empty_members_for_response(
+                created_group,
+                compatibility.show_empty_groups_members,
+            );
 
             // Build Location header URL
             let location_url =
@@ -330,8 +348,14 @@ pub async fn get_group(
 
             // Apply compatibility transformations based on tenant settings
             let compatibility = app_config.get_effective_compatibility(tenant_id);
-            group = crate::utils::convert_group_datetime_for_response(group, &compatibility.meta_datetime_format);
-            group = crate::utils::handle_group_empty_members_for_response(group, compatibility.show_empty_groups_members);
+            group = crate::utils::convert_group_datetime_for_response(
+                group,
+                &compatibility.meta_datetime_format,
+            );
+            group = crate::utils::handle_group_empty_members_for_response(
+                group,
+                compatibility.show_empty_groups_members,
+            );
 
             // Convert to JSON and apply attribute filtering
             let group_json = serde_json::to_value(&group).map_err(|_| {
@@ -416,8 +440,14 @@ pub async fn search_groups(
                         set_group_location(&tenant_info, group);
                         fix_group_refs(&tenant_info, group);
                         // Apply compatibility transformations
-                        *group = crate::utils::convert_group_datetime_for_response(group.clone(), &compatibility.meta_datetime_format);
-                        *group = crate::utils::handle_group_empty_members_for_response(group.clone(), compatibility.show_empty_groups_members);
+                        *group = crate::utils::convert_group_datetime_for_response(
+                            group.clone(),
+                            &compatibility.meta_datetime_format,
+                        );
+                        *group = crate::utils::handle_group_empty_members_for_response(
+                            group.clone(),
+                            compatibility.show_empty_groups_members,
+                        );
                     }
                     let total_results = groups.len() as i64;
                     let response = create_filtered_group_list_response(
@@ -436,8 +466,9 @@ pub async fn search_groups(
     // Handle general filtering
     if let Some(filter_str) = filter {
         // Check if displayName filter is supported
-        if (filter_str.contains("displayName") || filter_str.contains("displayname")) 
-            && !compatibility.support_group_displayname_filter {
+        if (filter_str.contains("displayName") || filter_str.contains("displayname"))
+            && !compatibility.support_group_displayname_filter
+        {
             return Err((
                 StatusCode::BAD_REQUEST,
                 Json(json!({"message": "Filtering Groups by displayName is not supported"})),
@@ -464,8 +495,14 @@ pub async fn search_groups(
                             set_group_location(&tenant_info, group);
                             fix_group_refs(&tenant_info, group);
                             // Apply compatibility transformations
-                            *group = crate::utils::convert_group_datetime_for_response(group.clone(), &compatibility.meta_datetime_format);
-                            *group = crate::utils::handle_group_empty_members_for_response(group.clone(), compatibility.show_empty_groups_members);
+                            *group = crate::utils::convert_group_datetime_for_response(
+                                group.clone(),
+                                &compatibility.meta_datetime_format,
+                            );
+                            *group = crate::utils::handle_group_empty_members_for_response(
+                                group.clone(),
+                                compatibility.show_empty_groups_members,
+                            );
                         }
                         let response = create_filtered_group_list_response(
                             groups,
@@ -506,8 +543,14 @@ pub async fn search_groups(
                 set_group_location(&tenant_info, group);
                 fix_group_refs(&tenant_info, group);
                 // Apply compatibility transformations
-                *group = crate::utils::convert_group_datetime_for_response(group.clone(), &compatibility.meta_datetime_format);
-                *group = crate::utils::handle_group_empty_members_for_response(group.clone(), compatibility.show_empty_groups_members);
+                *group = crate::utils::convert_group_datetime_for_response(
+                    group.clone(),
+                    &compatibility.meta_datetime_format,
+                );
+                *group = crate::utils::handle_group_empty_members_for_response(
+                    group.clone(),
+                    compatibility.show_empty_groups_members,
+                );
             }
             let response =
                 create_filtered_group_list_response(groups, total, start_index, &attribute_filter);
@@ -521,7 +564,7 @@ pub async fn update_group(
     State((backend, app_config)): State<AppState>,
     Extension(tenant_info): Extension<TenantInfo>,
     uri: Uri,
-    Json(payload): Json<serde_json::Value>,
+    ScimJson(payload): ScimJson<serde_json::Value>,
 ) -> Result<(StatusCode, Json<serde_json::Value>), (StatusCode, Json<serde_json::Value>)> {
     let tenant_id = tenant_info.tenant_id;
 
@@ -591,8 +634,14 @@ pub async fn update_group(
 
             // Apply compatibility transformations based on tenant settings
             let compatibility = app_config.get_effective_compatibility(tenant_id);
-            updated_group = crate::utils::convert_group_datetime_for_response(updated_group, &compatibility.meta_datetime_format);
-            updated_group = crate::utils::handle_group_empty_members_for_response(updated_group, compatibility.show_empty_groups_members);
+            updated_group = crate::utils::convert_group_datetime_for_response(
+                updated_group,
+                &compatibility.meta_datetime_format,
+            );
+            updated_group = crate::utils::handle_group_empty_members_for_response(
+                updated_group,
+                compatibility.show_empty_groups_members,
+            );
 
             // Convert to JSON and remove null fields to comply with SCIM specification
             let group_json = serde_json::to_value(&updated_group).map_err(|_| {
@@ -646,7 +695,7 @@ pub async fn patch_group(
     State((backend, app_config)): State<AppState>,
     Extension(tenant_info): Extension<TenantInfo>,
     uri: Uri,
-    Json(patch_ops): Json<ScimPatchOp>,
+    ScimJson(patch_ops): ScimJson<ScimPatchOp>,
 ) -> Result<(StatusCode, Json<serde_json::Value>), (StatusCode, Json<serde_json::Value>)> {
     let tenant_id = tenant_info.tenant_id;
 
@@ -670,8 +719,14 @@ pub async fn patch_group(
 
             // Apply compatibility transformations based on tenant settings
             let compatibility = app_config.get_effective_compatibility(tenant_id);
-            group = crate::utils::convert_group_datetime_for_response(group, &compatibility.meta_datetime_format);
-            group = crate::utils::handle_group_empty_members_for_response(group, compatibility.show_empty_groups_members);
+            group = crate::utils::convert_group_datetime_for_response(
+                group,
+                &compatibility.meta_datetime_format,
+            );
+            group = crate::utils::handle_group_empty_members_for_response(
+                group,
+                compatibility.show_empty_groups_members,
+            );
 
             // Convert to JSON and remove null fields to comply with SCIM specification
             let group_json = serde_json::to_value(&group).map_err(|_| {

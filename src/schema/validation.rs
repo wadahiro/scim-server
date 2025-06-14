@@ -268,18 +268,18 @@ pub fn validate_locale(locale: &str) -> bool {
         Ok(tag) => tag,
         Err(_) => return false,
     };
-    
+
     // Allow private use tags (starting with "x-")
     if locale.starts_with("x-") || locale.starts_with("X-") {
         return true;
     }
-    
+
     // Get the language subtag (this is required in BCP 47)
     let language = match tag.language() {
         Some(lang) => lang.to_string(),
         None => return false,
     };
-    
+
     // Check if the language subtag is a known ISO 639 language code
     // This prevents nonsensical language codes like "invalid"
     is_valid_language_code(&language)
@@ -292,35 +292,21 @@ fn is_valid_language_code(lang: &str) -> bool {
     // This list can be expanded as needed
     const VALID_LANGUAGES: &[&str] = &[
         // ISO 639-1 codes (2 letter)
-        "aa", "ab", "ae", "af", "ak", "am", "an", "ar", "as", "av", "ay", "az",
-        "ba", "be", "bg", "bh", "bi", "bm", "bn", "bo", "br", "bs",
-        "ca", "ce", "ch", "co", "cr", "cs", "cu", "cv", "cy",
-        "da", "de", "dv", "dz",
-        "ee", "el", "en", "eo", "es", "et", "eu",
-        "fa", "ff", "fi", "fj", "fo", "fr", "fy",
-        "ga", "gd", "gl", "gn", "gu", "gv",
-        "ha", "he", "hi", "ho", "hr", "ht", "hu", "hy", "hz",
-        "ia", "id", "ie", "ig", "ii", "ik", "io", "is", "it", "iu",
-        "ja", "jv",
-        "ka", "kg", "ki", "kj", "kk", "kl", "km", "kn", "ko", "kr", "ks", "ku", "kv", "kw", "ky",
-        "la", "lb", "lg", "li", "ln", "lo", "lt", "lu", "lv",
-        "mg", "mh", "mi", "mk", "ml", "mn", "mr", "ms", "mt", "my",
-        "na", "nb", "nd", "ne", "ng", "nl", "nn", "no", "nr", "nv", "ny",
-        "oc", "oj", "om", "or", "os",
-        "pa", "pi", "pl", "ps", "pt",
-        "qu",
-        "rm", "rn", "ro", "ru", "rw",
-        "sa", "sc", "sd", "se", "sg", "si", "sk", "sl", "sm", "sn", "so", "sq", "sr", "ss", "st", "su", "sv", "sw",
-        "ta", "te", "tg", "th", "ti", "tk", "tl", "tn", "to", "tr", "ts", "tt", "tw", "ty",
-        "ug", "uk", "ur", "uz",
-        "ve", "vi", "vo",
-        "wa", "wo",
-        "xh",
-        "yi", "yo",
-        "za", "zh", "zu",
-        // Some common ISO 639-2 codes (3 letter)
+        "aa", "ab", "ae", "af", "ak", "am", "an", "ar", "as", "av", "ay", "az", "ba", "be", "bg",
+        "bh", "bi", "bm", "bn", "bo", "br", "bs", "ca", "ce", "ch", "co", "cr", "cs", "cu", "cv",
+        "cy", "da", "de", "dv", "dz", "ee", "el", "en", "eo", "es", "et", "eu", "fa", "ff", "fi",
+        "fj", "fo", "fr", "fy", "ga", "gd", "gl", "gn", "gu", "gv", "ha", "he", "hi", "ho", "hr",
+        "ht", "hu", "hy", "hz", "ia", "id", "ie", "ig", "ii", "ik", "io", "is", "it", "iu", "ja",
+        "jv", "ka", "kg", "ki", "kj", "kk", "kl", "km", "kn", "ko", "kr", "ks", "ku", "kv", "kw",
+        "ky", "la", "lb", "lg", "li", "ln", "lo", "lt", "lu", "lv", "mg", "mh", "mi", "mk", "ml",
+        "mn", "mr", "ms", "mt", "my", "na", "nb", "nd", "ne", "ng", "nl", "nn", "no", "nr", "nv",
+        "ny", "oc", "oj", "om", "or", "os", "pa", "pi", "pl", "ps", "pt", "qu", "rm", "rn", "ro",
+        "ru", "rw", "sa", "sc", "sd", "se", "sg", "si", "sk", "sl", "sm", "sn", "so", "sq", "sr",
+        "ss", "st", "su", "sv", "sw", "ta", "te", "tg", "th", "ti", "tk", "tl", "tn", "to", "tr",
+        "ts", "tt", "tw", "ty", "ug", "uk", "ur", "uz", "ve", "vi", "vo", "wa", "wo", "xh", "yi",
+        "yo", "za", "zh", "zu", // Some common ISO 639-2 codes (3 letter)
         "chi", "zho", // Chinese variants
-        "ger", "deu", // German variants  
+        "ger", "deu", // German variants
         "fre", "fra", // French variants
         "dut", "nld", // Dutch variants
         "gre", "ell", // Greek variants
@@ -338,7 +324,7 @@ fn is_valid_language_code(lang: &str) -> bool {
         "bur", "mya", // Burmese variants
         "tib", "bod", // Tibetan variants
     ];
-    
+
     VALID_LANGUAGES.contains(&lang)
 }
 
@@ -522,7 +508,7 @@ mod validation_tests {
         assert!(validate_locale("zh-Hans"));
         assert!(validate_locale("zh-Hans-CN"));
         assert!(validate_locale("x-custom")); // Private use tags are allowed
-        
+
         // Invalid language tags
         assert!(!validate_locale("en_US")); // Wrong separator
         assert!(!validate_locale(""));

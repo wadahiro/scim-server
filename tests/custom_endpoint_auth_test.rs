@@ -3,8 +3,8 @@ mod common;
 use axum::http::StatusCode;
 use axum_test::TestServer;
 use scim_server::config::{
-    AppConfig, AuthConfig, BackendConfig, CompatibilityConfig, CustomEndpoint, DatabaseConfig, ServerConfig,
-    TenantConfig,
+    AppConfig, AuthConfig, BackendConfig, CompatibilityConfig, CustomEndpoint, DatabaseConfig,
+    ServerConfig, TenantConfig,
 };
 use serde_json::json;
 
@@ -218,8 +218,8 @@ async fn test_multiple_tenants_with_custom_endpoints() {
                     basic: None,
                 },
                 host: None,
-            host_resolution: None,
-            override_base_url: None,
+                host_resolution: None,
+                override_base_url: None,
                 custom_endpoints: vec![CustomEndpoint {
                     path: "/tenant1/status".to_string(),
                     status_code: 200,
@@ -238,8 +238,8 @@ async fn test_multiple_tenants_with_custom_endpoints() {
                     basic: None,
                 },
                 host: None,
-            host_resolution: None,
-            override_base_url: None,
+                host_resolution: None,
+                override_base_url: None,
                 custom_endpoints: vec![CustomEndpoint {
                     path: "/tenant2/status".to_string(),
                     status_code: 200,

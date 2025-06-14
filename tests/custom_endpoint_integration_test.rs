@@ -1,7 +1,7 @@
 use axum::http::StatusCode;
 use axum_test::TestServer;
 use scim_server::config::{
-    AppConfig, AuthConfig, BackendConfig, CompatibilityConfig, CustomEndpoint, DatabaseConfig, 
+    AppConfig, AuthConfig, BackendConfig, CompatibilityConfig, CustomEndpoint, DatabaseConfig,
     HostResolutionConfig, HostResolutionType, ServerConfig, TenantConfig,
 };
 use serde_json::json;
@@ -41,7 +41,8 @@ async fn test_custom_endpoint_basic_functionality() {
                     response: json!({
                         "status": "healthy",
                         "service": "SCIM Server"
-                    }).to_string(),
+                    })
+                    .to_string(),
                     status_code: 200,
                     content_type: "application/json".to_string(),
                     auth: None, // Inherit tenant's auth config
@@ -51,7 +52,8 @@ async fn test_custom_endpoint_basic_functionality() {
                     response: json!({
                         "version": "1.0.0",
                         "description": "Custom info endpoint"
-                    }).to_string(),
+                    })
+                    .to_string(),
                     status_code: 200,
                     content_type: "application/json".to_string(),
                     auth: None,
@@ -130,7 +132,8 @@ async fn test_custom_endpoint_with_route() {
                         "tenant": "tenant1",
                         "name": "First Tenant",
                         "route": true
-                    }).to_string(),
+                    })
+                    .to_string(),
                     status_code: 200,
                     content_type: "application/json".to_string(),
                     auth: None,
@@ -166,8 +169,11 @@ async fn test_custom_endpoint_with_route() {
     // In test environment, this might still return 200 due to simplified routing
     // The actual host resolution logic is tested in unit tests
     let status = response.status_code();
-    assert!(status == StatusCode::OK || status == StatusCode::NOT_FOUND,
-        "Expected OK or NOT_FOUND, got: {}", status);
+    assert!(
+        status == StatusCode::OK || status == StatusCode::NOT_FOUND,
+        "Expected OK or NOT_FOUND, got: {}",
+        status
+    );
 }
 
 #[tokio::test]
@@ -202,7 +208,8 @@ async fn test_custom_endpoint_with_authentication() {
                 response: json!({
                     "message": "This is a protected endpoint",
                     "authenticated": true
-                }).to_string(),
+                })
+                .to_string(),
                 status_code: 200,
                 content_type: "application/json".to_string(),
                 auth: None,
@@ -349,7 +356,8 @@ async fn test_custom_endpoint_priority_over_scim() {
                 response: json!({
                     "message": "This custom endpoint overrides any potential SCIM path",
                     "type": "custom"
-                }).to_string(),
+                })
+                .to_string(),
                 status_code: 200,
                 content_type: "application/json".to_string(),
                 auth: None,
@@ -403,8 +411,8 @@ async fn test_multiple_tenants_different_custom_endpoint_paths() {
                     basic: None,
                 },
                 host: None,
-            host_resolution: None,
-            override_base_url: None,
+                host_resolution: None,
+                override_base_url: None,
                 custom_endpoints: vec![CustomEndpoint {
                     path: "/api/tenant1/status".to_string(),
                     response: json!({"tenant": 1, "status": "active"}).to_string(),
@@ -423,8 +431,8 @@ async fn test_multiple_tenants_different_custom_endpoint_paths() {
                     basic: None,
                 },
                 host: None,
-            host_resolution: None,
-            override_base_url: None,
+                host_resolution: None,
+                override_base_url: None,
                 custom_endpoints: vec![CustomEndpoint {
                     path: "/api/tenant2/status".to_string(),
                     response: json!({"tenant": 2, "status": "running"}).to_string(),

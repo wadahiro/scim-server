@@ -12,6 +12,7 @@ mod auth;
 mod backend;
 mod config;
 mod error;
+mod extractors;
 mod logging;
 mod models;
 mod parser;
@@ -169,7 +170,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         // For tenants with route, we'll handle them dynamically in the handlers
         // For simple URL tenants, we'll use static routing as before
 
-        let base_path = if tenant.path.starts_with("http://") || tenant.path.starts_with("https://") {
+        let base_path = if tenant.path.starts_with("http://") || tenant.path.starts_with("https://")
+        {
             // Extract path from full URL
             if let Ok(url) = url::Url::parse(&tenant.path) {
                 url.path().trim_end_matches('/').to_string()
@@ -184,7 +186,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         if tenant.host.is_some() {
             println!(
                 "🔧 Setting up host-based routing for tenant {} (host: {})",
-                tenant.id, tenant.host.as_ref().unwrap_or(&"unspecified".to_string())
+                tenant.id,
+                tenant.host.as_ref().unwrap_or(&"unspecified".to_string())
             );
         } else {
             println!(
@@ -279,7 +282,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         [127, 0, 0, 1].into()
     });
     let addr = SocketAddr::from((host, app_config.server.port));
-    
+
     // Display version and server info
     println!("🚀 SCIM Server v{}", env!("CARGO_PKG_VERSION"));
     println!("📍 Listening on {}", addr);
@@ -332,7 +335,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!("    🏷️ ResourceTypes: {}/ResourceTypes", tenant.path);
         println!("    👥 Users: {}/Users", tenant.path);
         println!("    👥 Groups: {}/Groups", tenant.path);
-        
+
         // Display custom endpoints if any
         if !tenant.custom_endpoints.is_empty() {
             println!("    🎯 Custom endpoints:");
@@ -343,23 +346,23 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     let listener = TcpListener::bind(&addr).await?;
-    
+
     // Enable graceful shutdown with proper cleanup
     let shutdown_future = shutdown_signal();
     let server_future = axum::serve(listener, app).with_graceful_shutdown(shutdown_future);
-    
+
     // Run server and handle shutdown
     let result = server_future.await;
-    
+
     // Perform cleanup
     println!("🧹 Performing cleanup...");
-    
+
     // Note: Backend cleanup would be implemented here if needed
     // Currently SQLite/PostgreSQL connections are automatically cleaned up
     // when the connection pools are dropped
-    
+
     println!("✅ Cleanup completed, server stopped");
-    
+
     result?;
     Ok(())
 }

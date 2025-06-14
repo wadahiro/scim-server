@@ -32,7 +32,7 @@ pub async fn logging_middleware(request: Request, next: Next) -> Response {
         .to_string();
 
     let response = next.run(request).await;
-    
+
     let duration = start.elapsed();
     let status = response.status();
     let timestamp = Utc::now().format("%Y-%m-%d %H:%M:%S UTC");

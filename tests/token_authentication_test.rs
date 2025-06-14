@@ -12,7 +12,7 @@ async fn test_token_authentication_success() {
 
     // Test successful authentication with token
     let user_data = common::create_test_user_json("test-user", "Test", "User");
-    
+
     let response = server
         .post("/scim/v2/Users")
         .add_header("authorization", "token test-token-123")
@@ -33,7 +33,7 @@ async fn test_token_authentication_invalid_token() {
 
     // Test failed authentication with wrong token
     let user_data = common::create_test_user_json("test-user", "Test", "User");
-    
+
     let response = server
         .post("/scim/v2/Users")
         .add_header("authorization", "token wrong-token")
@@ -52,7 +52,7 @@ async fn test_token_authentication_missing_token() {
 
     // Test failed authentication without token
     let user_data = common::create_test_user_json("test-user", "Test", "User");
-    
+
     let response = server
         .post("/scim/v2/Users")
         .content_type("application/scim+json")
@@ -70,7 +70,7 @@ async fn test_token_authentication_wrong_prefix() {
 
     // Test failed authentication with Bearer instead of token
     let user_data = common::create_test_user_json("test-user", "Test", "User");
-    
+
     let response = server
         .post("/scim/v2/Users")
         .add_header("authorization", "Bearer test-token-123")
@@ -85,10 +85,10 @@ async fn test_token_authentication_wrong_prefix() {
 async fn test_token_vs_bearer_difference() {
     let token_config = common::create_token_auth_config();
     let bearer_config = common::create_bearer_auth_config();
-    
+
     let token_app = common::setup_test_app(token_config).await.unwrap();
     let bearer_app = common::setup_test_app(bearer_config).await.unwrap();
-    
+
     let token_server = TestServer::new(token_app).unwrap();
     let bearer_server = TestServer::new(bearer_app).unwrap();
 

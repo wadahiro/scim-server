@@ -17,7 +17,7 @@ pub struct PostgresGroupInserter {
 
 impl PostgresGroupInserter {
     pub fn new(pool: PgPool) -> Self {
-        Self { 
+        Self {
             group_reader: PostgresGroupReader::new(pool.clone()),
             pool,
         }
@@ -122,9 +122,15 @@ impl GroupInserter for PostgresGroupInserter {
         })?;
 
         // Fetch the created group with properly populated members
-        match self.group_reader.find_group_by_id(tenant_id, &data.group.base.id).await? {
+        match self
+            .group_reader
+            .find_group_by_id(tenant_id, &data.group.base.id)
+            .await?
+        {
             Some(group) => Ok(group),
-            None => Err(AppError::Database("Failed to fetch created group".to_string())),
+            None => Err(AppError::Database(
+                "Failed to fetch created group".to_string(),
+            )),
         }
     }
 }

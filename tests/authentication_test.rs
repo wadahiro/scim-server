@@ -6,8 +6,8 @@ use axum::{
 };
 use common::{create_test_user_json, setup_test_app};
 use scim_server::config::{
-    AppConfig, AuthConfig, BackendConfig, BasicAuthConfig, CompatibilityConfig, DatabaseConfig, ServerConfig,
-    TenantConfig,
+    AppConfig, AuthConfig, BackendConfig, BasicAuthConfig, CompatibilityConfig, DatabaseConfig,
+    ServerConfig, TenantConfig,
 };
 use tower::ServiceExt;
 
@@ -350,10 +350,10 @@ async fn test_multi_tenant_authentication() {
                     basic: None,
                 },
                 host: None,
-            host_resolution: None,
-            override_base_url: None,
+                host_resolution: None,
+                override_base_url: None,
                 custom_endpoints: vec![],
-            compatibility: None,
+                compatibility: None,
             },
             TenantConfig {
                 id: 2,
@@ -367,10 +367,10 @@ async fn test_multi_tenant_authentication() {
                     }),
                 },
                 host: None,
-            host_resolution: None,
-            override_base_url: None,
+                host_resolution: None,
+                override_base_url: None,
                 custom_endpoints: vec![],
-            compatibility: None,
+                compatibility: None,
             },
         ],
     };

@@ -1,6 +1,6 @@
 use axum::{
     extract::{Request, State},
-    http::{StatusCode},
+    http::StatusCode,
     response::{IntoResponse, Response},
 };
 use std::sync::Arc;
@@ -13,13 +13,10 @@ pub async fn handle_custom_endpoint(
     request: Request,
 ) -> impl IntoResponse {
     let path = request.uri().path();
-    
+
     // Get tenant info from auth middleware
-    let tenant_info = request
-        .extensions()
-        .get::<TenantInfo>()
-        .cloned();
-    
+    let tenant_info = request.extensions().get::<TenantInfo>().cloned();
+
     // Find matching custom endpoint
     if let Some((tenant, endpoint)) = app_config.find_custom_endpoint(path) {
         // Verify tenant matches (this should always be true if auth middleware worked correctly)
@@ -40,7 +37,11 @@ pub async fn handle_custom_endpoint(
         if let Ok(response) = response.body(endpoint.response.clone()) {
             response.into_response()
         } else {
-            (StatusCode::INTERNAL_SERVER_ERROR, "Failed to create response").into_response()
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Failed to create response",
+            )
+                .into_response()
         }
     } else {
         (StatusCode::NOT_FOUND, "Custom endpoint not found").into_response()

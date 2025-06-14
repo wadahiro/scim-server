@@ -6,15 +6,16 @@ use axum::{
 use scim_server::backend::database::DatabaseBackendConfig;
 use scim_server::backend::{BackendFactory, DatabaseType, ScimBackend};
 use scim_server::config::{
-    AppConfig, AuthConfig, BackendConfig, CompatibilityConfig, DatabaseConfig, ServerConfig, TenantConfig,
+    AppConfig, AuthConfig, BackendConfig, CompatibilityConfig, DatabaseConfig, ServerConfig,
+    TenantConfig,
 };
-use url::Url;
 use serde_json::json;
 use std::sync::Arc;
 #[cfg(test)]
 use testcontainers::ContainerAsync;
 #[cfg(test)]
 use testcontainers_modules::postgres::Postgres;
+use url::Url;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum TestDatabaseType {
@@ -94,7 +95,7 @@ pub async fn setup_test_app(app_config: AppConfig) -> Result<Router, Box<dyn std
 
     // Build our application with multi-tenant routes based on tenant configuration
     let mut app = Router::new();
-    
+
     // Add custom endpoints first (before SCIM routes)
     for tenant in &app_config.tenants {
         for endpoint in &tenant.custom_endpoints {
@@ -108,7 +109,8 @@ pub async fn setup_test_app(app_config: AppConfig) -> Result<Router, Box<dyn std
     // Add routes for each tenant based on their configured URL path
     for tenant in &app_config.tenants {
         // Extract path from tenant path (remove protocol and host if present)
-        let base_path = if tenant.path.starts_with("http://") || tenant.path.starts_with("https://") {
+        let base_path = if tenant.path.starts_with("http://") || tenant.path.starts_with("https://")
+        {
             // Extract path from full URL
             if let Ok(url) = Url::parse(&tenant.path) {
                 url.path().trim_end_matches('/').to_string()
@@ -210,7 +212,7 @@ pub async fn setup_postgres_test_app(
 
     // Build our application with multi-tenant routes based on tenant configuration
     let mut app = Router::new();
-    
+
     // Add custom endpoints first (before SCIM routes)
     for tenant in &app_config.tenants {
         for endpoint in &tenant.custom_endpoints {
@@ -224,7 +226,8 @@ pub async fn setup_postgres_test_app(
     // Add routes for each tenant based on their configured URL path
     for tenant in &app_config.tenants {
         // Extract path from tenant path (remove protocol and host if present)
-        let base_path = if tenant.path.starts_with("http://") || tenant.path.starts_with("https://") {
+        let base_path = if tenant.path.starts_with("http://") || tenant.path.starts_with("https://")
+        {
             // Extract path from full URL
             if let Ok(url) = Url::parse(&tenant.path) {
                 url.path().trim_end_matches('/').to_string()

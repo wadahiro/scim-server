@@ -102,13 +102,9 @@ impl SqliteUserReader {
                 // Remove password from response
                 *user.password_mut() = None;
 
-                // Fetch groups
+                // Fetch groups and always set them (compatibility settings will handle empty array display)
                 let groups = self.fetch_user_groups(tenant_id, id).await?;
-                *user.groups_mut() = if groups.is_empty() {
-                    None
-                } else {
-                    Some(groups)
-                };
+                *user.groups_mut() = Some(groups);
 
                 Ok(Some(user))
             }

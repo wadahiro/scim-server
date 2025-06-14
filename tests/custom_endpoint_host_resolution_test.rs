@@ -5,7 +5,7 @@ use serde_json::json;
 mod common;
 
 use scim_server::config::{
-    AppConfig, AuthConfig, BackendConfig, CompatibilityConfig, CustomEndpoint, DatabaseConfig, 
+    AppConfig, AuthConfig, BackendConfig, CompatibilityConfig, CustomEndpoint, DatabaseConfig,
     HostResolutionConfig, HostResolutionType, ServerConfig, TenantConfig,
 };
 
@@ -77,18 +77,20 @@ async fn test_custom_endpoint_basic_with_tenant_isolation() {
     let server = TestServer::new(app).unwrap();
 
     // Test tenant 1 custom endpoint
-    let response = server
-        .get("/tenant1/custom/status")
-        .await;
+    let response = server.get("/tenant1/custom/status").await;
     assert_eq!(response.status_code(), StatusCode::OK);
-    assert_eq!(response.json::<serde_json::Value>(), json!({"tenant": "tenant1", "status": "ok"}));
+    assert_eq!(
+        response.json::<serde_json::Value>(),
+        json!({"tenant": "tenant1", "status": "ok"})
+    );
 
     // Test tenant 2 custom endpoint
-    let response = server
-        .get("/tenant2/custom/status")
-        .await;
+    let response = server.get("/tenant2/custom/status").await;
     assert_eq!(response.status_code(), StatusCode::OK);
-    assert_eq!(response.json::<serde_json::Value>(), json!({"tenant": "tenant2", "status": "healthy"}));
+    assert_eq!(
+        response.json::<serde_json::Value>(),
+        json!({"tenant": "tenant2", "status": "healthy"})
+    );
 
     // Test that each tenant's SCIM endpoints work
     let response = server.get("/tenant1/scim/v2/ServiceProviderConfig").await;
@@ -128,7 +130,7 @@ async fn test_tenant_config_supports_route() {
 
     // Verify that host resolution configuration is properly structured
     assert!(tenant_config.host_resolution.is_some());
-    
+
     let host_resolution = tenant_config.host_resolution.unwrap();
     assert_eq!(host_resolution.resolution_type, HostResolutionType::Host);
     assert!(host_resolution.trusted_proxies.is_some());

@@ -22,17 +22,23 @@ async fn test_create_group_with_non_existent_user_should_fail() {
     });
 
     let response = server.post("/scim/v2/Groups").json(&group_payload).await;
-    
+
     // Should return 400 Bad Request
     assert_eq!(response.status_code(), StatusCode::BAD_REQUEST);
 
     let error_response: Value = response.json();
-    
+
     // Should be SCIM error format
-    assert_eq!(error_response["schemas"], json!(["urn:ietf:params:scim:api:messages:2.0:Error"]));
+    assert_eq!(
+        error_response["schemas"],
+        json!(["urn:ietf:params:scim:api:messages:2.0:Error"])
+    );
     assert_eq!(error_response["scimType"], "invalidValue");
     assert_eq!(error_response["status"], "400");
-    assert!(error_response["detail"].as_str().unwrap().contains("User with id 'non-existent-user-id' does not exist"));
+    assert!(error_response["detail"]
+        .as_str()
+        .unwrap()
+        .contains("User with id 'non-existent-user-id' does not exist"));
 }
 
 #[tokio::test]
@@ -60,13 +66,12 @@ async fn test_create_group_with_existing_user_should_succeed() {
     });
 
     let response = server.post("/scim/v2/Groups").json(&group_payload).await;
-    
+
     // Should succeed
     assert_eq!(response.status_code(), StatusCode::CREATED);
 
     let group_response: Value = response.json();
-    
+
     assert_eq!(group_response["displayName"], "TestGroup");
     assert_eq!(group_response["members"][0]["value"], user_id);
 }
-

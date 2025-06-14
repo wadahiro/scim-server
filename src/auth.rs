@@ -78,13 +78,14 @@ fn resolve_tenant_and_authenticate(
     let auth_header = headers.get("authorization").and_then(|h| h.to_str().ok());
 
     // Check if this is a custom endpoint with specific auth config
-    let auth_config = if let Some(custom_endpoint) = tenant.custom_endpoints.iter().find(|ep| ep.path == path) {
-        // Use custom endpoint's auth config if available, otherwise tenant's auth config
-        custom_endpoint.effective_auth_config(&tenant.auth)
-    } else {
-        // Regular SCIM endpoint - use tenant's auth config
-        &tenant.auth
-    };
+    let auth_config =
+        if let Some(custom_endpoint) = tenant.custom_endpoints.iter().find(|ep| ep.path == path) {
+            // Use custom endpoint's auth config if available, otherwise tenant's auth config
+            custom_endpoint.effective_auth_config(&tenant.auth)
+        } else {
+            // Regular SCIM endpoint - use tenant's auth config
+            &tenant.auth
+        };
 
     // Validate authentication using the effective auth config
     validate_authentication(auth_config, auth_header)?;
@@ -147,7 +148,9 @@ fn validate_authentication(
             let auth_header = auth_header.ok_or(StatusCode::UNAUTHORIZED)?;
 
             // Check for "Bearer " prefix case-insensitively
-            if auth_header.len() < 7 || !auth_header[..7].to_ascii_lowercase().starts_with("bearer ") {
+            if auth_header.len() < 7
+                || !auth_header[..7].to_ascii_lowercase().starts_with("bearer ")
+            {
                 return Err(StatusCode::UNAUTHORIZED);
             }
 
@@ -169,7 +172,8 @@ fn validate_authentication(
             let auth_header = auth_header.ok_or(StatusCode::UNAUTHORIZED)?;
 
             // Check for "token " prefix case-insensitively
-            if auth_header.len() < 6 || !auth_header[..6].to_ascii_lowercase().starts_with("token ") {
+            if auth_header.len() < 6 || !auth_header[..6].to_ascii_lowercase().starts_with("token ")
+            {
                 return Err(StatusCode::UNAUTHORIZED);
             }
 
@@ -191,7 +195,8 @@ fn validate_authentication(
             let auth_header = auth_header.ok_or(StatusCode::UNAUTHORIZED)?;
 
             // Check for "Basic " prefix case-insensitively
-            if auth_header.len() < 6 || !auth_header[..6].to_ascii_lowercase().starts_with("basic ") {
+            if auth_header.len() < 6 || !auth_header[..6].to_ascii_lowercase().starts_with("basic ")
+            {
                 return Err(StatusCode::UNAUTHORIZED);
             }
 
