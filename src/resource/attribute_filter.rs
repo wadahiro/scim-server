@@ -360,8 +360,9 @@ impl AttributeFilter {
                                 })
                                 .collect();
 
-                            // Special case: always include empty arrays for Group members field
-                            if key == "members" || !cleaned_array.is_empty() {
+                            // Special case: always include empty arrays for Group members and User groups fields
+                            // Other empty arrays (emails, phoneNumbers, etc.) should be removed
+                            if key == "members" || key == "groups" || !cleaned_array.is_empty() {
                                 filtered.insert(key.clone(), Value::Array(cleaned_array));
                             }
                         }
@@ -454,7 +455,7 @@ mod tests {
         // Null top-level field should be removed
         assert!(cleaned.get("phoneNumbers").is_none());
 
-        // Empty arrays should be removed
+        // Empty arrays should be removed (except for groups/members fields)
         assert!(cleaned.get("addresses").is_none());
     }
 
@@ -597,5 +598,44 @@ mod tests {
         assert!(first_email.get("type").is_none());
         assert!(first_email.get("primary").is_none());
         assert_eq!(first_email.len(), 1); // Only 'value' should be present
+    }
+
+    #[test]
+    fn test_empty_arrays_removal() {
+        // Test that empty arrays are removed for normal fields but preserved for groups/members
+        let user_with_empty_arrays = json!({
+            "id": "123",
+            "userName": "john.doe",
+            "emails": [],
+            "phoneNumbers": [],
+            "addresses": [],
+            "groups": []  // Should be preserved
+        });
+
+        let cleaned = AttributeFilter::remove_null_fields(&user_with_empty_arrays);
+
+        // Normal empty arrays should be removed
+        assert!(cleaned.get("emails").is_none());
+        assert!(cleaned.get("phoneNumbers").is_none());
+        assert!(cleaned.get("addresses").is_none());
+
+        // groups empty array should be preserved
+        assert!(cleaned.get("groups").is_some());
+        let groups = cleaned["groups"].as_array().unwrap();
+        assert!(groups.is_empty());
+
+        // Test group with empty members
+        let group_with_empty_members = json!({
+            "id": "group-123",
+            "displayName": "Test Group",
+            "members": []  // Should be preserved
+        });
+
+        let cleaned_group = AttributeFilter::remove_null_fields(&group_with_empty_members);
+
+        // members empty array should be preserved
+        assert!(cleaned_group.get("members").is_some());
+        let members = cleaned_group["members"].as_array().unwrap();
+        assert!(members.is_empty());
     }
 }

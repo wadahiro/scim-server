@@ -13,13 +13,14 @@ use async_trait::async_trait;
 #[async_trait]
 pub trait UserReader: Send + Sync {
     /// Find a user by ID
-    async fn find_user_by_id(&self, tenant_id: u32, id: &str) -> AppResult<Option<User>>;
+    async fn find_user_by_id(&self, tenant_id: u32, id: &str, include_groups: bool) -> AppResult<Option<User>>;
 
     /// Find a user by username (case-insensitive)
     async fn find_user_by_username(
         &self,
         tenant_id: u32,
         username: &str,
+        include_groups: bool,
     ) -> AppResult<Option<User>>;
 
     /// Find all users with pagination
@@ -28,6 +29,7 @@ pub trait UserReader: Send + Sync {
         tenant_id: u32,
         start_index: Option<i64>,
         count: Option<i64>,
+        include_groups: bool,
     ) -> AppResult<(Vec<User>, i64)>;
 
     /// Find all users with sorting
@@ -37,6 +39,7 @@ pub trait UserReader: Send + Sync {
         start_index: Option<i64>,
         count: Option<i64>,
         sort_spec: Option<&SortSpec>,
+        include_groups: bool,
     ) -> AppResult<(Vec<User>, i64)>;
 
     /// Find users by SCIM filter
@@ -47,10 +50,11 @@ pub trait UserReader: Send + Sync {
         start_index: Option<i64>,
         count: Option<i64>,
         sort_spec: Option<&SortSpec>,
+        include_groups: bool,
     ) -> AppResult<(Vec<User>, i64)>;
 
     /// Find users by group ID
-    async fn find_users_by_group_id(&self, tenant_id: u32, group_id: &str) -> AppResult<Vec<User>>;
+    async fn find_users_by_group_id(&self, tenant_id: u32, group_id: &str, include_groups: bool) -> AppResult<Vec<User>>;
 }
 
 /// Unified user read operations
@@ -67,8 +71,8 @@ impl<T: UserReader> UnifiedUserReadOps<T> {
     }
 
     /// Find a user by ID
-    pub async fn find_user_by_id(&self, tenant_id: u32, id: &str) -> AppResult<Option<User>> {
-        self.reader.find_user_by_id(tenant_id, id).await
+    pub async fn find_user_by_id(&self, tenant_id: u32, id: &str, include_groups: bool) -> AppResult<Option<User>> {
+        self.reader.find_user_by_id(tenant_id, id, include_groups).await
     }
 
     /// Find a user by username (case-insensitive)
@@ -76,8 +80,9 @@ impl<T: UserReader> UnifiedUserReadOps<T> {
         &self,
         tenant_id: u32,
         username: &str,
+        include_groups: bool,
     ) -> AppResult<Option<User>> {
-        self.reader.find_user_by_username(tenant_id, username).await
+        self.reader.find_user_by_username(tenant_id, username, include_groups).await
     }
 
     /// Find all users with pagination
@@ -86,9 +91,10 @@ impl<T: UserReader> UnifiedUserReadOps<T> {
         tenant_id: u32,
         start_index: Option<i64>,
         count: Option<i64>,
+        include_groups: bool,
     ) -> AppResult<(Vec<User>, i64)> {
         self.reader
-            .find_all_users(tenant_id, start_index, count)
+            .find_all_users(tenant_id, start_index, count, include_groups)
             .await
     }
 
@@ -99,9 +105,10 @@ impl<T: UserReader> UnifiedUserReadOps<T> {
         start_index: Option<i64>,
         count: Option<i64>,
         sort_spec: Option<&SortSpec>,
+        include_groups: bool,
     ) -> AppResult<(Vec<User>, i64)> {
         self.reader
-            .find_all_users_sorted(tenant_id, start_index, count, sort_spec)
+            .find_all_users_sorted(tenant_id, start_index, count, sort_spec, include_groups)
             .await
     }
 
@@ -113,9 +120,10 @@ impl<T: UserReader> UnifiedUserReadOps<T> {
         start_index: Option<i64>,
         count: Option<i64>,
         sort_spec: Option<&SortSpec>,
+        include_groups: bool,
     ) -> AppResult<(Vec<User>, i64)> {
         self.reader
-            .find_users_by_filter(tenant_id, filter, start_index, count, sort_spec)
+            .find_users_by_filter(tenant_id, filter, start_index, count, sort_spec, include_groups)
             .await
     }
 
@@ -124,9 +132,10 @@ impl<T: UserReader> UnifiedUserReadOps<T> {
         &self,
         tenant_id: u32,
         group_id: &str,
+        include_groups: bool,
     ) -> AppResult<Vec<User>> {
         self.reader
-            .find_users_by_group_id(tenant_id, group_id)
+            .find_users_by_group_id(tenant_id, group_id, include_groups)
             .await
     }
 }

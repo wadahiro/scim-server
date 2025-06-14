@@ -254,23 +254,23 @@ pub async fn get_user(
         params.get("excludedAttributes").map(String::as_str),
     );
 
-    match backend.find_user_by_id(tenant_id, &id).await {
+    // Get compatibility settings for this tenant to determine if we should include groups
+    let compatibility = app_config.get_effective_compatibility(tenant_id);
+    
+    match backend.find_user_by_id(tenant_id, &id, compatibility.include_user_groups).await {
         Ok(Some(mut user)) => {
             // Set meta.location for SCIM compliance
             set_user_location(&tenant_info, &mut user);
 
             fix_user_refs(&tenant_info, &mut user);
 
-            // Apply compatibility transformations based on tenant settings
-            let compatibility = app_config.get_effective_compatibility(tenant_id);
+            // Apply compatibility transformations based on tenant settings (already retrieved above)
             user = crate::utils::convert_user_datetime_for_response(
                 user,
                 &compatibility.meta_datetime_format,
             );
-            user = crate::utils::handle_user_groups_inclusion_for_response(
-                user,
-                compatibility.include_user_groups,
-            );
+            // Note: groups field inclusion is already handled at the database level
+            // Only need to handle empty array display behavior
             user = crate::utils::handle_user_empty_groups_for_response(
                 user,
                 compatibility.show_empty_groups_members,
@@ -344,7 +344,7 @@ pub async fn search_users(
             let group_id = &filter_str[start_quote + 1..end_quote];
 
             // Get users by group
-            match backend.find_users_by_group_id(tenant_id, group_id).await {
+            match backend.find_users_by_group_id(tenant_id, group_id, compatibility.include_user_groups).await {
                 Ok(mut users) => {
                     // Set location and fix refs for all users
                     for user in &mut users {
@@ -355,10 +355,8 @@ pub async fn search_users(
                             user.clone(),
                             &compatibility.meta_datetime_format,
                         );
-                        *user = crate::utils::handle_user_groups_inclusion_for_response(
-                            user.clone(),
-                            compatibility.include_user_groups,
-                        );
+                        // Note: groups field inclusion is already handled at the database level
+                        // Only need to handle empty array display behavior
                         *user = crate::utils::handle_user_empty_groups_for_response(
                             user.clone(),
                             compatibility.show_empty_groups_members,
@@ -391,6 +389,7 @@ pub async fn search_users(
                         start_index,
                         count,
                         sort_spec.as_ref(),
+                        compatibility.include_user_groups,
                     )
                     .await
                 {
@@ -404,10 +403,8 @@ pub async fn search_users(
                                 user.clone(),
                                 &compatibility.meta_datetime_format,
                             );
-                            *user = crate::utils::handle_user_groups_inclusion_for_response(
-                                user.clone(),
-                                compatibility.include_user_groups,
-                            );
+                            // Note: groups field inclusion is already handled at the database level
+                            // Only need to handle empty array display behavior
                             *user = crate::utils::handle_user_empty_groups_for_response(
                                 user.clone(),
                                 compatibility.show_empty_groups_members,
@@ -439,10 +436,10 @@ pub async fn search_users(
 
     let result = if sort_spec.is_some() {
         backend
-            .find_all_users_sorted(tenant_id, start_index, count, sort_spec.as_ref())
+            .find_all_users_sorted(tenant_id, start_index, count, sort_spec.as_ref(), compatibility.include_user_groups)
             .await
     } else {
-        backend.find_all_users(tenant_id, start_index, count).await
+        backend.find_all_users(tenant_id, start_index, count, compatibility.include_user_groups).await
     };
 
     match result {
@@ -456,10 +453,8 @@ pub async fn search_users(
                     user.clone(),
                     &compatibility.meta_datetime_format,
                 );
-                *user = crate::utils::handle_user_groups_inclusion_for_response(
-                    user.clone(),
-                    compatibility.include_user_groups,
-                );
+                // Note: groups field inclusion is already handled at the database level
+                // Only need to handle empty array display behavior
                 *user = crate::utils::handle_user_empty_groups_for_response(
                     user.clone(),
                     compatibility.show_empty_groups_members,
@@ -521,10 +516,8 @@ pub async fn update_user(
                 updated_user,
                 &compatibility.meta_datetime_format,
             );
-            updated_user = crate::utils::handle_user_groups_inclusion_for_response(
-                updated_user,
-                compatibility.include_user_groups,
-            );
+            // Note: groups field inclusion is already handled at the database level
+            // Only need to handle empty array display behavior
             updated_user = crate::utils::handle_user_empty_groups_for_response(
                 updated_user,
                 compatibility.show_empty_groups_members,
@@ -610,10 +603,8 @@ pub async fn patch_user(
                 user,
                 &compatibility.meta_datetime_format,
             );
-            user = crate::utils::handle_user_groups_inclusion_for_response(
-                user,
-                compatibility.include_user_groups,
-            );
+            // Note: groups field inclusion is already handled at the database level
+            // Only need to handle empty array display behavior
             user = crate::utils::handle_user_empty_groups_for_response(
                 user,
                 compatibility.show_empty_groups_members,
