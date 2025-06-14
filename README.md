@@ -14,6 +14,7 @@ A SCIM (System for Cross-domain Identity Management) v2.0 server implementation 
 - **Complete data isolation**: Full separation between tenant data
 - **Per-tenant authentication**: Bearer tokens and HTTP Basic auth per tenant
 - **Flexible configuration**: YAML-based tenant setup with environment variable support
+- **Compatibility modes**: Per-tenant SCIM implementation compatibility settings
 
 ### 🔧 SCIM 2.0 Specification Support
 
@@ -131,6 +132,14 @@ tenants:
     auth:
       type: "bearer"
       token: "${PUBLIC_API_TOKEN:-public-token}"
+
+# Global compatibility settings (can be overridden per tenant)
+compatibility:
+  meta_datetime_format: "rfc3339"  # or "epoch" for milliseconds
+  show_empty_groups_members: true  # false to omit empty arrays
+  include_user_groups: true        # false to omit User.groups field
+  support_group_members_filter: true     # false to reject members filters
+  support_group_displayname_filter: true # false to reject displayName filters
 ```
 
 ### Environment Variables
@@ -144,6 +153,55 @@ export API_PASSWORD="secret"
 export TENANT1_TOKEN="tenant1-bearer-token"
 
 cargo run
+```
+
+### Compatibility Configuration
+
+The server supports extensive compatibility options to emulate various SCIM implementations:
+
+#### Global vs Tenant-Specific Settings
+- **Global settings**: Applied to all tenants by default (defined at top level)
+- **Tenant overrides**: Each tenant can override global settings
+
+```yaml
+# Global defaults
+compatibility:
+  meta_datetime_format: "rfc3339"
+  show_empty_groups_members: true
+
+# Tenant-specific override
+tenants:
+  - id: 1
+    path: "/scim/v2"
+    compatibility:  # Overrides global settings for this tenant
+      meta_datetime_format: "epoch"
+      show_empty_groups_members: false
+```
+
+#### Available Options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `meta_datetime_format` | string | `"rfc3339"` | DateTime format: `"rfc3339"` (standard) or `"epoch"` (milliseconds) |
+| `show_empty_groups_members` | bool | `true` | Show empty arrays as `[]` or omit them entirely |
+| `include_user_groups` | bool | `true` | Include or completely omit the `groups` field in User resources |
+| `support_group_members_filter` | bool | `true` | Allow filtering Groups by `members.value` |
+| `support_group_displayname_filter` | bool | `true` | Allow filtering Groups by `displayName` |
+
+#### Use Cases
+
+**Legacy System Compatibility**
+```yaml
+compatibility:
+  meta_datetime_format: "epoch"  # Return timestamps as 1749895434374
+  show_empty_groups_members: false  # Omit empty arrays
+```
+
+**Limited SCIM Implementation**
+```yaml
+compatibility:
+  include_user_groups: false  # Server doesn't support User.groups
+  support_group_members_filter: false  # Can't filter by members
 ```
 
 ## 📡 API Endpoints

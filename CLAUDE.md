@@ -193,6 +193,26 @@ tenants:
     auth:
       auth_type: "bearer"
       token: "${PUBLIC_API_TOKEN}"
+      
+  # Tenant with custom compatibility settings
+  - id: 6
+    path: "/legacy/scim"
+    auth:
+      auth_type: "bearer"
+      token: "${LEGACY_TOKEN}"
+    compatibility:
+      meta_datetime_format: "epoch"        # Legacy system uses timestamps
+      show_empty_groups_members: false     # Don't show empty arrays
+      include_user_groups: false           # Doesn't support User.groups
+      support_group_members_filter: false  # Can't filter by members
+
+# Global compatibility defaults
+compatibility:
+  meta_datetime_format: "rfc3339"
+  show_empty_groups_members: true
+  include_user_groups: true
+  support_group_members_filter: true
+  support_group_displayname_filter: true
 ```
 
 ### Response URL Control (override_base_url)
@@ -215,6 +235,63 @@ tenants:
 - **Unauthenticated**: Anonymous access for development/testing
 - **Per-tenant configuration**: Each tenant can use different auth methods
 - **Authorization header validation**: Proper parsing and validation for all auth types
+- **Case-insensitive auth schemes**: Bearer, token, and Basic are case-insensitive per RFC 7235
+
+### Compatibility Configuration
+
+The server supports extensive compatibility options to emulate various SCIM implementations with different levels of compliance:
+
+**Global and Tenant-Specific Settings:**
+```yaml
+# Global defaults (apply to all tenants)
+compatibility:
+  meta_datetime_format: "rfc3339"       # "rfc3339" or "epoch"
+  show_empty_groups_members: true       # Show/hide empty arrays
+  include_user_groups: true             # Include/exclude User.groups field
+  support_group_members_filter: true    # Allow/reject members filters
+  support_group_displayname_filter: true # Allow/reject displayName filters
+
+# Tenant-specific overrides
+tenants:
+  - id: 1
+    path: "/scim/v2"
+    compatibility:  # Overrides global settings
+      meta_datetime_format: "epoch"  # Legacy system compatibility
+      include_user_groups: false     # This tenant doesn't support User.groups
+```
+
+**Compatibility Options:**
+- **`meta_datetime_format`**: Controls datetime format in responses
+  - `"rfc3339"` (default): Standard format like `"2025-06-14T10:03:54.374Z"`
+  - `"epoch"`: Unix timestamp in milliseconds like `1749895434374`
+  - Applied to meta.created and meta.lastModified fields
+  - **Important**: Only affects response format, storage remains RFC3339
+
+- **`show_empty_groups_members`**: Controls empty array display
+  - `true` (default): Show empty arrays as `[]`
+  - `false`: Omit empty members/groups arrays entirely
+  - Applies to Group.members and User.groups
+
+- **`include_user_groups`**: Controls User.groups field inclusion
+  - `true` (default): Include groups field in User resources
+  - `false`: Completely omit groups field from User resources
+  - Useful for servers that don't support User group membership
+
+- **`support_group_members_filter`**: Controls Group members filtering
+  - `true` (default): Allow `filter=members[value eq "user-id"]`
+  - `false`: Return 400 error for members filters
+  - For servers that can't filter groups by member
+
+- **`support_group_displayname_filter`**: Controls Group displayName filtering
+  - `true` (default): Allow `filter=displayName eq "Admins"`
+  - `false`: Return 400 error for displayName filters
+  - For servers with limited filter capabilities
+
+**Implementation Details:**
+- Located in `src/config.rs` as `CompatibilityConfig`
+- Utility functions in `src/utils.rs` for datetime and array transformations
+- Applied in all User and Group handlers (`src/resource/user.rs`, `src/resource/group.rs`)
+- Response-time transformations only - database storage format unchanged
 
 ### Zero-Configuration Development Mode
 
