@@ -112,7 +112,7 @@ impl GroupUpdateProcessor {
     /// This updates the lastModified timestamp in the SCIM meta attribute.
     fn set_group_metadata(group: &mut Group, timestamp: &DateTime<Utc>) {
         if let Some(meta) = group.meta_mut() {
-            meta.last_modified = Some(timestamp.to_rfc3339());
+            meta.last_modified = Some(crate::utils::format_scim_datetime(*timestamp));
         }
     }
 }

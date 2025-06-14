@@ -88,10 +88,11 @@ impl GroupInsertProcessor {
 
     /// Set group metadata with timestamps
     fn set_group_metadata(group: &mut Group, timestamp: &DateTime<Utc>) {
+        let formatted_time = crate::utils::format_scim_datetime(*timestamp);
         let meta = scim_v2::models::scim_schema::Meta {
             resource_type: Some("Group".to_string()),
-            created: Some(timestamp.to_rfc3339()),
-            last_modified: Some(timestamp.to_rfc3339()),
+            created: Some(formatted_time.clone()),
+            last_modified: Some(formatted_time),
             location: None,
             version: None,
         };

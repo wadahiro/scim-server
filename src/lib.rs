@@ -9,6 +9,7 @@ pub mod password;
 pub mod resource;
 pub mod schema;
 pub mod startup;
+pub mod utils;
 
 // Re-export commonly used types for easier access
 pub use models::{Group, User};

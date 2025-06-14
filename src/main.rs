@@ -19,6 +19,7 @@ mod password;
 mod resource;
 mod schema;
 mod startup;
+mod utils;
 
 use backend::database::DatabaseBackendConfig;
 use backend::{BackendFactory, ScimBackend};

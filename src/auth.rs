@@ -143,10 +143,11 @@ fn validate_authentication(
             Ok(())
         }
         "bearer" => {
-            // Validate Bearer token
+            // Validate Bearer token (case-insensitive per RFC 7235)
             let auth_header = auth_header.ok_or(StatusCode::UNAUTHORIZED)?;
 
-            if !auth_header.starts_with("Bearer ") {
+            // Check for "Bearer " prefix case-insensitively
+            if auth_header.len() < 7 || !auth_header[..7].to_ascii_lowercase().starts_with("bearer ") {
                 return Err(StatusCode::UNAUTHORIZED);
             }
 
@@ -164,10 +165,11 @@ fn validate_authentication(
             }
         }
         "token" => {
-            // Validate token authentication
+            // Validate token authentication (case-insensitive per RFC 7235)
             let auth_header = auth_header.ok_or(StatusCode::UNAUTHORIZED)?;
 
-            if !auth_header.starts_with("token ") {
+            // Check for "token " prefix case-insensitively
+            if auth_header.len() < 6 || !auth_header[..6].to_ascii_lowercase().starts_with("token ") {
                 return Err(StatusCode::UNAUTHORIZED);
             }
 
@@ -185,10 +187,11 @@ fn validate_authentication(
             }
         }
         "basic" => {
-            // Validate HTTP Basic authentication
+            // Validate HTTP Basic authentication (case-insensitive per RFC 7235)
             let auth_header = auth_header.ok_or(StatusCode::UNAUTHORIZED)?;
 
-            if !auth_header.starts_with("Basic ") {
+            // Check for "Basic " prefix case-insensitively
+            if auth_header.len() < 6 || !auth_header[..6].to_ascii_lowercase().starts_with("basic ") {
                 return Err(StatusCode::UNAUTHORIZED);
             }
 

@@ -1,7 +1,7 @@
 use axum::http::StatusCode;
 use axum_test::TestServer;
 use scim_server::config::{
-    AppConfig, AuthConfig, BackendConfig, BasicAuthConfig, CustomEndpoint, DatabaseConfig,
+    AppConfig, AuthConfig, BackendConfig, BasicAuthConfig, CompatibilityConfig, CustomEndpoint, DatabaseConfig,
     ServerConfig, TenantConfig,
 };
 use serde_json::json;
@@ -23,6 +23,7 @@ async fn test_custom_endpoint_auth_override_from_tenant_to_unauthenticated() {
                 max_connections: 1,
             }),
         },
+        compatibility: CompatibilityConfig::default(),
         tenants: vec![TenantConfig {
             id: 1,
             path: "/scim/v2".to_string(),
@@ -45,6 +46,7 @@ async fn test_custom_endpoint_auth_override_from_tenant_to_unauthenticated() {
                     basic: None,
                 }),
             }],
+            compatibility: None,
         }],
     };
 
@@ -95,6 +97,7 @@ async fn test_custom_endpoint_auth_override_from_unauthenticated_to_bearer() {
                 max_connections: 1,
             }),
         },
+        compatibility: CompatibilityConfig::default(),
         tenants: vec![TenantConfig {
             id: 1,
             path: "/scim/v2".to_string(),
@@ -117,6 +120,7 @@ async fn test_custom_endpoint_auth_override_from_unauthenticated_to_bearer() {
                     basic: None,
                 }),
             }],
+            compatibility: None,
         }],
     };
 
@@ -167,6 +171,7 @@ async fn test_custom_endpoint_auth_override_from_bearer_to_basic() {
                 max_connections: 1,
             }),
         },
+        compatibility: CompatibilityConfig::default(),
         tenants: vec![TenantConfig {
             id: 1,
             path: "/scim/v2".to_string(),
@@ -192,6 +197,7 @@ async fn test_custom_endpoint_auth_override_from_bearer_to_basic() {
                     }),
                 }),
             }],
+            compatibility: None,
         }],
     };
 
@@ -251,6 +257,7 @@ async fn test_custom_endpoint_without_auth_override_inherits_tenant_auth() {
                 max_connections: 1,
             }),
         },
+        compatibility: CompatibilityConfig::default(),
         tenants: vec![TenantConfig {
             id: 1,
             path: "/scim/v2".to_string(),
@@ -269,6 +276,7 @@ async fn test_custom_endpoint_without_auth_override_inherits_tenant_auth() {
                 content_type: "application/json".to_string(),
                 auth: None, // No override - should inherit tenant auth
             }],
+            compatibility: None,
         }],
     };
 

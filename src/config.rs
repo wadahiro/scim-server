@@ -8,6 +8,8 @@ pub struct AppConfig {
     pub server: ServerConfig,
     pub backend: BackendConfig,
     pub tenants: Vec<TenantConfig>,
+    #[serde(default)]
+    pub compatibility: CompatibilityConfig,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -49,6 +51,8 @@ pub struct TenantConfig {
     pub override_base_url: Option<String>,
     #[serde(default)]
     pub custom_endpoints: Vec<CustomEndpoint>,
+    #[serde(default)]
+    pub compatibility: Option<CompatibilityConfig>,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -99,6 +103,52 @@ pub struct AuthConfig {
 pub struct BasicAuthConfig {
     pub username: String,
     pub password: String,
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct CompatibilityConfig {
+    #[serde(default = "default_meta_datetime_format")]
+    pub meta_datetime_format: String,
+    #[serde(default = "default_show_empty_groups_members")]
+    pub show_empty_groups_members: bool,
+    #[serde(default = "default_include_user_groups")]
+    pub include_user_groups: bool,
+    #[serde(default = "default_support_group_members_filter")]
+    pub support_group_members_filter: bool,
+    #[serde(default = "default_support_group_displayname_filter")]
+    pub support_group_displayname_filter: bool,
+}
+
+fn default_meta_datetime_format() -> String {
+    "rfc3339".to_string()
+}
+
+fn default_show_empty_groups_members() -> bool {
+    true // true: show empty arrays as [], false: omit empty arrays from response
+}
+
+fn default_include_user_groups() -> bool {
+    true // true: include groups field in User responses, false: omit groups field entirely
+}
+
+fn default_support_group_members_filter() -> bool {
+    true // true: support filtering Groups by members.value, false: reject such filters
+}
+
+fn default_support_group_displayname_filter() -> bool {
+    true // true: support filtering Groups by displayName, false: reject such filters
+}
+
+impl Default for CompatibilityConfig {
+    fn default() -> Self {
+        Self {
+            meta_datetime_format: default_meta_datetime_format(),
+            show_empty_groups_members: default_show_empty_groups_members(),
+            include_user_groups: default_include_user_groups(),
+            support_group_members_filter: default_support_group_members_filter(),
+            support_group_displayname_filter: default_support_group_displayname_filter(),
+        }
+    }
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -462,6 +512,7 @@ impl AppConfig {
                     max_connections: 1,
                 }),
             },
+            compatibility: CompatibilityConfig::default(),
             tenants: vec![TenantConfig {
                 id: 1,
                 path: "/scim/v2".to_string(),
@@ -474,6 +525,7 @@ impl AppConfig {
                 },
                 override_base_url: None, // Use auto-constructed URL for zero-config mode
                 custom_endpoints: vec![],
+                compatibility: None, // Use global compatibility settings
             }],
         }
     }
@@ -589,6 +641,19 @@ impl AppConfig {
         }
         None
     }
+
+    /// Get effective compatibility configuration for a tenant
+    /// 
+    /// Tenant-specific settings override global settings.
+    /// If no tenant-specific settings exist, use global settings.
+    pub fn get_effective_compatibility(&self, tenant_id: u32) -> &CompatibilityConfig {
+        if let Some(tenant) = self.tenants.iter().find(|t| t.id == tenant_id) {
+            if let Some(ref tenant_compatibility) = tenant.compatibility {
+                return tenant_compatibility;
+            }
+        }
+        &self.compatibility
+    }
 }
 
 impl DatabaseConfig {
@@ -639,6 +704,7 @@ mod tests {
                     max_connections: 10,
                 }),
             },
+            compatibility: CompatibilityConfig::default(),
             tenants: vec![
                 TenantConfig {
                     id: 1,
@@ -652,6 +718,7 @@ mod tests {
                     },
                     override_base_url: None,
                     custom_endpoints: vec![],
+                    compatibility: None,
                 },
                 TenantConfig {
                     id: 2,
@@ -665,6 +732,7 @@ mod tests {
                     },
                     override_base_url: None,
                     custom_endpoints: vec![],
+                    compatibility: None,
                 },
             ],
         };
@@ -738,6 +806,7 @@ tenants:
                     max_connections: 10,
                 }),
             },
+            compatibility: CompatibilityConfig::default(),
             tenants: vec![TenantConfig {
                 id: 3,
                 path: "https://basic.example.com".to_string(),
@@ -753,6 +822,7 @@ tenants:
                 },
                 override_base_url: None,
                 custom_endpoints: vec![],
+                compatibility: None,
             }],
         };
 
@@ -928,6 +998,7 @@ tenants:
                     max_connections: 10,
                 }),
             },
+            compatibility: CompatibilityConfig::default(),
             tenants: vec![TenantConfig {
                 id: 4,
                 path: "/api/scim".to_string(),
@@ -943,6 +1014,7 @@ tenants:
                 },
                 override_base_url: None,
                 custom_endpoints: vec![],
+                compatibility: None,
             }],
         };
 
@@ -980,6 +1052,7 @@ tenants:
                     max_connections: 10,
                 }),
             },
+            compatibility: CompatibilityConfig::default(),
             tenants: vec![TenantConfig {
                 id: 5,
                 path: "/scim".to_string(),
@@ -998,6 +1071,7 @@ tenants:
                 },
                 override_base_url: None,
                 custom_endpoints: vec![],
+                compatibility: None,
             }],
         };
 
@@ -1135,6 +1209,7 @@ tenants:
             },
             override_base_url: Some("https://custom.example.com".to_string()),
             custom_endpoints: vec![],
+            compatibility: None,
         };
 
         let request_info = RequestInfo {
@@ -1163,6 +1238,7 @@ tenants:
             },
             override_base_url: None,
             custom_endpoints: vec![],
+            compatibility: None,
         };
 
         let result = tenant_path_only.build_base_url(&request_info);
@@ -1184,6 +1260,7 @@ tenants:
             },
             override_base_url: None,
             custom_endpoints: vec![],
+            compatibility: None,
         };
 
         let request_info_with_matching_host = RequestInfo {
@@ -1215,6 +1292,7 @@ tenants:
             },
             override_base_url: None,
             custom_endpoints: vec![],
+            compatibility: None,
         };
 
         let request_info_forwarded = RequestInfo {

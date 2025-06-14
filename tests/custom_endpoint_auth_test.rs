@@ -3,7 +3,7 @@ mod common;
 use axum::http::StatusCode;
 use axum_test::TestServer;
 use scim_server::config::{
-    AppConfig, AuthConfig, BackendConfig, CustomEndpoint, DatabaseConfig, ServerConfig,
+    AppConfig, AuthConfig, BackendConfig, CompatibilityConfig, CustomEndpoint, DatabaseConfig, ServerConfig,
     TenantConfig,
 };
 use serde_json::json;
@@ -23,6 +23,7 @@ async fn test_custom_endpoint_with_unauthenticated_access() {
                 max_connections: 1,
             }),
         },
+        compatibility: CompatibilityConfig::default(),
         tenants: vec![TenantConfig {
             id: 1,
             path: "/scim/v2".to_string(),
@@ -41,6 +42,7 @@ async fn test_custom_endpoint_with_unauthenticated_access() {
                 response: "{\"status\":\"healthy\"}".to_string(),
                 auth: None,
             }],
+            compatibility: None,
         }],
     };
 
@@ -73,6 +75,7 @@ async fn test_custom_endpoint_with_bearer_auth() {
                 max_connections: 1,
             }),
         },
+        compatibility: CompatibilityConfig::default(),
         tenants: vec![TenantConfig {
             id: 1,
             path: "/scim/v2".to_string(),
@@ -91,6 +94,7 @@ async fn test_custom_endpoint_with_bearer_auth() {
                 response: "Service is running".to_string(),
                 auth: None,
             }],
+            compatibility: None,
         }],
     };
 
@@ -134,6 +138,7 @@ async fn test_custom_endpoint_with_basic_auth() {
                 max_connections: 1,
             }),
         },
+        compatibility: CompatibilityConfig::default(),
         tenants: vec![TenantConfig {
             id: 1,
             path: "/scim/v2".to_string(),
@@ -155,6 +160,7 @@ async fn test_custom_endpoint_with_basic_auth() {
                 response: "requests_total 42".to_string(),
                 auth: None,
             }],
+            compatibility: None,
         }],
     };
 
@@ -201,6 +207,7 @@ async fn test_multiple_tenants_with_custom_endpoints() {
                 max_connections: 1,
             }),
         },
+        compatibility: CompatibilityConfig::default(),
         tenants: vec![
             TenantConfig {
                 id: 1,
@@ -220,6 +227,7 @@ async fn test_multiple_tenants_with_custom_endpoints() {
                     response: "{\"tenant\":\"1\",\"status\":\"ok\"}".to_string(),
                     auth: None,
                 }],
+                compatibility: None,
             },
             TenantConfig {
                 id: 2,
@@ -239,6 +247,7 @@ async fn test_multiple_tenants_with_custom_endpoints() {
                     response: "{\"tenant\":\"2\",\"status\":\"ok\"}".to_string(),
                     auth: None,
                 }],
+                compatibility: None,
             },
         ],
     };
@@ -293,6 +302,7 @@ async fn test_custom_endpoint_not_found() {
                 max_connections: 1,
             }),
         },
+        compatibility: CompatibilityConfig::default(),
         tenants: vec![TenantConfig {
             id: 1,
             path: "/scim/v2".to_string(),
@@ -311,6 +321,7 @@ async fn test_custom_endpoint_not_found() {
                 response: "test".to_string(),
                 auth: None,
             }],
+            compatibility: None,
         }],
     };
 

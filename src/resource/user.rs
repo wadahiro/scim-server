@@ -54,8 +54,7 @@ fn set_user_location(tenant_info: &TenantInfo, user: &mut User) {
 
         // Ensure meta exists
         if user.base.meta.is_none() {
-            use chrono::Utc;
-            let now = Utc::now().to_rfc3339();
+            let now = crate::utils::current_scim_datetime();
             user.base.meta = Some(scim_v2::models::scim_schema::Meta {
                 created: Some(now.clone()),
                 last_modified: Some(now),
@@ -131,7 +130,7 @@ fn create_filtered_user_list_response(
 
 // Multi-tenant handlers with tenant_id extraction and validation
 pub async fn create_user(
-    State((backend, _)): State<AppState>,
+    State((backend, app_config)): State<AppState>,
     Extension(tenant_info): Extension<TenantInfo>,
     Json(payload): Json<serde_json::Value>,
 ) -> Result<Response, (StatusCode, Json<serde_json::Value>)> {
@@ -160,6 +159,12 @@ pub async fn create_user(
 
             // Fix refs with base URL
             fix_user_refs(&tenant_info, &mut created_user);
+
+            // Apply compatibility transformations based on tenant settings
+            let compatibility = app_config.get_effective_compatibility(tenant_id);
+            created_user = crate::utils::convert_user_datetime_for_response(created_user, &compatibility.meta_datetime_format);
+            created_user = crate::utils::handle_user_groups_inclusion_for_response(created_user, compatibility.include_user_groups);
+            created_user = crate::utils::handle_user_empty_groups_for_response(created_user, compatibility.show_empty_groups_members);
 
             // Build Location header URL
             let location_url = if let Some(ref user_id) = created_user.base.id {
@@ -204,7 +209,7 @@ pub async fn create_user(
 }
 
 pub async fn get_user(
-    State((backend, _)): State<AppState>,
+    State((backend, app_config)): State<AppState>,
     Extension(tenant_info): Extension<TenantInfo>,
     uri: Uri,
     Query(params): Query<HashMap<String, String>>,
@@ -235,6 +240,12 @@ pub async fn get_user(
 
             fix_user_refs(&tenant_info, &mut user);
 
+            // Apply compatibility transformations based on tenant settings
+            let compatibility = app_config.get_effective_compatibility(tenant_id);
+            user = crate::utils::convert_user_datetime_for_response(user, &compatibility.meta_datetime_format);
+            user = crate::utils::handle_user_groups_inclusion_for_response(user, compatibility.include_user_groups);
+            user = crate::utils::handle_user_empty_groups_for_response(user, compatibility.show_empty_groups_members);
+
             // Convert to JSON and apply attribute filtering
             let user_json = serde_json::to_value(&user).map_err(|_| {
                 (
@@ -255,7 +266,7 @@ pub async fn get_user(
 }
 
 pub async fn search_users(
-    State((backend, _)): State<AppState>,
+    State((backend, app_config)): State<AppState>,
     Extension(tenant_info): Extension<TenantInfo>,
     Query(params): Query<HashMap<String, String>>,
 ) -> Result<(StatusCode, Json<ScimListResponse>), (StatusCode, Json<serde_json::Value>)> {
@@ -272,6 +283,9 @@ pub async fn search_users(
         params.get("attributes").map(String::as_str),
         params.get("excludedAttributes").map(String::as_str),
     );
+
+    // Get compatibility settings for this tenant
+    let compatibility = app_config.get_effective_compatibility(tenant_id);
 
     // Handle filter for group membership: groups[value eq "group-id"]
     if let Some(filter_str) = filter {
@@ -306,6 +320,10 @@ pub async fn search_users(
                     for user in &mut users {
                         set_user_location(&tenant_info, user);
                         fix_user_refs(&tenant_info, user);
+                        // Apply compatibility transformations
+                        *user = crate::utils::convert_user_datetime_for_response(user.clone(), &compatibility.meta_datetime_format);
+                        *user = crate::utils::handle_user_groups_inclusion_for_response(user.clone(), compatibility.include_user_groups);
+                        *user = crate::utils::handle_user_empty_groups_for_response(user.clone(), compatibility.show_empty_groups_members);
                     }
                     let total_results = users.len() as i64;
                     let response = create_filtered_user_list_response(
@@ -342,6 +360,10 @@ pub async fn search_users(
                         for user in &mut users {
                             set_user_location(&tenant_info, user);
                             fix_user_refs(&tenant_info, user);
+                            // Apply compatibility transformations
+                            *user = crate::utils::convert_user_datetime_for_response(user.clone(), &compatibility.meta_datetime_format);
+                            *user = crate::utils::handle_user_groups_inclusion_for_response(user.clone(), compatibility.include_user_groups);
+                            *user = crate::utils::handle_user_empty_groups_for_response(user.clone(), compatibility.show_empty_groups_members);
                         }
                         let response = create_filtered_user_list_response(
                             users,
@@ -381,6 +403,10 @@ pub async fn search_users(
             for user in &mut users {
                 set_user_location(&tenant_info, user);
                 fix_user_refs(&tenant_info, user);
+                // Apply compatibility transformations
+                *user = crate::utils::convert_user_datetime_for_response(user.clone(), &compatibility.meta_datetime_format);
+                *user = crate::utils::handle_user_groups_inclusion_for_response(user.clone(), compatibility.include_user_groups);
+                *user = crate::utils::handle_user_empty_groups_for_response(user.clone(), compatibility.show_empty_groups_members);
             }
             let response =
                 create_filtered_user_list_response(users, total, start_index, &attribute_filter);
@@ -391,7 +417,7 @@ pub async fn search_users(
 }
 
 pub async fn update_user(
-    State((backend, _)): State<AppState>,
+    State((backend, app_config)): State<AppState>,
     Extension(tenant_info): Extension<TenantInfo>,
     uri: Uri,
     Json(payload): Json<serde_json::Value>,
@@ -431,6 +457,12 @@ pub async fn update_user(
             set_user_location(&tenant_info, &mut updated_user);
 
             fix_user_refs(&tenant_info, &mut updated_user);
+
+            // Apply compatibility transformations based on tenant settings
+            let compatibility = app_config.get_effective_compatibility(tenant_id);
+            updated_user = crate::utils::convert_user_datetime_for_response(updated_user, &compatibility.meta_datetime_format);
+            updated_user = crate::utils::handle_user_groups_inclusion_for_response(updated_user, compatibility.include_user_groups);
+            updated_user = crate::utils::handle_user_empty_groups_for_response(updated_user, compatibility.show_empty_groups_members);
 
             // Convert to JSON and remove null fields to comply with SCIM specification
             let user_json = serde_json::to_value(&updated_user).map_err(|_| {
@@ -481,7 +513,7 @@ pub async fn delete_user(
 }
 
 pub async fn patch_user(
-    State((backend, _)): State<AppState>,
+    State((backend, app_config)): State<AppState>,
     Extension(tenant_info): Extension<TenantInfo>,
     uri: Uri,
     Json(patch_ops): Json<ScimPatchOp>,
@@ -505,6 +537,12 @@ pub async fn patch_user(
             set_user_location(&tenant_info, &mut user);
 
             fix_user_refs(&tenant_info, &mut user);
+
+            // Apply compatibility transformations based on tenant settings
+            let compatibility = app_config.get_effective_compatibility(tenant_id);
+            user = crate::utils::convert_user_datetime_for_response(user, &compatibility.meta_datetime_format);
+            user = crate::utils::handle_user_groups_inclusion_for_response(user, compatibility.include_user_groups);
+            user = crate::utils::handle_user_empty_groups_for_response(user, compatibility.show_empty_groups_members);
 
             // Convert to JSON and remove null fields to comply with SCIM specification
             let user_json = serde_json::to_value(&user).map_err(|_| {

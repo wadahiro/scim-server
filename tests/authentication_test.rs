@@ -6,7 +6,7 @@ use axum::{
 };
 use common::{create_test_user_json, setup_test_app};
 use scim_server::config::{
-    AppConfig, AuthConfig, BackendConfig, BasicAuthConfig, DatabaseConfig, ServerConfig,
+    AppConfig, AuthConfig, BackendConfig, BasicAuthConfig, CompatibilityConfig, DatabaseConfig, ServerConfig,
     TenantConfig,
 };
 use tower::ServiceExt;
@@ -27,6 +27,7 @@ async fn test_unauthenticated_access() {
                 max_connections: 1,
             }),
         },
+        compatibility: CompatibilityConfig::default(),
         tenants: vec![TenantConfig {
             id: 1,
             path: "/scim/v2".to_string(),
@@ -39,6 +40,7 @@ async fn test_unauthenticated_access() {
             host_resolution: None,
             override_base_url: None,
             custom_endpoints: vec![],
+            compatibility: None,
         }],
     };
 
@@ -74,6 +76,7 @@ async fn test_bearer_token_authentication_success() {
                 max_connections: 1,
             }),
         },
+        compatibility: CompatibilityConfig::default(),
         tenants: vec![TenantConfig {
             id: 1,
             path: "/scim/v2".to_string(),
@@ -86,6 +89,7 @@ async fn test_bearer_token_authentication_success() {
             host_resolution: None,
             override_base_url: None,
             custom_endpoints: vec![],
+            compatibility: None,
         }],
     };
 
@@ -122,6 +126,7 @@ async fn test_bearer_token_authentication_failure() {
                 max_connections: 1,
             }),
         },
+        compatibility: CompatibilityConfig::default(),
         tenants: vec![TenantConfig {
             id: 1,
             path: "/scim/v2".to_string(),
@@ -134,6 +139,7 @@ async fn test_bearer_token_authentication_failure() {
             host_resolution: None,
             override_base_url: None,
             custom_endpoints: vec![],
+            compatibility: None,
         }],
     };
 
@@ -170,6 +176,7 @@ async fn test_bearer_token_missing_header() {
                 max_connections: 1,
             }),
         },
+        compatibility: CompatibilityConfig::default(),
         tenants: vec![TenantConfig {
             id: 1,
             path: "/scim/v2".to_string(),
@@ -182,6 +189,7 @@ async fn test_bearer_token_missing_header() {
             host_resolution: None,
             override_base_url: None,
             custom_endpoints: vec![],
+            compatibility: None,
         }],
     };
 
@@ -217,6 +225,7 @@ async fn test_basic_authentication_success() {
                 max_connections: 1,
             }),
         },
+        compatibility: CompatibilityConfig::default(),
         tenants: vec![TenantConfig {
             id: 1,
             path: "/scim/v2".to_string(),
@@ -232,6 +241,7 @@ async fn test_basic_authentication_success() {
             host_resolution: None,
             override_base_url: None,
             custom_endpoints: vec![],
+            compatibility: None,
         }],
     };
 
@@ -272,6 +282,7 @@ async fn test_basic_authentication_failure() {
                 max_connections: 1,
             }),
         },
+        compatibility: CompatibilityConfig::default(),
         tenants: vec![TenantConfig {
             id: 1,
             path: "/scim/v2".to_string(),
@@ -287,6 +298,7 @@ async fn test_basic_authentication_failure() {
             host_resolution: None,
             override_base_url: None,
             custom_endpoints: vec![],
+            compatibility: None,
         }],
     };
 
@@ -327,6 +339,7 @@ async fn test_multi_tenant_authentication() {
                 max_connections: 1,
             }),
         },
+        compatibility: CompatibilityConfig::default(),
         tenants: vec![
             TenantConfig {
                 id: 1,
@@ -340,6 +353,7 @@ async fn test_multi_tenant_authentication() {
             host_resolution: None,
             override_base_url: None,
                 custom_endpoints: vec![],
+            compatibility: None,
             },
             TenantConfig {
                 id: 2,
@@ -356,6 +370,7 @@ async fn test_multi_tenant_authentication() {
             host_resolution: None,
             override_base_url: None,
                 custom_endpoints: vec![],
+            compatibility: None,
             },
         ],
     };
@@ -410,6 +425,7 @@ async fn test_tenant_not_found() {
                 max_connections: 1,
             }),
         },
+        compatibility: CompatibilityConfig::default(),
         tenants: vec![TenantConfig {
             id: 1,
             path: "/scim/v2".to_string(),
@@ -422,6 +438,7 @@ async fn test_tenant_not_found() {
             host_resolution: None,
             override_base_url: None,
             custom_endpoints: vec![],
+            compatibility: None,
         }],
     };
 

@@ -303,7 +303,6 @@ async fn test_phone_no_validation() {
 }
 
 #[tokio::test]
-#[ignore = "Locale/timezone validation not yet implemented"]
 async fn test_locale_timezone_validation() {
     let tenant_config = create_test_app_config();
     let app = common::setup_test_app(tenant_config).await.unwrap();

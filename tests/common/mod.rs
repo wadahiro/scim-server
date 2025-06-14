@@ -6,7 +6,7 @@ use axum::{
 use scim_server::backend::database::DatabaseBackendConfig;
 use scim_server::backend::{BackendFactory, DatabaseType, ScimBackend};
 use scim_server::config::{
-    AppConfig, AuthConfig, BackendConfig, DatabaseConfig, ServerConfig, TenantConfig,
+    AppConfig, AuthConfig, BackendConfig, CompatibilityConfig, DatabaseConfig, ServerConfig, TenantConfig,
 };
 use url::Url;
 use serde_json::json;
@@ -367,6 +367,7 @@ pub fn create_test_app_config() -> AppConfig {
                 max_connections: 10,
             }),
         },
+        compatibility: CompatibilityConfig::default(),
         tenants: vec![
             TenantConfig {
                 id: 1,
@@ -380,6 +381,7 @@ pub fn create_test_app_config() -> AppConfig {
                 host_resolution: None,
                 override_base_url: None,
                 custom_endpoints: vec![],
+                compatibility: None,
             },
             TenantConfig {
                 id: 2,
@@ -393,6 +395,7 @@ pub fn create_test_app_config() -> AppConfig {
                 host_resolution: None,
                 override_base_url: None,
                 custom_endpoints: vec![],
+                compatibility: None,
             },
             TenantConfig {
                 id: 3,
@@ -406,6 +409,7 @@ pub fn create_test_app_config() -> AppConfig {
                 host_resolution: None,
                 override_base_url: None,
                 custom_endpoints: vec![],
+                compatibility: None,
             },
         ],
     }
@@ -427,6 +431,7 @@ pub fn create_token_auth_config() -> AppConfig {
                 max_connections: 10,
             }),
         },
+        compatibility: CompatibilityConfig::default(),
         tenants: vec![TenantConfig {
             id: 1,
             path: "/scim/v2".to_string(),
@@ -439,6 +444,7 @@ pub fn create_token_auth_config() -> AppConfig {
             },
             override_base_url: None,
             custom_endpoints: vec![],
+            compatibility: None,
         }],
     }
 }
@@ -457,6 +463,7 @@ pub fn create_bearer_auth_config() -> AppConfig {
                 max_connections: 10,
             }),
         },
+        compatibility: CompatibilityConfig::default(),
         tenants: vec![TenantConfig {
             id: 1,
             path: "/scim/v2".to_string(),
@@ -469,6 +476,7 @@ pub fn create_bearer_auth_config() -> AppConfig {
             },
             override_base_url: None,
             custom_endpoints: vec![],
+            compatibility: None,
         }],
     }
 }

@@ -5,7 +5,6 @@ use serde_json::json;
 mod common;
 
 #[tokio::test]
-#[ignore = "Multi-tenant repository architecture needs refactoring"]
 async fn test_concurrent_operations() {
     let tenant_config = common::create_test_app_config();
     let app = common::setup_test_app(tenant_config).await.unwrap();

@@ -157,7 +157,7 @@ impl UserPatchProcessor {
     /// This updates the lastModified timestamp in the SCIM meta attribute.
     fn set_user_metadata(user: &mut User, timestamp: &DateTime<Utc>) {
         if let Some(meta) = user.meta_mut() {
-            meta.last_modified = Some(timestamp.to_rfc3339());
+            meta.last_modified = Some(crate::utils::format_scim_datetime(*timestamp));
         }
     }
 

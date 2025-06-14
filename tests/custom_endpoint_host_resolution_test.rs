@@ -5,7 +5,7 @@ use serde_json::json;
 mod common;
 
 use scim_server::config::{
-    AppConfig, AuthConfig, BackendConfig, CustomEndpoint, DatabaseConfig, 
+    AppConfig, AuthConfig, BackendConfig, CompatibilityConfig, CustomEndpoint, DatabaseConfig, 
     HostResolutionConfig, HostResolutionType, ServerConfig, TenantConfig,
 };
 
@@ -26,6 +26,7 @@ async fn test_custom_endpoint_basic_with_tenant_isolation() {
                 max_connections: 1,
             }),
         },
+        compatibility: CompatibilityConfig::default(),
         tenants: vec![
             TenantConfig {
                 id: 1,
@@ -45,6 +46,7 @@ async fn test_custom_endpoint_basic_with_tenant_isolation() {
                     content_type: "application/json".to_string(),
                     auth: None,
                 }],
+                compatibility: None,
             },
             TenantConfig {
                 id: 2,
@@ -64,6 +66,7 @@ async fn test_custom_endpoint_basic_with_tenant_isolation() {
                     content_type: "application/json".to_string(),
                     auth: None,
                 }],
+                compatibility: None,
             },
         ],
     };
@@ -120,6 +123,7 @@ async fn test_tenant_config_supports_route() {
             content_type: "application/json".to_string(),
             auth: None,
         }],
+        compatibility: None,
     };
 
     // Verify that host resolution configuration is properly structured
