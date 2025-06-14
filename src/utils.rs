@@ -126,22 +126,24 @@ pub fn handle_user_groups_inclusion_for_response(
 /// - true: Keep empty arrays as []
 /// - false: Remove empty arrays from the response
 /// Note: This only applies if groups field is included (see handle_user_groups_inclusion_for_response)
+/// IMPORTANT: Only operates on existing groups, respects include_user_groups setting
 pub fn handle_user_empty_groups_for_response(
     mut user: crate::models::User,
     show_empty_groups_members: bool,
 ) -> crate::models::User {
-    if show_empty_groups_members {
-        // Ensure empty groups array is shown as []
-        if user.base.groups.is_none() {
-            user.base.groups = Some(Vec::new());
-        }
-    } else {
-        // Remove empty groups array
-        if let Some(ref groups) = user.base.groups {
+    // Only modify behavior if groups field is present
+    if let Some(ref groups) = user.base.groups {
+        if show_empty_groups_members {
+            // Keep empty groups array as is (already Some([]))
+        } else {
+            // Remove empty groups array
             if groups.is_empty() {
                 user.base.groups = None;
             }
         }
+    } else {
+        // If groups is None, it means include_user_groups: false
+        // Don't add it back regardless of show_empty_groups_members setting
     }
     user
 }
@@ -272,13 +274,13 @@ mod tests {
     fn test_handle_user_empty_groups_for_response() {
         use crate::models::User;
 
-        // Test with None groups and show_empty_groups_members = true
+        // Test with None groups (include_user_groups: false) and show_empty_groups_members = true
+        // Should remain None (respects include_user_groups setting)
         let mut user = User::default();
         user.base.groups = None;
 
         let result = handle_user_empty_groups_for_response(user, true);
-        assert!(result.base.groups.is_some());
-        assert!(result.base.groups.as_ref().unwrap().is_empty());
+        assert!(result.base.groups.is_none(), "None groups should remain None regardless of show_empty_groups_members");
 
         // Test with None groups and show_empty_groups_members = false
         let mut user = User::default();

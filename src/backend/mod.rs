@@ -49,13 +49,14 @@ pub trait UserBackend: Backend {
     async fn create_user(&self, tenant_id: u32, user: &User) -> AppResult<User>;
 
     /// Find a user by ID within a tenant
-    async fn find_user_by_id(&self, tenant_id: u32, id: &str) -> AppResult<Option<User>>;
+    async fn find_user_by_id(&self, tenant_id: u32, id: &str, include_groups: bool) -> AppResult<Option<User>>;
 
     /// Find a user by username (case-insensitive per SCIM 2.0)
     async fn find_user_by_username(
         &self,
         tenant_id: u32,
         username: &str,
+        include_groups: bool,
     ) -> AppResult<Option<User>>;
 
     /// Find all users in a tenant with pagination
@@ -64,6 +65,7 @@ pub trait UserBackend: Backend {
         tenant_id: u32,
         start_index: Option<i64>,
         count: Option<i64>,
+        include_groups: bool,
     ) -> AppResult<(Vec<User>, i64)>;
 
     /// Find all users with sorting support
@@ -73,6 +75,7 @@ pub trait UserBackend: Backend {
         start_index: Option<i64>,
         count: Option<i64>,
         sort_spec: Option<&SortSpec>,
+        include_groups: bool,
     ) -> AppResult<(Vec<User>, i64)>;
 
     /// Find users by SCIM filter with pagination and sorting
@@ -83,6 +86,7 @@ pub trait UserBackend: Backend {
         start_index: Option<i64>,
         count: Option<i64>,
         sort_spec: Option<&SortSpec>,
+        include_groups: bool,
     ) -> AppResult<(Vec<User>, i64)>;
 
     /// Update an existing user (full replacement)
@@ -100,7 +104,7 @@ pub trait UserBackend: Backend {
     async fn delete_user(&self, tenant_id: u32, id: &str) -> AppResult<bool>;
 
     /// Find users that are members of a specific group
-    async fn find_users_by_group_id(&self, tenant_id: u32, group_id: &str) -> AppResult<Vec<User>>;
+    async fn find_users_by_group_id(&self, tenant_id: u32, group_id: &str, include_groups: bool) -> AppResult<Vec<User>>;
 }
 
 /// Group-specific backend operations

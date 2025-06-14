@@ -75,8 +75,8 @@ impl SqliteUserReader {
         }
     }
 
-    /// Helper function to fetch a user with their groups
-    async fn fetch_user_with_groups(&self, tenant_id: u32, id: &str) -> AppResult<Option<User>> {
+    /// Helper function to fetch a user with or without groups
+    async fn fetch_user_with_groups_optional(&self, tenant_id: u32, id: &str, include_groups: bool) -> AppResult<Option<User>> {
         let table_name = self.users_table(tenant_id);
         let sql = format!(
             "SELECT id, username, external_id, data_orig, data_norm, created_at, updated_at FROM {} WHERE id = ?1",
@@ -102,9 +102,14 @@ impl SqliteUserReader {
                 // Remove password from response
                 *user.password_mut() = None;
 
-                // Fetch groups and always set them (compatibility settings will handle empty array display)
-                let groups = self.fetch_user_groups(tenant_id, id).await?;
-                *user.groups_mut() = Some(groups);
+                // Only fetch groups if include_groups is true
+                if include_groups {
+                    let groups = self.fetch_user_groups(tenant_id, id).await?;
+                    *user.groups_mut() = Some(groups);
+                } else {
+                    // Set groups to None when not including groups (optimization)
+                    *user.groups_mut() = None;
+                }
 
                 Ok(Some(user))
             }
@@ -168,14 +173,15 @@ impl SqliteUserReader {
 
 #[async_trait]
 impl UserReader for SqliteUserReader {
-    async fn find_user_by_id(&self, tenant_id: u32, id: &str) -> AppResult<Option<User>> {
-        self.fetch_user_with_groups(tenant_id, id).await
+    async fn find_user_by_id(&self, tenant_id: u32, id: &str, include_groups: bool) -> AppResult<Option<User>> {
+        self.fetch_user_with_groups_optional(tenant_id, id, include_groups).await
     }
 
     async fn find_user_by_username(
         &self,
         tenant_id: u32,
         username: &str,
+        include_groups: bool,
     ) -> AppResult<Option<User>> {
         let table_name = self.users_table(tenant_id);
         let sql = format!(
@@ -192,7 +198,7 @@ impl UserReader for SqliteUserReader {
         match row {
             Some(row) => {
                 let id: String = row.get("id");
-                self.fetch_user_with_groups(tenant_id, &id).await
+                self.fetch_user_with_groups_optional(tenant_id, &id, include_groups).await
             }
             None => Ok(None),
         }
@@ -203,6 +209,7 @@ impl UserReader for SqliteUserReader {
         tenant_id: u32,
         start_index: Option<i64>,
         count: Option<i64>,
+        include_groups: bool,
     ) -> AppResult<(Vec<User>, i64)> {
         let table_name = self.users_table(tenant_id);
 
@@ -232,7 +239,7 @@ impl UserReader for SqliteUserReader {
         let mut users = Vec::new();
         for row in rows {
             let id: String = row.get("id");
-            if let Some(user) = self.fetch_user_with_groups(tenant_id, &id).await? {
+            if let Some(user) = self.fetch_user_with_groups_optional(tenant_id, &id, include_groups).await? {
                 users.push(user);
             }
         }
@@ -246,9 +253,10 @@ impl UserReader for SqliteUserReader {
         start_index: Option<i64>,
         count: Option<i64>,
         sort_spec: Option<&SortSpec>,
+        include_groups: bool,
     ) -> AppResult<(Vec<User>, i64)> {
         if sort_spec.is_none() {
-            return self.find_all_users(tenant_id, start_index, count).await;
+            return self.find_all_users(tenant_id, start_index, count, include_groups).await;
         }
 
         let table_name = self.users_table(tenant_id);
@@ -280,7 +288,7 @@ impl UserReader for SqliteUserReader {
         let mut users = Vec::new();
         for row in rows {
             let id: String = row.get("id");
-            if let Some(user) = self.fetch_user_with_groups(tenant_id, &id).await? {
+            if let Some(user) = self.fetch_user_with_groups_optional(tenant_id, &id, include_groups).await? {
                 users.push(user);
             }
         }
@@ -295,6 +303,7 @@ impl UserReader for SqliteUserReader {
         start_index: Option<i64>,
         count: Option<i64>,
         sort_spec: Option<&SortSpec>,
+        include_groups: bool,
     ) -> AppResult<(Vec<User>, i64)> {
         let table_name = self.users_table(tenant_id);
 
@@ -344,7 +353,7 @@ impl UserReader for SqliteUserReader {
         let mut users = Vec::new();
         for row in rows {
             let id: String = row.get("id");
-            if let Some(user) = self.fetch_user_with_groups(tenant_id, &id).await? {
+            if let Some(user) = self.fetch_user_with_groups_optional(tenant_id, &id, include_groups).await? {
                 users.push(user);
             }
         }
@@ -352,7 +361,7 @@ impl UserReader for SqliteUserReader {
         Ok((users, total))
     }
 
-    async fn find_users_by_group_id(&self, tenant_id: u32, group_id: &str) -> AppResult<Vec<User>> {
+    async fn find_users_by_group_id(&self, tenant_id: u32, group_id: &str, include_groups: bool) -> AppResult<Vec<User>> {
         let users_table = self.users_table(tenant_id);
         let memberships_table = self.memberships_table(tenant_id);
 
@@ -376,7 +385,7 @@ impl UserReader for SqliteUserReader {
         let mut users = Vec::new();
         for row in rows {
             let id: String = row.get("id");
-            if let Some(user) = self.fetch_user_with_groups(tenant_id, &id).await? {
+            if let Some(user) = self.fetch_user_with_groups_optional(tenant_id, &id, include_groups).await? {
                 users.push(user);
             }
         }

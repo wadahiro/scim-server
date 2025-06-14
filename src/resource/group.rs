@@ -121,7 +121,7 @@ async fn validate_group_members(
 
                 match member_type {
                     "User" => {
-                        match backend.find_user_by_id(tenant_id, member_id).await {
+                        match backend.find_user_by_id(tenant_id, member_id, false).await {
                             Ok(Some(_)) => continue, // User exists, continue
                             Ok(None) => {
                                 return Err(scim_error_response(
