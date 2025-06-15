@@ -1,7 +1,7 @@
 use crate::error::{AppError, AppResult};
 use chrono_tz::Tz;
 use email_address::EmailAddress;
-use fluent_uri::Uri;
+use fluent_uri::UriRef;
 use langtag::LangTag;
 use regex::Regex;
 use scim_v2::models::user::User;
@@ -208,15 +208,14 @@ pub fn validate_url(uri: &str) -> bool {
         return false;
     }
 
-    // Parse with fluent-uri (RFC 3986 compliant)
-    let parsed = match Uri::parse(uri) {
-        Ok(uri) => uri,
+    // Parse as URI reference (handles both absolute URIs and relative references)
+    let parsed_ref = match UriRef::parse(uri) {
+        Ok(uri_ref) => uri_ref,
         Err(_) => return false,
     };
 
-    // Additional SCIM-specific validation
-    // Accept absolute URIs with valid schemes
-    if parsed.scheme().is_some() {
+    // Accept absolute URIs with schemes (e.g., "https://example.com/path")
+    if parsed_ref.has_scheme() {
         return true;
     }
 
