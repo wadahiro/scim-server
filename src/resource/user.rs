@@ -16,7 +16,7 @@ use crate::config::AppConfig;
 use crate::models::{ScimListResponse, ScimPatchOp, User};
 use crate::parser::filter_parser::parse_filter;
 use crate::parser::{ResourceType, SortSpec};
-use crate::schema::validate_user;
+use crate::schema::{should_fetch_external_attributes, validate_user};
 
 type AppState = (Arc<dyn ScimBackend>, Arc<AppConfig>);
 
@@ -257,8 +257,15 @@ pub async fn get_user(
     // Get compatibility settings for this tenant to determine if we should include groups
     let compatibility = app_config.get_effective_compatibility(tenant_id);
 
+    // Optimize: Only fetch groups if needed based on attribute filtering and compatibility
+    let should_include_groups = should_fetch_external_attributes(
+        &attribute_filter,
+        ResourceType::User,
+        compatibility.include_user_groups,
+    );
+
     match backend
-        .find_user_by_id(tenant_id, &id, compatibility.include_user_groups)
+        .find_user_by_id(tenant_id, &id, should_include_groups)
         .await
     {
         Ok(Some(mut user)) => {
@@ -320,6 +327,13 @@ pub async fn search_users(
     // Get compatibility settings for this tenant
     let compatibility = app_config.get_effective_compatibility(tenant_id);
 
+    // Optimize: Only fetch groups if needed based on attribute filtering and compatibility
+    let should_include_groups = should_fetch_external_attributes(
+        &attribute_filter,
+        ResourceType::User,
+        compatibility.include_user_groups,
+    );
+
     // Handle filter for group membership: groups[value eq "group-id"]
     if let Some(filter_str) = filter {
         if filter_str.starts_with("groups[value eq ") && filter_str.ends_with("]") {
@@ -348,7 +362,7 @@ pub async fn search_users(
 
             // Get users by group
             match backend
-                .find_users_by_group_id(tenant_id, group_id, compatibility.include_user_groups)
+                .find_users_by_group_id(tenant_id, group_id, should_include_groups)
                 .await
             {
                 Ok(mut users) => {
@@ -395,7 +409,7 @@ pub async fn search_users(
                         start_index,
                         count,
                         sort_spec.as_ref(),
-                        compatibility.include_user_groups,
+                        should_include_groups,
                     )
                     .await
                 {
@@ -447,17 +461,12 @@ pub async fn search_users(
                 start_index,
                 count,
                 sort_spec.as_ref(),
-                compatibility.include_user_groups,
+                should_include_groups,
             )
             .await
     } else {
         backend
-            .find_all_users(
-                tenant_id,
-                start_index,
-                count,
-                compatibility.include_user_groups,
-            )
+            .find_all_users(tenant_id, start_index, count, should_include_groups)
             .await
     };
 

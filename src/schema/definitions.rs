@@ -4,6 +4,7 @@
 //! Any schema customization should be done here.
 
 use crate::parser::ResourceType;
+use crate::resource::attribute_filter::AttributeFilter;
 use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -1362,5 +1363,178 @@ mod tests {
             ResourceType::User
         ));
         assert!(!is_multi_valued_attribute("userName", ResourceType::User));
+    }
+}
+
+/// Check if an attribute requires external table access (separate DB queries)
+///
+/// This function identifies attributes that are stored in separate database tables
+/// rather than in the main resource JSON. This is used for query optimization
+/// to avoid unnecessary database joins when the attribute is filtered out.
+pub fn requires_external_table_access(attribute: &str, resource_type: ResourceType) -> bool {
+    match resource_type {
+        ResourceType::User => {
+            matches!(attribute, "groups")
+        }
+        ResourceType::Group => {
+            matches!(attribute, "members")
+        }
+    }
+}
+
+/// Check if any of the given attributes require external table access
+pub fn any_require_external_table_access(attributes: &[&str], resource_type: ResourceType) -> bool {
+    attributes
+        .iter()
+        .any(|attr| requires_external_table_access(attr, resource_type))
+}
+
+/// Determine if external table attributes should be fetched based on attribute filtering
+///
+/// This function analyzes attribute filtering parameters to determine whether
+/// external table attributes (like User.groups or Group.members) need to be fetched.
+/// Returns true if external attributes should be fetched, false otherwise.
+///
+/// Logic:
+/// - If no attribute filtering is applied, fetch external attributes (default behavior)
+/// - If "attributes" parameter is used, only fetch if external attributes are explicitly requested
+/// - If "excludedAttributes" parameter is used, don't fetch if external attributes are excluded
+pub fn should_fetch_external_attributes(
+    attribute_filter: &AttributeFilter,
+    resource_type: ResourceType,
+    default_include: bool,
+) -> bool {
+    // If no filtering specified, use default behavior
+    if attribute_filter.attributes.is_none() && attribute_filter.excluded_attributes.is_none() {
+        return default_include;
+    }
+
+    // If "attributes" parameter is specified, only fetch if external attributes are explicitly included
+    if let Some(ref attributes) = attribute_filter.attributes {
+        let attribute_refs: Vec<&str> = attributes.iter().map(|s| s.as_str()).collect();
+        return any_require_external_table_access(&attribute_refs, resource_type);
+    }
+
+    // If "excludedAttributes" parameter is used, don't fetch if external attributes are excluded
+    if let Some(ref excluded_attributes) = attribute_filter.excluded_attributes {
+        let excluded_refs: Vec<&str> = excluded_attributes.iter().map(|s| s.as_str()).collect();
+        return !any_require_external_table_access(&excluded_refs, resource_type);
+    }
+
+    default_include
+}
+
+#[cfg(test)]
+mod external_table_tests {
+    use super::*;
+
+    #[test]
+    fn test_requires_external_table_access() {
+        // User attributes
+        assert!(requires_external_table_access("groups", ResourceType::User));
+        assert!(!requires_external_table_access(
+            "userName",
+            ResourceType::User
+        ));
+        assert!(!requires_external_table_access(
+            "emails",
+            ResourceType::User
+        ));
+
+        // Group attributes
+        assert!(requires_external_table_access(
+            "members",
+            ResourceType::Group
+        ));
+        assert!(!requires_external_table_access(
+            "displayName",
+            ResourceType::Group
+        ));
+
+        // Other resource types would be false (currently only User and Group are supported)
+    }
+
+    #[test]
+    fn test_any_require_external_table_access() {
+        // User
+        assert!(any_require_external_table_access(
+            &["userName", "groups"],
+            ResourceType::User
+        ));
+        assert!(!any_require_external_table_access(
+            &["userName", "emails"],
+            ResourceType::User
+        ));
+
+        // Group
+        assert!(any_require_external_table_access(
+            &["displayName", "members"],
+            ResourceType::Group
+        ));
+        assert!(!any_require_external_table_access(
+            &["displayName", "externalId"],
+            ResourceType::Group
+        ));
+    }
+
+    #[test]
+    fn test_should_fetch_external_attributes() {
+        // Test no filtering (default behavior)
+        let filter = AttributeFilter::from_params(None, None);
+        assert!(should_fetch_external_attributes(
+            &filter,
+            ResourceType::User,
+            true
+        ));
+        assert!(!should_fetch_external_attributes(
+            &filter,
+            ResourceType::User,
+            false
+        ));
+
+        // Test include filtering
+        let filter = AttributeFilter::from_params(Some("userName,groups"), None);
+        assert!(should_fetch_external_attributes(
+            &filter,
+            ResourceType::User,
+            true
+        ));
+
+        let filter = AttributeFilter::from_params(Some("userName,emails"), None);
+        assert!(!should_fetch_external_attributes(
+            &filter,
+            ResourceType::User,
+            true
+        ));
+
+        // Test exclude filtering
+        let filter = AttributeFilter::from_params(None, Some("groups"));
+        assert!(!should_fetch_external_attributes(
+            &filter,
+            ResourceType::User,
+            true
+        ));
+
+        let filter = AttributeFilter::from_params(None, Some("emails"));
+        assert!(should_fetch_external_attributes(
+            &filter,
+            ResourceType::User,
+            true
+        ));
+
+        // Test Group resource
+        let filter = AttributeFilter::from_params(Some("displayName,members"), None);
+        assert!(should_fetch_external_attributes(
+            &filter,
+            ResourceType::Group,
+            true
+        ));
+
+        let filter = AttributeFilter::from_params(None, Some("members"));
+        assert!(!should_fetch_external_attributes(
+            &filter,
+            ResourceType::Group,
+            true
+        ));
     }
 }

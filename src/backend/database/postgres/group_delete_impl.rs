@@ -40,7 +40,8 @@ impl GroupDeleter for PostgresGroupDeleter {
 
         // First, delete group memberships where this group is the parent
         let membership_table = format!("t{}_group_memberships", tenant_id);
-        let parent_membership_sql = format!("DELETE FROM {} WHERE group_id = $1::uuid", membership_table);
+        let parent_membership_sql =
+            format!("DELETE FROM {} WHERE group_id = $1::uuid", membership_table);
 
         sqlx::query(&parent_membership_sql)
             .bind(id)
@@ -51,7 +52,10 @@ impl GroupDeleter for PostgresGroupDeleter {
             })?;
 
         // Second, delete memberships where this group is a member of other groups
-        let child_membership_sql = format!("DELETE FROM {} WHERE member_id = $1::uuid AND member_type = 'Group'", membership_table);
+        let child_membership_sql = format!(
+            "DELETE FROM {} WHERE member_id = $1::uuid AND member_type = 'Group'",
+            membership_table
+        );
 
         sqlx::query(&child_membership_sql)
             .bind(id)

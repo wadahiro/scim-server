@@ -41,7 +41,10 @@ impl GroupDeleter for SqliteGroupDeleter {
             })?;
 
         // Second, delete memberships where this group is a member of other groups
-        let child_membership_sql = format!("DELETE FROM {} WHERE member_id = ?1 AND member_type = 'Group'", membership_table);
+        let child_membership_sql = format!(
+            "DELETE FROM {} WHERE member_id = ?1 AND member_type = 'Group'",
+            membership_table
+        );
 
         sqlx::query(&child_membership_sql)
             .bind(id)
