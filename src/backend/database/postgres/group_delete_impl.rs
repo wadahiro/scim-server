@@ -38,16 +38,27 @@ impl GroupDeleter for PostgresGroupDeleter {
             .await
             .map_err(|e| AppError::Database(format!("Failed to begin transaction: {}", e)))?;
 
-        // First, delete group memberships
+        // First, delete group memberships where this group is the parent
         let membership_table = format!("t{}_group_memberships", tenant_id);
-        let membership_sql = format!("DELETE FROM {} WHERE group_id = $1::uuid", membership_table);
+        let parent_membership_sql = format!("DELETE FROM {} WHERE group_id = $1::uuid", membership_table);
 
-        sqlx::query(&membership_sql)
+        sqlx::query(&parent_membership_sql)
             .bind(id)
             .execute(&mut *tx)
             .await
             .map_err(|e| {
-                AppError::Database(format!("Failed to delete group memberships: {}", e))
+                AppError::Database(format!("Failed to delete group parent memberships: {}", e))
+            })?;
+
+        // Second, delete memberships where this group is a member of other groups
+        let child_membership_sql = format!("DELETE FROM {} WHERE member_id = $1::uuid AND member_type = 'Group'", membership_table);
+
+        sqlx::query(&child_membership_sql)
+            .bind(id)
+            .execute(&mut *tx)
+            .await
+            .map_err(|e| {
+                AppError::Database(format!("Failed to delete group child memberships: {}", e))
             })?;
 
         // Then, delete the group itself

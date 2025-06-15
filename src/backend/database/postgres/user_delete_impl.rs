@@ -30,16 +30,47 @@ impl UserDeleter for PostgresUserDeleter {
         // Validate UUID format for PostgreSQL
         Self::validate_uuid_format(id)?;
 
-        let table_name = format!("t{}_users", tenant_id);
-        let sql = format!("DELETE FROM {} WHERE id = $1::uuid", table_name);
+        let users_table = format!("t{}_users", tenant_id);
+        let memberships_table = format!("t{}_group_memberships", tenant_id);
 
-        let result = sqlx::query(&sql)
+        // Start a transaction to ensure atomic operation
+        let mut tx = self
+            .pool
+            .begin()
+            .await
+            .map_err(|e| AppError::Database(format!("Failed to start transaction: {}", e)))?;
+
+        // First, delete the user from group memberships
+        let membership_sql = format!(
+            "DELETE FROM {} WHERE member_id = $1::uuid AND member_type = 'User'",
+            memberships_table
+        );
+
+        sqlx::query(&membership_sql)
             .bind(id)
-            .execute(&self.pool)
+            .execute(&mut *tx)
+            .await
+            .map_err(|e| {
+                AppError::Database(format!("Failed to delete user group memberships: {}", e))
+            })?;
+
+        // Then, delete the user from users table
+        let user_sql = format!("DELETE FROM {} WHERE id = $1::uuid", users_table);
+
+        let result = sqlx::query(&user_sql)
+            .bind(id)
+            .execute(&mut *tx)
             .await
             .map_err(|e| AppError::Database(format!("Failed to delete user: {}", e)))?;
 
-        Ok(result.rows_affected() > 0)
+        let user_was_deleted = result.rows_affected() > 0;
+
+        // Commit the transaction
+        tx.commit()
+            .await
+            .map_err(|e| AppError::Database(format!("Failed to commit transaction: {}", e)))?;
+
+        Ok(user_was_deleted)
     }
 }
 
