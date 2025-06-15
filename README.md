@@ -12,9 +12,11 @@ A SCIM (System for Cross-domain Identity Management) v2.0 server implementation 
 ### 🏢 Multi-Tenant Architecture
 - **URL-based tenant routing**: Each tenant has dedicated SCIM endpoints
 - **Complete data isolation**: Full separation between tenant data
-- **Per-tenant authentication**: Bearer tokens and HTTP Basic auth per tenant
+- **Per-tenant authentication**: Multiple auth methods (Bearer, Token, Basic, Unauthenticated)
 - **Flexible configuration**: YAML-based tenant setup with environment variable support
 - **Compatibility modes**: Per-tenant SCIM implementation compatibility settings
+- **Custom endpoints**: Define static JSON/text responses per tenant
+- **Advanced host resolution**: Support for proxies and load balancers
 
 ### 🔧 SCIM 2.0 Specification Support
 
@@ -125,13 +127,54 @@ tenants:
       type: "bearer"
       token: "${TENANT1_TOKEN:-tenant1-token}"
 
-  # Tenant with override base URL for public-facing responses
+  # Host-specific tenant with Forwarded header resolution (behind proxy)
   - id: 20
-    path: "/internal/scim"
-    override_base_url: "https://api.public.com"  # Forces response URLs
+    path: "/scim/tenant2"
+    host: "tenant2.company.com"
+    host_resolution:
+      type: "forwarded"
+      trusted_proxies: ["192.168.1.100", "10.0.0.0/8"]
+    auth:
+      type: "basic"
+      basic:
+        username: "${TENANT2_USER:-tenant2user}"
+        password: "${TENANT2_PASS:-tenant2pass}"
+
+  # Token authentication tenant
+  - id: 25
+    path: "/scim/token"
+    host: "token.company.com"
+    auth:
+      type: "token"
+      token: "${TOKEN_SCIM_TOKEN:-token_xxxxxxxxxxxxxxxxxxxx}"
+
+  # Host-specific tenant with X-Forwarded headers (behind load balancer)
+  - id: 30
+    path: "/api/scim"
+    host: "api.loadbalancer.com"
+    host_resolution:
+      type: "xforwarded"
+      trusted_proxies: ["172.16.0.0/12"]
     auth:
       type: "bearer"
-      token: "${PUBLIC_API_TOKEN:-public-token}"
+      token: "${API_TOKEN:-api-token}"
+
+  # Tenant with custom endpoints and override base URL
+  - id: 40
+    path: "/scim/v2"
+    override_base_url: "https://public.example.com"  # Forces response URLs
+    auth:
+      type: "bearer"
+      token: "${CUSTOM_TOKEN:-custom-token}"
+    custom_endpoints:
+      - path: "/my/custom/static"
+        response: |
+          {
+            "message": "This is a custom static endpoint",
+            "version": "1.0.0"
+          }
+        status_code: 200
+        content_type: "application/json"
 
 # Global compatibility settings (can be overridden per tenant)
 compatibility:
@@ -203,6 +246,133 @@ compatibility:
   include_user_groups: false  # Server doesn't support User.groups
   support_group_members_filter: false  # Can't filter by members
 ```
+
+### Authentication Types
+
+The server supports multiple authentication methods per tenant:
+
+#### Bearer Token (OAuth 2.0)
+Standard OAuth 2.0 Bearer token authentication (RFC 6750):
+```yaml
+auth:
+  type: "bearer"
+  token: "${BEARER_TOKEN:-default-token}"
+```
+Usage: `Authorization: Bearer <token>`
+
+#### Token Authentication
+Alternative token format for systems that don't use Bearer prefix:
+```yaml
+auth:
+  type: "token"
+  token: "${API_TOKEN:-token_xxxxxxxxxxxxxxxxxxxx}"
+```
+Usage: `Authorization: token <token>`
+
+#### HTTP Basic Authentication
+Standard HTTP Basic authentication (RFC 7617):
+```yaml
+auth:
+  type: "basic"
+  basic:
+    username: "${API_USER:-admin}"
+    password: "${API_PASSWORD:-password}"
+```
+Usage: `Authorization: Basic <base64(username:password)>`
+
+#### Unauthenticated (Development Only)
+No authentication required - useful for development and testing:
+```yaml
+auth:
+  type: "unauthenticated"
+```
+
+### Host Resolution
+
+The server supports multiple methods for resolving the host in multi-tenant environments:
+
+#### Host Header (Default)
+Uses the standard HTTP Host header:
+```yaml
+host_resolution:
+  type: "host"  # or omit host_resolution entirely
+```
+
+#### Forwarded Header (RFC 7239)
+For proxies that use the standard Forwarded header:
+```yaml
+host_resolution:
+  type: "forwarded"
+  trusted_proxies: ["192.168.1.100", "10.0.0.0/8"]
+```
+The server will parse: `Forwarded: for=192.0.2.60;host=example.com;proto=https`
+
+#### X-Forwarded Headers
+For proxies/load balancers using X-Forwarded-* headers:
+```yaml
+host_resolution:
+  type: "xforwarded"
+  trusted_proxies: ["172.16.0.0/12"]
+```
+The server will use: `X-Forwarded-Host`, `X-Forwarded-Proto`, `X-Forwarded-For`
+
+**Important**: Only configure trusted_proxies with actual proxy IP addresses to prevent header spoofing.
+
+### Response URL Control
+
+Control how URLs appear in SCIM responses:
+
+#### Automatic URL Construction (Default)
+URLs are automatically constructed based on host resolution:
+- With `host` resolution: `http://resolved-host/path`
+- With `forwarded`/`xforwarded`: `https://resolved-host/path` (assumes HTTPS)
+
+#### Override Base URL
+Force a specific base URL for all responses:
+```yaml
+override_base_url: "https://api.public.com"
+```
+This is useful when:
+- Internal routing differs from external URLs
+- You need consistent URLs regardless of request origin
+- Running behind complex proxy setups
+
+### Custom Endpoints
+
+Define static responses for custom paths within a tenant:
+
+```yaml
+custom_endpoints:
+  # JSON response
+  - path: "/my/custom/static"
+    response: |
+      {
+        "message": "This is a custom static endpoint",
+        "version": "1.0.0",
+        "data": { "key": "value" }
+      }
+    status_code: 200
+    content_type: "application/json"
+  
+  # Plain text response
+  - path: "/info/text"
+    response: "This is a plain text response"
+    status_code: 200
+    content_type: "text/plain"
+  
+  # Health check endpoint
+  - path: "/health/custom"
+    response: |
+      {"status": "healthy", "service": "SCIM Server"}
+    status_code: 200
+    content_type: "application/json"
+```
+
+Custom endpoints are useful for:
+- Health checks and monitoring
+- Version information
+- Service-specific metadata
+- Integration with existing systems
 
 ## 📡 API Endpoints
 
@@ -297,11 +467,34 @@ curl -X POST "http://localhost:3000/scim/v2/Users" \
 # List users with attribute filtering
 curl "http://localhost:3000/scim/v2/Users?attributes=userName,emails"
 
-# For custom tenant configurations with authentication
-curl -X POST "http://localhost:3000/my-custom-path/Users" \
+# With Bearer token authentication
+curl -X POST "http://localhost:3000/scim/v2/Users" \
   -H "Content-Type: application/scim+json" \
-  -H "Authorization: Bearer your-token" \
+  -H "Authorization: Bearer your-bearer-token" \
   -d '...'
+
+# With Token authentication
+curl -X POST "http://localhost:3000/scim/token/Users" \
+  -H "Content-Type: application/scim+json" \
+  -H "Authorization: token token_xxxxxxxxxxxxxxxxxxxx" \
+  -d '...'
+
+# With Basic authentication
+curl -X POST "http://localhost:3000/api/scim/Users" \
+  -H "Content-Type: application/scim+json" \
+  -H "Authorization: Basic $(echo -n 'admin:password' | base64)" \
+  -d '...'
+
+# Testing custom endpoints
+curl "http://localhost:3000/scim/v2/my/custom/static" \
+  -H "Authorization: Bearer custom-token"
+
+# Behind proxy with X-Forwarded headers
+curl "http://localhost:3000/api/scim/Users" \
+  -H "X-Forwarded-Host: api.loadbalancer.com" \
+  -H "X-Forwarded-Proto: https" \
+  -H "X-Forwarded-For: 192.168.1.100" \
+  -H "Authorization: Bearer api-token"
 ```
 
 ### Comprehensive Testing

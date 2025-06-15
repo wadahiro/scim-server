@@ -155,52 +155,112 @@ backend:
     max_connections: 10
 
 tenants:
-  # Simple path-only tenant (matches any host)
+  # Simple path-only tenant (matches any host) - OAuth 2.0 Bearer Token
   - id: 1
     path: "/scim/v2"
     auth:
       auth_type: "bearer"
-      token: "${ACME_TOKEN}"
-      
-  # Token authentication tenant
+      token: "${SCIM_SERVER_TOKEN:-sample-bearer-token}"
+
+  # Host-specific tenant with default Host header resolution
   - id: 2
-    path: "/scim/token"
-    auth:
-      auth_type: "token"
-      token: "${TOKEN_SCIM_TOKEN}"
-      
-  # Host-specific tenant with explicit host resolution
-  - id: 3
-    path: "/api/scim/v2"
-    host: "globex.company.com"
-    host_resolution:
-      type: "host"
+    path: "/api/scim"
+    host: "api.example.com"
     auth:
       auth_type: "basic"
       basic:
-        username: "${GLOBEX_USER}"
-        password: "${GLOBEX_PASSWORD}"
-        
-  # Zero-configuration development tenant
-  - id: 4
+        username: "${API_USER:-admin}"
+        password: "${API_PASSWORD:-password}"
+
+  # Host-specific tenant with explicit Host header resolution
+  - id: 10
+    path: "/scim/tenant1"
+    host: "tenant1.company.com"
+    host_resolution:
+      type: "host"
+    auth:
+      auth_type: "bearer"
+      token: "${TENANT1_TOKEN:-tenant1-token}"
+
+  # Host-specific tenant with Forwarded header resolution (behind proxy)
+  - id: 20
+    path: "/scim/tenant2"
+    host: "tenant2.company.com"
+    host_resolution:
+      type: "forwarded"
+      trusted_proxies: ["192.168.1.100", "10.0.0.0/8"]
+    auth:
+      auth_type: "basic"
+      basic:
+        username: "${TENANT2_USER:-tenant2user}"
+        password: "${TENANT2_PASS:-tenant2pass}"
+
+  # Token authentication tenant
+  - id: 25
+    path: "/scim/token"
+    host: "token.company.com"
+    auth:
+      auth_type: "token"
+      token: "${TOKEN_SCIM_TOKEN:-token_xxxxxxxxxxxxxxxxxxxx}"
+
+  # Host-specific tenant with X-Forwarded headers (behind load balancer)
+  - id: 30
+    path: "/api/scim"
+    host: "api.loadbalancer.com"
+    host_resolution:
+      type: "xforwarded"
+      trusted_proxies: ["172.16.0.0/12"]
+    auth:
+      auth_type: "bearer"
+      token: "${API_TOKEN:-api-token}"
+
+  # Tenant with custom endpoints and override base URL
+  - id: 40
     path: "/scim/v2"
+    override_base_url: "https://public.example.com"  # Forces response URLs
+    auth:
+      auth_type: "bearer"
+      token: "${CUSTOM_TOKEN:-custom-token}"
+    custom_endpoints:
+      # Static JSON response endpoint
+      - path: "/my/custom/static"
+        response: |
+          {
+            "message": "This is a custom static endpoint",
+            "version": "1.0.0",
+            "timestamp": "2024-01-01T00:00:00Z"
+          }
+        status_code: 200
+        content_type: "application/json"
+      
+      # Health check endpoint
+      - path: "/health/custom"
+        response: |
+          {
+            "status": "healthy",
+            "service": "SCIM Server Custom Endpoint"
+          }
+        status_code: 200
+        content_type: "application/json"
+      
+      # Plain text response example
+      - path: "/info/text"
+        response: "This is a plain text custom endpoint response"
+        status_code: 200
+        content_type: "text/plain"
+      
+  # Zero-configuration development tenant
+  - id: 50
+    path: "/dev/scim"
     auth:
       auth_type: "unauthenticated"
       
-  # Tenant with override base URL for public-facing responses
-  - id: 5
-    path: "/internal/scim"
-    override_base_url: "https://api.public.company.com"  # Forces response URLs
-    auth:
-      auth_type: "bearer"
-      token: "${PUBLIC_API_TOKEN}"
-      
   # Tenant with custom compatibility settings
-  - id: 6
+  - id: 60
     path: "/legacy/scim"
     auth:
       auth_type: "bearer"
-      token: "${LEGACY_TOKEN}"
+      token: "${LEGACY_TOKEN:-legacy-token}"
     compatibility:
       meta_datetime_format: "epoch"        # Legacy system uses timestamps
       show_empty_groups_members: false     # Don't show empty arrays
@@ -216,27 +276,191 @@ compatibility:
   support_group_displayname_filter: true
 ```
 
-### Response URL Control (override_base_url)
-- **Auto-constructed URLs** (default): Uses host resolution + path configuration
-  - `host` mode: `http://resolved-host/path` (development/testing)
-  - `forwarded`/`xforwarded` modes: `https://resolved-host/path` (production)
-- **Override URLs** (optional): Forces specific base URL for all responses
-  - Example: `override_base_url: "https://api.public.com"` → responses use `https://api.public.com/path/*`
-  - Used for public-facing URLs when internal routing differs from external URLs
+### Authentication Types
+
+The server supports multiple authentication methods that can be configured per tenant:
+
+#### Bearer Token (OAuth 2.0)
+Standard OAuth 2.0 Bearer token authentication (RFC 6750):
+```yaml
+auth:
+  auth_type: "bearer"
+  token: "${BEARER_TOKEN:-default-token}"
+```
+- **Usage**: `Authorization: Bearer <token>`
+- **Case-insensitive**: "Bearer", "bearer", or "BEARER" are all valid
+- **Most common for API access**
+
+#### Token Authentication
+Alternative token format for systems that don't use Bearer prefix:
+```yaml
+auth:
+  auth_type: "token"
+  token: "${API_TOKEN:-token_xxxxxxxxxxxxxxxxxxxx}"
+```
+- **Usage**: `Authorization: token <token>`
+- **Case-insensitive**: "Token" or "token" are valid
+- **Used by some API providers like GitHub**
+
+#### HTTP Basic Authentication
+Standard HTTP Basic authentication (RFC 7617):
+```yaml
+auth:
+  auth_type: "basic"
+  basic:
+    username: "${API_USER:-admin}"
+    password: "${API_PASSWORD:-password}"
+```
+- **Usage**: `Authorization: Basic <base64(username:password)>`
+- **Case-insensitive**: "Basic" or "basic" are valid
+- **Suitable for simple username/password scenarios**
+
+#### Unauthenticated (Development Only)
+No authentication required - useful for development and testing:
+```yaml
+auth:
+  auth_type: "unauthenticated"
+```
+- **Usage**: No Authorization header required
+- **WARNING**: Never use in production environments
+- **Perfect for local development and testing**
+
+### Host Resolution
+
+The server supports multiple methods for resolving the host in multi-tenant environments:
+
+#### Host Header (Default)
+Uses the standard HTTP Host header:
+```yaml
+host_resolution:
+  type: "host"  # or omit host_resolution entirely
+```
+- **Default behavior** if host_resolution is not specified
+- **Direct connection** scenarios
+- **Development environments**
+
+#### Forwarded Header (RFC 7239)
+For proxies that use the standard Forwarded header:
+```yaml
+host_resolution:
+  type: "forwarded"
+  trusted_proxies: ["192.168.1.100", "10.0.0.0/8"]
+```
+- **Parses**: `Forwarded: for=192.0.2.60;host=example.com;proto=https`
+- **Validates proxy IP** against trusted_proxies list
+- **Extracts**: host, proto, and for parameters
+- **Most standards-compliant option**
+
+#### X-Forwarded Headers
+For proxies/load balancers using X-Forwarded-* headers:
+```yaml
+host_resolution:
+  type: "xforwarded"
+  trusted_proxies: ["172.16.0.0/12", "10.0.0.0/8"]
+```
+- **Uses headers**: `X-Forwarded-Host`, `X-Forwarded-Proto`, `X-Forwarded-For`
+- **Common with**: AWS ALB, nginx, Apache
+- **Validates proxy IP** from X-Forwarded-For
+- **Widely supported** by load balancers
+
+**Security Note**: Always configure `trusted_proxies` with actual proxy IP addresses to prevent header spoofing attacks.
+
+### Response URL Control
+
+Control how URLs appear in SCIM responses:
+
+#### Automatic URL Construction (Default)
+URLs are automatically constructed based on host resolution:
+- **Direct connection** (`host`): `http://resolved-host/path`
+- **Behind proxy** (`forwarded`/`xforwarded`): `https://resolved-host/path`
+- **Protocol detection**: Assumes HTTPS when behind proxy
+
+#### Override Base URL
+Force a specific base URL for all responses:
+```yaml
+override_base_url: "https://api.public.com"
+```
+
+**Use cases**:
+- **Internal vs External URLs**: Internal routing differs from public URLs
+- **Consistent URLs**: Same URLs regardless of request origin
+- **Complex proxy setups**: Multiple layers of proxies/load balancers
+- **Custom domains**: CDN or API gateway scenarios
+
+**Example**: If tenant path is `/scim/v2` and override is `https://api.public.com`:
+- User resource: `https://api.public.com/scim/v2/Users/123`
+- Group resource: `https://api.public.com/scim/v2/Groups/456`
+
+### Custom Endpoints
+
+Define static responses for custom paths within a tenant:
+
+```yaml
+custom_endpoints:
+  # JSON response
+  - path: "/my/custom/static"
+    response: |
+      {
+        "message": "This is a custom static endpoint",
+        "version": "1.0.0",
+        "timestamp": "2024-01-01T00:00:00Z",
+        "data": {
+          "custom_field": "custom_value",
+          "nested": {
+            "array": [1, 2, 3],
+            "boolean": true
+          }
+        }
+      }
+    status_code: 200
+    content_type: "application/json"
+  
+  # Health check endpoint
+  - path: "/health/custom"
+    response: |
+      {
+        "status": "healthy",
+        "service": "SCIM Server Custom Endpoint",
+        "uptime": "24h"
+      }
+    status_code: 200
+    content_type: "application/json"
+  
+  # Plain text response
+  - path: "/info/text"
+    response: "This is a plain text custom endpoint response"
+    status_code: 200
+    content_type: "text/plain"
+  
+  # Custom error response
+  - path: "/maintenance"
+    response: |
+      {
+        "error": "Service Unavailable",
+        "message": "The service is under maintenance"
+      }
+    status_code: 503
+    content_type: "application/json"
+```
+
+**Features**:
+- **Static responses**: No dynamic processing
+- **Any content type**: JSON, text, HTML, XML, etc.
+- **Custom status codes**: 200, 404, 503, etc.
+- **Tenant isolation**: Each tenant has its own endpoints
+- **Authentication**: Inherits tenant's auth configuration
+
+**Common use cases**:
+- **Health checks**: `/health`, `/ping`, `/status`
+- **Version info**: `/version`, `/info`
+- **Service metadata**: `/config`, `/features`
+- **Maintenance pages**: `/maintenance`
+- **Integration endpoints**: Legacy system compatibility
 
 ### Environment Variable Embedding
 - Use `${VAR_NAME}` or `${VAR_NAME:-default}` syntax in YAML
 - Only for sensitive data: tokens, passwords, database credentials
 - Variables expanded at startup with comprehensive error handling
-
-### Multi-Tenant Authentication
-- **Bearer Tokens**: OAuth 2.0 compliant (RFC 6750) - `Authorization: Bearer <token>`
-- **Token Authentication**: Alternative token format - `Authorization: token <token>`
-- **HTTP Basic Auth**: RFC 7617 compliant username/password - `Authorization: Basic <base64>`
-- **Unauthenticated**: Anonymous access for development/testing
-- **Per-tenant configuration**: Each tenant can use different auth methods
-- **Authorization header validation**: Proper parsing and validation for all auth types
-- **Case-insensitive auth schemes**: Bearer, token, and Basic are case-insensitive per RFC 7235
 
 ### Compatibility Configuration
 
