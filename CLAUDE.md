@@ -96,7 +96,8 @@ git push origin v1.0.0
 # 1. Create a draft release
 # 2. Build Linux binaries (x86_64 and ARM64)
 # 3. Upload binaries as tar archives
-# 4. Publish the release
+# 4. Generate and upload license information (THIRD-PARTY-LICENSES)
+# 5. Publish the release
 
 # Download released binaries
 curl -L https://github.com/{owner}/scim-server/releases/download/v1.0.0/scim-server-x86_64-unknown-linux-gnu.tar.gz | tar xz

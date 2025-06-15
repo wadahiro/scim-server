@@ -25,12 +25,66 @@ jobs:
         id: version
         run: echo "version=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
 
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install cargo-license
+        run: cargo install cargo-license
+
       - name: Create Release
         uses: taiki-e/create-gh-release-action@v1
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           draft: true
           title: ${{ steps.version.outputs.version }}
+
+      - name: Generate license information
+        run: |
+          # Generate detailed license information
+          cargo license --json > licenses.json
+          
+          # Create THIRD-PARTY-LICENSES file
+          cat > THIRD-PARTY-LICENSES << 'EOF'
+          # Third-Party Licenses
+          
+          This file contains the licenses of third-party dependencies used in this project.
+          Generated at release time for version ${{ steps.version.outputs.version }}.
+          
+          ## Summary of License Types
+          
+          EOF
+          
+          # Add license summary
+          cargo license | grep -E "^[A-Z]" | sort | uniq -c | sort -rn >> THIRD-PARTY-LICENSES
+          
+          echo "" >> THIRD-PARTY-LICENSES
+          echo "## Detailed License Information" >> THIRD-PARTY-LICENSES
+          echo "" >> THIRD-PARTY-LICENSES
+          echo "To regenerate this list, run:" >> THIRD-PARTY-LICENSES
+          echo "\`\`\`bash" >> THIRD-PARTY-LICENSES
+          echo "cargo license" >> THIRD-PARTY-LICENSES
+          echo "\`\`\`" >> THIRD-PARTY-LICENSES
+          echo "" >> THIRD-PARTY-LICENSES
+          echo "## Full Dependency List" >> THIRD-PARTY-LICENSES
+          echo "" >> THIRD-PARTY-LICENSES
+          echo "\`\`\`" >> THIRD-PARTY-LICENSES
+          cargo license >> THIRD-PARTY-LICENSES
+          echo "\`\`\`" >> THIRD-PARTY-LICENSES
+          echo "" >> THIRD-PARTY-LICENSES
+          echo "Last updated: $(date -u +"%Y-%m-%d %H:%M:%S UTC")" >> THIRD-PARTY-LICENSES
+
+      - name: Package and upload license information
+        run: |
+          # Create a licenses archive
+          mkdir -p licenses
+          mv THIRD-PARTY-LICENSES licenses/
+          mv licenses.json licenses/
+          tar czf licenses-${{ steps.version.outputs.version }}.tar.gz licenses/
+          
+          # Upload to release
+          gh release upload ${{ steps.version.outputs.version }} licenses-${{ steps.version.outputs.version }}.tar.gz
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   build-binaries:
     name: Build Binaries

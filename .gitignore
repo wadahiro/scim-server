@@ -39,3 +39,8 @@ Thumbs.db
 
 # Claude local memory
 .claude_memory
+
+# Generated license files (created during release)
+THIRD-PARTY-LICENSES
+licenses.json
+licenses-*.tar.gz

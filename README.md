@@ -325,6 +325,16 @@ See [TESTING.md](TESTING.md) for detailed testing instructions including TestCon
 
 This project is licensed under the MIT License. See [LICENSE](LICENSE) for details.
 
+### Third-Party Licenses
+
+This project uses various open-source dependencies. Third-party license information is automatically generated and included with each release as `licenses-{version}.tar.gz`.
+
+To check dependency licenses locally:
+```bash
+cargo install cargo-license
+cargo license
+```
+
 ## 🙏 Acknowledgments
 
 - [SCIM v2.0 Specification (RFC 7644)](https://tools.ietf.org/html/rfc7644)
