@@ -148,19 +148,19 @@ pub async fn setup_test_app(app_config: AppConfig) -> Result<Router, Box<dyn std
             get(scim_server::resource::user::search_users),
         );
         app = app.route(
-            &format!("{}/Users/:id", base_path),
+            &format!("{}/Users/{{id}}", base_path),
             get(scim_server::resource::user::get_user),
         );
         app = app.route(
-            &format!("{}/Users/:id", base_path),
+            &format!("{}/Users/{{id}}", base_path),
             put(scim_server::resource::user::update_user),
         );
         app = app.route(
-            &format!("{}/Users/:id", base_path),
+            &format!("{}/Users/{{id}}", base_path),
             patch(scim_server::resource::user::patch_user),
         );
         app = app.route(
-            &format!("{}/Users/:id", base_path),
+            &format!("{}/Users/{{id}}", base_path),
             delete(scim_server::resource::user::delete_user),
         );
 
@@ -174,19 +174,19 @@ pub async fn setup_test_app(app_config: AppConfig) -> Result<Router, Box<dyn std
             get(scim_server::resource::group::search_groups),
         );
         app = app.route(
-            &format!("{}/Groups/:id", base_path),
+            &format!("{}/Groups/{{id}}", base_path),
             get(scim_server::resource::group::get_group),
         );
         app = app.route(
-            &format!("{}/Groups/:id", base_path),
+            &format!("{}/Groups/{{id}}", base_path),
             put(scim_server::resource::group::update_group),
         );
         app = app.route(
-            &format!("{}/Groups/:id", base_path),
+            &format!("{}/Groups/{{id}}", base_path),
             patch(scim_server::resource::group::patch_group),
         );
         app = app.route(
-            &format!("{}/Groups/:id", base_path),
+            &format!("{}/Groups/{{id}}", base_path),
             delete(scim_server::resource::group::delete_group),
         );
     }
@@ -265,19 +265,19 @@ pub async fn setup_postgres_test_app(
             get(scim_server::resource::user::search_users),
         );
         app = app.route(
-            &format!("{}/Users/:id", base_path),
+            &format!("{}/Users/{{id}}", base_path),
             get(scim_server::resource::user::get_user),
         );
         app = app.route(
-            &format!("{}/Users/:id", base_path),
+            &format!("{}/Users/{{id}}", base_path),
             put(scim_server::resource::user::update_user),
         );
         app = app.route(
-            &format!("{}/Users/:id", base_path),
+            &format!("{}/Users/{{id}}", base_path),
             patch(scim_server::resource::user::patch_user),
         );
         app = app.route(
-            &format!("{}/Users/:id", base_path),
+            &format!("{}/Users/{{id}}", base_path),
             delete(scim_server::resource::user::delete_user),
         );
 
@@ -291,19 +291,19 @@ pub async fn setup_postgres_test_app(
             get(scim_server::resource::group::search_groups),
         );
         app = app.route(
-            &format!("{}/Groups/:id", base_path),
+            &format!("{}/Groups/{{id}}", base_path),
             get(scim_server::resource::group::get_group),
         );
         app = app.route(
-            &format!("{}/Groups/:id", base_path),
+            &format!("{}/Groups/{{id}}", base_path),
             put(scim_server::resource::group::update_group),
         );
         app = app.route(
-            &format!("{}/Groups/:id", base_path),
+            &format!("{}/Groups/{{id}}", base_path),
             patch(scim_server::resource::group::patch_group),
         );
         app = app.route(
-            &format!("{}/Groups/:id", base_path),
+            &format!("{}/Groups/{{id}}", base_path),
             delete(scim_server::resource::group::delete_group),
         );
     }

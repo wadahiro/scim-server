@@ -1,5 +1,4 @@
 use axum::{
-    async_trait,
     extract::{rejection::JsonRejection, FromRequest, Request},
     http::{header, HeaderMap, StatusCode},
     response::{IntoResponse, Response},
@@ -12,7 +11,6 @@ use serde_json::json;
 /// as required by SCIM 2.0 specification (RFC 7644)
 pub struct ScimJson<T>(pub T);
 
-#[async_trait]
 impl<T, S> FromRequest<S> for ScimJson<T>
 where
     T: DeserializeOwned,

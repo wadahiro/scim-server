@@ -222,19 +222,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             get(resource::user::search_users),
         );
         app = app.route(
-            &format!("{}/Users/:id", base_path),
+            &format!("{}/Users/{{id}}", base_path),
             get(resource::user::get_user),
         );
         app = app.route(
-            &format!("{}/Users/:id", base_path),
+            &format!("{}/Users/{{id}}", base_path),
             put(resource::user::update_user),
         );
         app = app.route(
-            &format!("{}/Users/:id", base_path),
+            &format!("{}/Users/{{id}}", base_path),
             patch(resource::user::patch_user),
         );
         app = app.route(
-            &format!("{}/Users/:id", base_path),
+            &format!("{}/Users/{{id}}", base_path),
             delete(resource::user::delete_user),
         );
 
@@ -248,19 +248,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             get(resource::group::search_groups),
         );
         app = app.route(
-            &format!("{}/Groups/:id", base_path),
+            &format!("{}/Groups/{{id}}", base_path),
             get(resource::group::get_group),
         );
         app = app.route(
-            &format!("{}/Groups/:id", base_path),
+            &format!("{}/Groups/{{id}}", base_path),
             put(resource::group::update_group),
         );
         app = app.route(
-            &format!("{}/Groups/:id", base_path),
+            &format!("{}/Groups/{{id}}", base_path),
             patch(resource::group::patch_group),
         );
         app = app.route(
-            &format!("{}/Groups/:id", base_path),
+            &format!("{}/Groups/{{id}}", base_path),
             delete(resource::group::delete_group),
         );
     }
