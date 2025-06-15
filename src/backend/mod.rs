@@ -49,7 +49,12 @@ pub trait UserBackend: Backend {
     async fn create_user(&self, tenant_id: u32, user: &User) -> AppResult<User>;
 
     /// Find a user by ID within a tenant
-    async fn find_user_by_id(&self, tenant_id: u32, id: &str, include_groups: bool) -> AppResult<Option<User>>;
+    async fn find_user_by_id(
+        &self,
+        tenant_id: u32,
+        id: &str,
+        include_groups: bool,
+    ) -> AppResult<Option<User>>;
 
     /// Find a user by username (case-insensitive per SCIM 2.0)
     async fn find_user_by_username(
@@ -104,7 +109,12 @@ pub trait UserBackend: Backend {
     async fn delete_user(&self, tenant_id: u32, id: &str) -> AppResult<bool>;
 
     /// Find users that are members of a specific group
-    async fn find_users_by_group_id(&self, tenant_id: u32, group_id: &str, include_groups: bool) -> AppResult<Vec<User>>;
+    async fn find_users_by_group_id(
+        &self,
+        tenant_id: u32,
+        group_id: &str,
+        include_groups: bool,
+    ) -> AppResult<Vec<User>>;
 }
 
 /// Group-specific backend operations

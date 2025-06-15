@@ -41,15 +41,23 @@ async fn test_include_user_groups_true_show_empty_groups_true() {
     assert_eq!(response.status_code(), StatusCode::OK);
 
     let user: serde_json::Value = response.json();
-    
+
     // Debug: print the actual response
-    println!("User response (include_user_groups: true, show_empty_groups_members: true): {}", 
-             serde_json::to_string_pretty(&user).unwrap());
+    println!(
+        "User response (include_user_groups: true, show_empty_groups_members: true): {}",
+        serde_json::to_string_pretty(&user).unwrap()
+    );
 
     // Should have groups field as empty array
-    assert!(user.get("groups").is_some(), "groups field should exist when include_user_groups: true");
+    assert!(
+        user.get("groups").is_some(),
+        "groups field should exist when include_user_groups: true"
+    );
     let groups = user["groups"].as_array().unwrap();
-    assert!(groups.is_empty(), "groups should be empty array when show_empty_groups_members: true");
+    assert!(
+        groups.is_empty(),
+        "groups should be empty array when show_empty_groups_members: true"
+    );
 }
 
 #[tokio::test]
@@ -87,10 +95,12 @@ async fn test_include_user_groups_true_show_empty_groups_false() {
     assert_eq!(response.status_code(), StatusCode::OK);
 
     let user: serde_json::Value = response.json();
-    
+
     // Debug: print the actual response
-    println!("User response (include_user_groups: true, show_empty_groups_members: false): {}", 
-             serde_json::to_string_pretty(&user).unwrap());
+    println!(
+        "User response (include_user_groups: true, show_empty_groups_members: false): {}",
+        serde_json::to_string_pretty(&user).unwrap()
+    );
 
     // Should NOT have groups field when empty and show_empty_groups_members: false
     assert!(user.get("groups").is_none(), 
@@ -161,17 +171,27 @@ async fn test_include_user_groups_true_show_empty_groups_false_with_actual_group
     assert_eq!(response.status_code(), StatusCode::OK);
 
     let user: serde_json::Value = response.json();
-    
+
     // Debug: print the actual response
     println!("User response (include_user_groups: true, show_empty_groups_members: false, with actual groups): {}", 
              serde_json::to_string_pretty(&user).unwrap());
 
     // Should have groups field with actual group data
-    assert!(user.get("groups").is_some(), "groups field should exist when user has actual group memberships");
+    assert!(
+        user.get("groups").is_some(),
+        "groups field should exist when user has actual group memberships"
+    );
     let groups = user["groups"].as_array().unwrap();
-    assert!(!groups.is_empty(), "groups should not be empty when user has actual group memberships");
-    assert_eq!(groups.len(), 1, "user should be member of exactly one group");
-    
+    assert!(
+        !groups.is_empty(),
+        "groups should not be empty when user has actual group memberships"
+    );
+    assert_eq!(
+        groups.len(),
+        1,
+        "user should be member of exactly one group"
+    );
+
     // Verify the group data
     let group = &groups[0];
     assert_eq!(group["value"].as_str().unwrap(), group_id);
@@ -244,10 +264,12 @@ async fn test_include_user_groups_false_no_db_fetch() {
     assert_eq!(response.status_code(), StatusCode::OK);
 
     let user: serde_json::Value = response.json();
-    
+
     // Debug: print the actual response
-    println!("User response (include_user_groups: false, with actual groups but no DB fetch): {}", 
-             serde_json::to_string_pretty(&user).unwrap());
+    println!(
+        "User response (include_user_groups: false, with actual groups but no DB fetch): {}",
+        serde_json::to_string_pretty(&user).unwrap()
+    );
 
     // Should NOT have groups field when include_user_groups: false, even with actual memberships
     assert!(user.get("groups").is_none(), 
@@ -284,17 +306,21 @@ async fn test_list_users_with_different_group_settings() {
     assert_eq!(response.status_code(), StatusCode::OK);
 
     let users_list: serde_json::Value = response.json();
-    
+
     // Debug: print the actual response
-    println!("Users list response (include_user_groups: false): {}", 
-             serde_json::to_string_pretty(&users_list).unwrap());
+    println!(
+        "Users list response (include_user_groups: false): {}",
+        serde_json::to_string_pretty(&users_list).unwrap()
+    );
 
     // Verify that users in the list don't have groups field
     let resources = users_list["Resources"].as_array().unwrap();
     assert!(!resources.is_empty(), "should have at least one user");
-    
+
     for user in resources {
-        assert!(user.get("groups").is_none(), 
-                "no user in the list should have groups field when include_user_groups: false");
+        assert!(
+            user.get("groups").is_none(),
+            "no user in the list should have groups field when include_user_groups: false"
+        );
     }
 }

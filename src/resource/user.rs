@@ -256,8 +256,11 @@ pub async fn get_user(
 
     // Get compatibility settings for this tenant to determine if we should include groups
     let compatibility = app_config.get_effective_compatibility(tenant_id);
-    
-    match backend.find_user_by_id(tenant_id, &id, compatibility.include_user_groups).await {
+
+    match backend
+        .find_user_by_id(tenant_id, &id, compatibility.include_user_groups)
+        .await
+    {
         Ok(Some(mut user)) => {
             // Set meta.location for SCIM compliance
             set_user_location(&tenant_info, &mut user);
@@ -344,7 +347,10 @@ pub async fn search_users(
             let group_id = &filter_str[start_quote + 1..end_quote];
 
             // Get users by group
-            match backend.find_users_by_group_id(tenant_id, group_id, compatibility.include_user_groups).await {
+            match backend
+                .find_users_by_group_id(tenant_id, group_id, compatibility.include_user_groups)
+                .await
+            {
                 Ok(mut users) => {
                     // Set location and fix refs for all users
                     for user in &mut users {
@@ -436,10 +442,23 @@ pub async fn search_users(
 
     let result = if sort_spec.is_some() {
         backend
-            .find_all_users_sorted(tenant_id, start_index, count, sort_spec.as_ref(), compatibility.include_user_groups)
+            .find_all_users_sorted(
+                tenant_id,
+                start_index,
+                count,
+                sort_spec.as_ref(),
+                compatibility.include_user_groups,
+            )
             .await
     } else {
-        backend.find_all_users(tenant_id, start_index, count, compatibility.include_user_groups).await
+        backend
+            .find_all_users(
+                tenant_id,
+                start_index,
+                count,
+                compatibility.include_user_groups,
+            )
+            .await
     };
 
     match result {

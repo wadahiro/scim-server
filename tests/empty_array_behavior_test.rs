@@ -36,13 +36,19 @@ async fn test_user_with_empty_emails_array_gets_removed() {
     assert_eq!(response.status_code(), StatusCode::OK);
 
     let user: serde_json::Value = response.json();
-    
+
     // Debug: print the actual response
-    println!("User response: {}", serde_json::to_string_pretty(&user).unwrap());
+    println!(
+        "User response: {}",
+        serde_json::to_string_pretty(&user).unwrap()
+    );
 
     // emails array should NOT exist (empty arrays get removed for normal fields)
-    assert!(user.get("emails").is_none(), "emails field should not exist when empty");
-    
+    assert!(
+        user.get("emails").is_none(),
+        "emails field should not exist when empty"
+    );
+
     // But groups field should exist as empty array when show_empty_groups_members=true
     assert!(user.get("groups").is_some(), "groups field should exist");
     let groups = user["groups"].as_array().unwrap();
@@ -82,8 +88,11 @@ async fn test_user_with_empty_phone_numbers_array_gets_removed() {
     let user: serde_json::Value = response.json();
 
     // phoneNumbers array should NOT exist (empty arrays get removed for normal fields)
-    assert!(user.get("phoneNumbers").is_none(), "phoneNumbers field should not exist when empty");
-    
+    assert!(
+        user.get("phoneNumbers").is_none(),
+        "phoneNumbers field should not exist when empty"
+    );
+
     // But groups field should exist as empty array
     assert!(user.get("groups").is_some(), "groups field should exist");
     let groups = user["groups"].as_array().unwrap();
@@ -118,7 +127,10 @@ async fn test_group_with_empty_members_preserved() {
     let group: serde_json::Value = response.json();
 
     // Debug: print the actual response
-    println!("Group response: {}", serde_json::to_string_pretty(&group).unwrap());
+    println!(
+        "Group response: {}",
+        serde_json::to_string_pretty(&group).unwrap()
+    );
 
     // members array should exist as empty array (special handling for groups/members)
     assert!(group.get("members").is_some(), "members field should exist");
@@ -131,7 +143,7 @@ async fn test_group_with_empty_members_removed_when_false() {
     // Test that Group members are removed when show_empty_groups_members: false
     let mut app_config = create_test_app_config();
     app_config.compatibility.show_empty_groups_members = false;
-    
+
     let app = setup_test_app(app_config).await.unwrap();
     let server = TestServer::new(app).unwrap();
 
@@ -157,8 +169,14 @@ async fn test_group_with_empty_members_removed_when_false() {
     let group: serde_json::Value = response.json();
 
     // Debug: print the actual response
-    println!("Group response (false setting): {}", serde_json::to_string_pretty(&group).unwrap());
+    println!(
+        "Group response (false setting): {}",
+        serde_json::to_string_pretty(&group).unwrap()
+    );
 
     // members array should NOT exist when show_empty_groups_members: false
-    assert!(group.get("members").is_none(), "members field should not exist when show_empty_groups_members is false");
+    assert!(
+        group.get("members").is_none(),
+        "members field should not exist when show_empty_groups_members is false"
+    );
 }

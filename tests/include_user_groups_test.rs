@@ -37,12 +37,18 @@ async fn test_include_user_groups_true() {
     assert_eq!(response.status_code(), StatusCode::OK);
 
     let user: serde_json::Value = response.json();
-    
+
     // Debug: print the actual response
-    println!("User response (include_user_groups: true): {}", serde_json::to_string_pretty(&user).unwrap());
+    println!(
+        "User response (include_user_groups: true): {}",
+        serde_json::to_string_pretty(&user).unwrap()
+    );
 
     // Should have groups field (empty array) when include_user_groups: true
-    assert!(user.get("groups").is_some(), "groups field should exist when include_user_groups: true");
+    assert!(
+        user.get("groups").is_some(),
+        "groups field should exist when include_user_groups: true"
+    );
     let groups = user["groups"].as_array().unwrap();
     assert!(groups.is_empty(), "groups should be empty array");
 }
@@ -80,12 +86,18 @@ async fn test_include_user_groups_false() {
     assert_eq!(response.status_code(), StatusCode::OK);
 
     let user: serde_json::Value = response.json();
-    
+
     // Debug: print the actual response
-    println!("User response (include_user_groups: false): {}", serde_json::to_string_pretty(&user).unwrap());
+    println!(
+        "User response (include_user_groups: false): {}",
+        serde_json::to_string_pretty(&user).unwrap()
+    );
 
     // Should NOT have groups field when include_user_groups: false
-    assert!(user.get("groups").is_none(), "groups field should not exist when include_user_groups: false");
+    assert!(
+        user.get("groups").is_none(),
+        "groups field should not exist when include_user_groups: false"
+    );
 }
 
 #[tokio::test]
@@ -150,9 +162,12 @@ async fn test_include_user_groups_false_with_actual_groups() {
     assert_eq!(response.status_code(), StatusCode::OK);
 
     let user: serde_json::Value = response.json();
-    
+
     // Debug: print the actual response
-    println!("User response (include_user_groups: false, but has groups): {}", serde_json::to_string_pretty(&user).unwrap());
+    println!(
+        "User response (include_user_groups: false, but has groups): {}",
+        serde_json::to_string_pretty(&user).unwrap()
+    );
 
     // Should NOT have groups field when include_user_groups: false, even with real group memberships
     assert!(user.get("groups").is_none(), "groups field should not exist when include_user_groups: false, even with group memberships");
@@ -162,13 +177,13 @@ async fn test_include_user_groups_false_with_actual_groups() {
 async fn test_include_user_groups_tenant_override() {
     // Test per-tenant override of include_user_groups
     let mut app_config = create_test_app_config();
-    
+
     // Global setting: true
     app_config.compatibility.include_user_groups = true;
-    
+
     // Override for specific tenant: false
     if let Some(tenant) = app_config.tenants.get_mut(2) {
-        // tenant with id: 3 (index 2) 
+        // tenant with id: 3 (index 2)
         tenant.compatibility = Some(CompatibilityConfig {
             include_user_groups: false,
             ..Default::default()
@@ -204,5 +219,8 @@ async fn test_include_user_groups_tenant_override() {
     let user: serde_json::Value = response.json();
 
     // Should NOT have groups field due to tenant override
-    assert!(user.get("groups").is_none(), "groups field should not exist due to tenant override");
+    assert!(
+        user.get("groups").is_none(),
+        "groups field should not exist due to tenant override"
+    );
 }

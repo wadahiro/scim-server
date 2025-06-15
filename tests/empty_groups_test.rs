@@ -39,9 +39,12 @@ async fn test_show_empty_groups_true() {
     assert_eq!(response.status_code(), StatusCode::OK);
 
     let user: serde_json::Value = response.json();
-    
+
     // Debug: print the actual response
-    println!("Actual user response: {}", serde_json::to_string_pretty(&user).unwrap());
+    println!(
+        "Actual user response: {}",
+        serde_json::to_string_pretty(&user).unwrap()
+    );
 
     // Should have empty groups array
     assert!(user.get("groups").is_some(), "groups field should exist");

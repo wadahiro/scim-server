@@ -280,7 +280,10 @@ mod tests {
         user.base.groups = None;
 
         let result = handle_user_empty_groups_for_response(user, true);
-        assert!(result.base.groups.is_none(), "None groups should remain None regardless of show_empty_groups_members");
+        assert!(
+            result.base.groups.is_none(),
+            "None groups should remain None regardless of show_empty_groups_members"
+        );
 
         // Test with None groups and show_empty_groups_members = false
         let mut user = User::default();

@@ -13,7 +13,12 @@ use async_trait::async_trait;
 #[async_trait]
 pub trait UserReader: Send + Sync {
     /// Find a user by ID
-    async fn find_user_by_id(&self, tenant_id: u32, id: &str, include_groups: bool) -> AppResult<Option<User>>;
+    async fn find_user_by_id(
+        &self,
+        tenant_id: u32,
+        id: &str,
+        include_groups: bool,
+    ) -> AppResult<Option<User>>;
 
     /// Find a user by username (case-insensitive)
     async fn find_user_by_username(
@@ -54,7 +59,12 @@ pub trait UserReader: Send + Sync {
     ) -> AppResult<(Vec<User>, i64)>;
 
     /// Find users by group ID
-    async fn find_users_by_group_id(&self, tenant_id: u32, group_id: &str, include_groups: bool) -> AppResult<Vec<User>>;
+    async fn find_users_by_group_id(
+        &self,
+        tenant_id: u32,
+        group_id: &str,
+        include_groups: bool,
+    ) -> AppResult<Vec<User>>;
 }
 
 /// Unified user read operations
@@ -71,8 +81,15 @@ impl<T: UserReader> UnifiedUserReadOps<T> {
     }
 
     /// Find a user by ID
-    pub async fn find_user_by_id(&self, tenant_id: u32, id: &str, include_groups: bool) -> AppResult<Option<User>> {
-        self.reader.find_user_by_id(tenant_id, id, include_groups).await
+    pub async fn find_user_by_id(
+        &self,
+        tenant_id: u32,
+        id: &str,
+        include_groups: bool,
+    ) -> AppResult<Option<User>> {
+        self.reader
+            .find_user_by_id(tenant_id, id, include_groups)
+            .await
     }
 
     /// Find a user by username (case-insensitive)
@@ -82,7 +99,9 @@ impl<T: UserReader> UnifiedUserReadOps<T> {
         username: &str,
         include_groups: bool,
     ) -> AppResult<Option<User>> {
-        self.reader.find_user_by_username(tenant_id, username, include_groups).await
+        self.reader
+            .find_user_by_username(tenant_id, username, include_groups)
+            .await
     }
 
     /// Find all users with pagination
@@ -123,7 +142,14 @@ impl<T: UserReader> UnifiedUserReadOps<T> {
         include_groups: bool,
     ) -> AppResult<(Vec<User>, i64)> {
         self.reader
-            .find_users_by_filter(tenant_id, filter, start_index, count, sort_spec, include_groups)
+            .find_users_by_filter(
+                tenant_id,
+                filter,
+                start_index,
+                count,
+                sort_spec,
+                include_groups,
+            )
             .await
     }
 

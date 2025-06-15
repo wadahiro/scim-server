@@ -140,8 +140,15 @@ impl UserBackend for PostgresBackend {
         self.user_insert_ops.create_user(tenant_id, user).await
     }
 
-    async fn find_user_by_id(&self, tenant_id: u32, id: &str, include_groups: bool) -> AppResult<Option<User>> {
-        self.user_read_ops.find_user_by_id(tenant_id, id, include_groups).await
+    async fn find_user_by_id(
+        &self,
+        tenant_id: u32,
+        id: &str,
+        include_groups: bool,
+    ) -> AppResult<Option<User>> {
+        self.user_read_ops
+            .find_user_by_id(tenant_id, id, include_groups)
+            .await
     }
 
     async fn find_user_by_username(
@@ -190,7 +197,14 @@ impl UserBackend for PostgresBackend {
         include_groups: bool,
     ) -> AppResult<(Vec<User>, i64)> {
         self.user_read_ops
-            .find_users_by_filter(tenant_id, filter, start_index, count, sort_spec, include_groups)
+            .find_users_by_filter(
+                tenant_id,
+                filter,
+                start_index,
+                count,
+                sort_spec,
+                include_groups,
+            )
             .await
     }
 
@@ -203,7 +217,9 @@ impl UserBackend for PostgresBackend {
         {
             Some(_) => {
                 // After successful update, fetch the user with groups populated
-                self.user_read_ops.find_user_by_id(tenant_id, id, true).await
+                self.user_read_ops
+                    .find_user_by_id(tenant_id, id, true)
+                    .await
             }
             None => Ok(None),
         }
@@ -223,7 +239,9 @@ impl UserBackend for PostgresBackend {
         {
             Some(_) => {
                 // After successful patch, fetch the user with groups populated
-                self.user_read_ops.find_user_by_id(tenant_id, id, true).await
+                self.user_read_ops
+                    .find_user_by_id(tenant_id, id, true)
+                    .await
             }
             None => Ok(None),
         }
@@ -233,7 +251,12 @@ impl UserBackend for PostgresBackend {
         self.user_delete_ops.delete_user(tenant_id, id).await
     }
 
-    async fn find_users_by_group_id(&self, tenant_id: u32, group_id: &str, include_groups: bool) -> AppResult<Vec<User>> {
+    async fn find_users_by_group_id(
+        &self,
+        tenant_id: u32,
+        group_id: &str,
+        include_groups: bool,
+    ) -> AppResult<Vec<User>> {
         self.user_read_ops
             .find_users_by_group_id(tenant_id, group_id, include_groups)
             .await
