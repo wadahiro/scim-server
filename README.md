@@ -30,7 +30,7 @@ A SCIM (System for Cross-domain Identity Management) v2.0 server implementation 
 - ✅ **Case-insensitive attributes**: userName and Group displayName per specification
 - ✅ **Sorting and pagination**: Basic SCIM query parameter support
 - ✅ **ServiceProviderConfig**: Server capabilities endpoint
-- ✅ **Resource Type discovery**: Schema and resource type endpoints
+- ✅ **Resource Type discovery**: Schema and resource type endpoints (`/Schemas`, `/ResourceTypes`)
 - ✅ **ETag/Versioning**: Full RFC 7232 conditional request support with optimistic concurrency control
 
 **In Development:**
@@ -609,6 +609,27 @@ cargo test --test etag_version_test
 
 See [TESTING.md](TESTING.md) for detailed testing instructions including TestContainers setup.
 
+
+## 🚧 Unsupported Features
+
+While this SCIM server provides comprehensive support for core SCIM 2.0 operations, the following features are not yet implemented:
+
+### Not Implemented
+- **Bulk Operations** (`/Bulk` endpoint) - RFC 7644 Section 3.7
+- **`.search` POST endpoints** - Alternative to GET with complex filters
+- **`/Me` endpoint** - Authenticated user self-service endpoint
+- **Cursor-based pagination** - Only offset/limit pagination is supported (cursor pagination is from [draft-ietf-scim-cursor-pagination](https://datatracker.ietf.org/doc/draft-ietf-scim-cursor-pagination/), not RFC 7644)
+- **Complex filter syntax like `emails[type eq "work"].value eq "foo"`** - Microsoft Entra ID extension, not standard SCIM 2.0 ([reference](https://stackoverflow.com/questions/76763662/is-microsoft-azure-misusing-the-scim-rfc-emailstype-eq-work-value-eq-foo))
+- **Enterprise User extension fields** beyond basic support
+- **Custom schema extensions** - Only standard schemas are supported
+- **`excludedAttributes` parameter for list operations** - Only supported for individual resources
+- **Complex attribute paths in `attributes` parameter** - e.g., `name.givenName`
+- **Sub-attribute filtering in list operations** - e.g., `attributes=emails.value`
+
+### Partially Implemented
+- **SCIM PATCH operations** - Basic support, but complex value selections are limited
+- **Filter operators** - Supports `eq`, `ne`, `co`, `sw`, `ew`, `pr`, `gt`, `ge`, `lt`, `le`, `and`, `or`, `not`; Missing: `regex`, complex attribute filters
+- **Sorting** - Only single attribute sorting is supported
 
 ## 📄 License
 
