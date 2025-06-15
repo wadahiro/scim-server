@@ -9,7 +9,7 @@ async fn test_group_create_and_get() {
     let tenant_config = common::create_test_app_config();
     let app = common::setup_test_app(tenant_config).await.unwrap();
     let server = TestServer::new(app).unwrap();
-    let tenant_id = "3";
+    let _tenant_id = "3";
 
     // Test POST - Create a group
     let group_data = json!({
@@ -18,7 +18,7 @@ async fn test_group_create_and_get() {
     });
 
     let response = server
-        .post(&format!("/scim/v2/Groups"))
+        .post("/scim/v2/Groups")
         .content_type("application/scim+json")
         .json(&group_data)
         .await;
@@ -61,7 +61,7 @@ async fn test_group_list() {
     let tenant_config = common::create_test_app_config();
     let app = common::setup_test_app(tenant_config).await.unwrap();
     let server = TestServer::new(app).unwrap();
-    let tenant_id = "3";
+    let _tenant_id = "3";
 
     // Create a group first
     let group_data = json!({
@@ -70,7 +70,7 @@ async fn test_group_list() {
     });
 
     let response = server
-        .post(&format!("/scim/v2/Groups"))
+        .post("/scim/v2/Groups")
         .content_type("application/scim+json")
         .json(&group_data)
         .await;
@@ -79,7 +79,7 @@ async fn test_group_list() {
 
     // Test GET all groups
     let response = server
-        .get(&format!("/scim/v2/Groups"))
+        .get("/scim/v2/Groups")
         .add_header(http::header::ACCEPT, "application/scim+json")
         .await;
 
@@ -101,7 +101,7 @@ async fn test_group_update_and_delete() {
     let tenant_config = common::create_test_app_config();
     let app = common::setup_test_app(tenant_config).await.unwrap();
     let server = TestServer::new(app).unwrap();
-    let tenant_id = "3";
+    let _tenant_id = "3";
 
     // Create a group first
     let group_data = json!({
@@ -110,7 +110,7 @@ async fn test_group_update_and_delete() {
     });
 
     let response = server
-        .post(&format!("/scim/v2/Groups"))
+        .post("/scim/v2/Groups")
         .content_type("application/scim+json")
         .json(&group_data)
         .await;
@@ -154,12 +154,12 @@ async fn test_group_patch_operations() {
     let tenant_config = common::create_test_app_config();
     let app = common::setup_test_app(tenant_config).await.unwrap();
     let server = TestServer::new(app).unwrap();
-    let tenant_id = "3";
+    let _tenant_id = "3";
 
     // Create a user first for testing membership
     let user_data = common::create_test_user_json("test-user", "Test", "User");
     let user_response = server
-        .post(&format!("/scim/v2/Users"))
+        .post("/scim/v2/Users")
         .content_type("application/scim+json")
         .json(&user_data)
         .await;
@@ -175,7 +175,7 @@ async fn test_group_patch_operations() {
     });
 
     let response = server
-        .post(&format!("/scim/v2/Groups"))
+        .post("/scim/v2/Groups")
         .content_type("application/scim+json")
         .json(&group_data)
         .await;
@@ -266,12 +266,12 @@ async fn test_user_groups_attribute() {
     let tenant_config = common::create_test_app_config();
     let app = common::setup_test_app(tenant_config).await.unwrap();
     let server = TestServer::new(app).unwrap();
-    let tenant_id = "3";
+    let _tenant_id = "3";
 
     // Create a user
     let user_data = common::create_test_user_json("group-test-user", "Group", "Test");
     let user_response = server
-        .post(&format!("/scim/v2/Users"))
+        .post("/scim/v2/Users")
         .content_type("application/scim+json")
         .json(&user_data)
         .await;
@@ -293,7 +293,7 @@ async fn test_user_groups_attribute() {
     });
 
     let group_response = server
-        .post(&format!("/scim/v2/Groups"))
+        .post("/scim/v2/Groups")
         .content_type("application/scim+json")
         .json(&group_data)
         .await;
@@ -337,7 +337,7 @@ async fn test_group_error_scenarios() {
     let tenant_config = common::create_test_app_config();
     let app = common::setup_test_app(tenant_config).await.unwrap();
     let server = TestServer::new(app).unwrap();
-    let tenant_id = "3";
+    let _tenant_id = "3";
     let invalid_tenant_id = "invalid-tenant";
 
     // Test creating group with invalid tenant
@@ -360,7 +360,7 @@ async fn test_group_error_scenarios() {
     });
 
     let response = server
-        .post(&format!("/scim/v2/Groups"))
+        .post("/scim/v2/Groups")
         .content_type("application/scim+json")
         .json(&invalid_group_data)
         .await;
@@ -382,7 +382,7 @@ async fn test_group_to_group_membership() {
     let tenant_config = common::create_test_app_config();
     let app = common::setup_test_app(tenant_config).await.unwrap();
     let server = TestServer::new(app).unwrap();
-    let tenant_id = "3";
+    let _tenant_id = "3";
 
     // Create parent group
     let parent_group_data = json!({
@@ -391,7 +391,7 @@ async fn test_group_to_group_membership() {
     });
 
     let parent_response = server
-        .post(&format!("/scim/v2/Groups"))
+        .post("/scim/v2/Groups")
         .content_type("application/scim+json")
         .json(&parent_group_data)
         .await;
@@ -407,7 +407,7 @@ async fn test_group_to_group_membership() {
     });
 
     let child_response = server
-        .post(&format!("/scim/v2/Groups"))
+        .post("/scim/v2/Groups")
         .content_type("application/scim+json")
         .json(&child_group_data)
         .await;

@@ -71,7 +71,7 @@ impl SqliteGroupUpdater {
             Some(row) => {
                 let data_orig: String = row.get("data_orig");
                 let mut group: Group =
-                    serde_json::from_str(&data_orig).map_err(|e| AppError::Serialization(e))?;
+                    serde_json::from_str(&data_orig).map_err(AppError::Serialization)?;
 
                 // Set version in meta (ensure meta exists)
                 let version: i64 = row.get("version");
@@ -209,7 +209,7 @@ impl GroupUpdater for SqliteGroupUpdater {
             .bind(&data.external_id)
             .bind(&data_orig_str) // SQLite uses TEXT
             .bind(&data_norm_str) // SQLite uses TEXT
-            .bind(&data.timestamp)
+            .bind(data.timestamp)
             .bind(&data.id)
             .execute(&mut *tx)
             .await
@@ -269,7 +269,7 @@ impl GroupUpdater for SqliteGroupUpdater {
 ///
 /// This ensures consistent JSON serialization for SQLite databases.
 fn json_value_to_string(value: &Value) -> AppResult<String> {
-    serde_json::to_string(value).map_err(|e| AppError::Serialization(e))
+    serde_json::to_string(value).map_err(AppError::Serialization)
 }
 
 #[cfg(test)]
@@ -285,7 +285,7 @@ mod tests {
         let pool = create_test_pool().await;
         let updater = SqliteGroupUpdater::new(pool);
         // Just verify the updater can be created
-        assert!(format!("{:?}", &updater as *const _).len() > 0);
+        assert!(!format!("{:?}", &updater as *const _).is_empty());
     }
 
     #[test]

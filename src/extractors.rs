@@ -81,6 +81,7 @@ impl IntoResponse for ScimJsonRejection {
 }
 
 // Helper function to set SCIM content type in responses
+#[allow(dead_code)]
 pub fn scim_content_type() -> HeaderMap {
     let mut headers = HeaderMap::new();
     headers.insert(

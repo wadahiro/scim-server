@@ -54,7 +54,7 @@ impl SqliteUserReader {
             _ => {
                 // Normalize attribute name to lowercase for JSON path
                 let normalized_attr = sort_spec.attribute.to_lowercase();
-                let json_path = normalized_attr.replace('.', ".");
+                let json_path = normalized_attr;
                 format!("LOWER(json_extract(data_orig, '$.{}'))", json_path)
             }
         }
@@ -98,7 +98,7 @@ impl SqliteUserReader {
             Some(row) => {
                 let data_orig: String = row.get("data_orig");
                 let mut user: User =
-                    serde_json::from_str(&data_orig).map_err(|e| AppError::Serialization(e))?;
+                    serde_json::from_str(&data_orig).map_err(AppError::Serialization)?;
 
                 // Ensure ID is set from database (in case data_orig doesn't have it)
                 let db_id: String = row.get("id");

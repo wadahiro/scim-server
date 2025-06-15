@@ -1,3 +1,5 @@
+#![allow(clippy::collapsible_match)]
+
 use crate::error::{AppError, AppResult};
 use chrono_tz::Tz;
 use email_address::EmailAddress;

@@ -79,7 +79,7 @@ impl UserPatcher for PostgresUserPatcher {
             .bind(&data.external_id)
             .bind(&data.data_orig) // PostgreSQL uses JSONB
             .bind(&data.data_norm) // PostgreSQL uses JSONB
-            .bind(&data.timestamp)
+            .bind(data.timestamp)
             .bind(&data.id)
             .execute(&self.pool)
             .await
@@ -108,7 +108,7 @@ impl UserPatcher for PostgresUserPatcher {
         match row {
             Some(row) => {
                 let mut user: User = serde_json::from_value(row.get("data_orig"))
-                    .map_err(|e| AppError::Serialization(e))?;
+                    .map_err(AppError::Serialization)?;
 
                 // Ensure ID is set from database (in case data_orig doesn't have it)
                 let db_id: uuid::Uuid = row.get("id");

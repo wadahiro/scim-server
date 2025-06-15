@@ -11,7 +11,7 @@ async fn test_case_insensitive_username_storage() {
     let tenant_config = create_test_app_config();
     let app = common::setup_test_app(tenant_config).await.unwrap();
     let server = TestServer::new(app).unwrap();
-    let tenant_id = "3";
+    let _tenant_id = "3";
 
     // Create user with mixed case userName
     let user_data = json!({
@@ -24,7 +24,7 @@ async fn test_case_insensitive_username_storage() {
     });
 
     let response = server
-        .post(&format!("/scim/v2/Users"))
+        .post("/scim/v2/Users")
         .content_type("application/scim+json")
         .json(&user_data)
         .await;
@@ -48,7 +48,7 @@ async fn test_case_insensitive_username_storage() {
     });
 
     let response = server
-        .post(&format!("/scim/v2/Users"))
+        .post("/scim/v2/Users")
         .content_type("application/scim+json")
         .json(&duplicate_user_data)
         .await;
@@ -69,9 +69,9 @@ async fn test_case_insensitive_username_variations() {
     let tenant_config = create_test_app_config();
     let app = common::setup_test_app(tenant_config).await.unwrap();
     let server = TestServer::new(app).unwrap();
-    let tenant_id = "3";
+    let _tenant_id = "3";
 
-    let test_cases = vec![
+    let test_cases = [
         "user@domain.com",
         "USER@DOMAIN.COM",
         "User@Domain.Com",
@@ -89,7 +89,7 @@ async fn test_case_insensitive_username_variations() {
     });
 
     let response = server
-        .post(&format!("/scim/v2/Users"))
+        .post("/scim/v2/Users")
         .content_type("application/scim+json")
         .json(&user_data)
         .await;
@@ -107,7 +107,7 @@ async fn test_case_insensitive_username_variations() {
         });
 
         let response = server
-            .post(&format!("/scim/v2/Users"))
+            .post("/scim/v2/Users")
             .content_type("application/scim+json")
             .json(&duplicate_user_data)
             .await;
@@ -134,7 +134,7 @@ async fn test_case_insensitive_username_search() {
     let tenant_config = create_test_app_config();
     let app = common::setup_test_app(tenant_config).await.unwrap();
     let server = TestServer::new(app).unwrap();
-    let tenant_id = "3";
+    let _tenant_id = "3";
 
     // Create user with mixed case userName
     let user_data = json!({
@@ -147,7 +147,7 @@ async fn test_case_insensitive_username_search() {
     });
 
     let response = server
-        .post(&format!("/scim/v2/Users"))
+        .post("/scim/v2/Users")
         .content_type("application/scim+json")
         .json(&user_data)
         .await;
@@ -177,7 +177,7 @@ async fn test_case_insensitive_username_search() {
         });
 
         let response = server
-            .post(&format!("/scim/v2/Users"))
+            .post("/scim/v2/Users")
             .content_type("application/scim+json")
             .json(&duplicate_user_data)
             .await;

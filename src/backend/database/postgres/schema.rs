@@ -94,16 +94,14 @@ async fn create_indexes(pool: &PgPool, tenant_id: u32) -> AppResult<()> {
     let memberships_table = format!("t{}_group_memberships", tenant_id);
 
     // Users table indexes
-    let user_indexes = vec![
-        format!("CREATE INDEX IF NOT EXISTS \"idx_{}_users_username_lower\" ON {} (LOWER(username))", tenant_id, users_table),
+    let user_indexes = [format!("CREATE INDEX IF NOT EXISTS \"idx_{}_users_username_lower\" ON {} (LOWER(username))", tenant_id, users_table),
         format!("CREATE INDEX IF NOT EXISTS \"idx_{}_users_external_id\" ON {} (external_id) WHERE external_id IS NOT NULL", tenant_id, users_table),
         format!("CREATE INDEX IF NOT EXISTS \"idx_{}_users_data_orig_gin\" ON {} USING GIN (data_orig)", tenant_id, users_table),
         format!("CREATE INDEX IF NOT EXISTS \"idx_{}_users_data_norm_gin\" ON {} USING GIN (data_norm)", tenant_id, users_table),
-        format!("CREATE INDEX IF NOT EXISTS \"idx_{}_users_created_at\" ON {} (created_at)", tenant_id, users_table),
-    ];
+        format!("CREATE INDEX IF NOT EXISTS \"idx_{}_users_created_at\" ON {} (created_at)", tenant_id, users_table)];
 
     // Groups table indexes
-    let group_indexes = vec![
+    let group_indexes = [
         format!("CREATE INDEX IF NOT EXISTS \"idx_{}_groups_display_name_lower\" ON {} (LOWER(display_name))", tenant_id, groups_table),
         format!("CREATE INDEX IF NOT EXISTS \"idx_{}_groups_external_id\" ON {} (external_id) WHERE external_id IS NOT NULL", tenant_id, groups_table),
         format!("CREATE INDEX IF NOT EXISTS \"idx_{}_groups_data_orig_gin\" ON {} USING GIN (data_orig)", tenant_id, groups_table),
@@ -112,7 +110,7 @@ async fn create_indexes(pool: &PgPool, tenant_id: u32) -> AppResult<()> {
     ];
 
     // Memberships table indexes
-    let membership_indexes = vec![
+    let membership_indexes = [
         format!(
             "CREATE INDEX IF NOT EXISTS \"idx_{}_memberships_group_id\" ON {} (group_id)",
             tenant_id, memberships_table

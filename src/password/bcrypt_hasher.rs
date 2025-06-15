@@ -20,6 +20,7 @@ impl BcryptHasher {
     ///
     /// Cost should be between 4 and 31. Higher values are more secure but slower.
     /// Default is 12, which is recommended for most applications.
+    #[allow(dead_code)]
     pub fn with_cost(cost: u32) -> AppResult<Self> {
         if !(4..=31).contains(&cost) {
             return Err(AppError::BadRequest(

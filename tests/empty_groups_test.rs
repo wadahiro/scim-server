@@ -4,7 +4,7 @@ use serde_json::json;
 
 mod common;
 use common::{create_test_app_config, setup_test_app};
-use scim_server::config::{CompatibilityConfig, TenantConfig};
+use scim_server::config::CompatibilityConfig;
 
 #[tokio::test]
 async fn test_show_empty_groups_true() {

@@ -21,6 +21,7 @@ impl SshaHasher {
     }
 
     /// Create SSHA hasher with custom salt length
+    #[allow(dead_code)]
     pub fn with_salt_length(salt_length: usize) -> Self {
         Self { salt_length }
     }

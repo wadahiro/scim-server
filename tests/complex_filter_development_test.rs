@@ -54,7 +54,8 @@ fn test_special_case_filters_work() {
     ];
 
     for (path, expected_display) in test_cases {
-        let parsed = ScimPath::parse(path).expect(&format!("Should parse path: {}", path));
+        let parsed =
+            ScimPath::parse(path).unwrap_or_else(|_| panic!("Should parse path: {}", path));
 
         // Verify the filter was parsed correctly
         match parsed {

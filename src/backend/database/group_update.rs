@@ -25,6 +25,7 @@ pub trait GroupUpdater: Send + Sync {
 /// This struct contains all the processed and validated data needed
 /// for updating a group in the database, including member relationships.
 pub struct PreparedGroupUpdateData {
+    #[allow(dead_code)]
     pub group: Group,
     pub id: String,
     pub display_name: String,

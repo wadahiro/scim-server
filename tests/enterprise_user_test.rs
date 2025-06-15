@@ -11,7 +11,7 @@ async fn test_enterprise_user_extension_crud() {
     let tenant_config = create_test_app_config();
     let app = common::setup_test_app(tenant_config).await.unwrap();
     let server = TestServer::new(app).unwrap();
-    let tenant_id = "3";
+    let _tenant_id = "3";
 
     // Test creating user with Enterprise User extension
     let user_data = json!({
@@ -44,7 +44,7 @@ async fn test_enterprise_user_extension_crud() {
     });
 
     let response = server
-        .post(&format!("/scim/v2/Users"))
+        .post("/scim/v2/Users")
         .content_type("application/scim+json")
         .json(&user_data)
         .await;
@@ -183,7 +183,7 @@ async fn test_user_without_enterprise_extension() {
     let tenant_config = create_test_app_config();
     let app = common::setup_test_app(tenant_config).await.unwrap();
     let server = TestServer::new(app).unwrap();
-    let tenant_id = "3";
+    let _tenant_id = "3";
 
     // Create user without Enterprise User extension
     let user_data = json!({
@@ -202,7 +202,7 @@ async fn test_user_without_enterprise_extension() {
     });
 
     let response = server
-        .post(&format!("/scim/v2/Users"))
+        .post("/scim/v2/Users")
         .content_type("application/scim+json")
         .json(&user_data)
         .await;
@@ -223,7 +223,7 @@ async fn test_email_validation() {
     let tenant_config = create_test_app_config();
     let app = common::setup_test_app(tenant_config).await.unwrap();
     let server = TestServer::new(app).unwrap();
-    let tenant_id = "3";
+    let _tenant_id = "3";
 
     // Test invalid email format
     let user_data = json!({
@@ -237,7 +237,7 @@ async fn test_email_validation() {
     });
 
     let response = server
-        .post(&format!("/scim/v2/Users"))
+        .post("/scim/v2/Users")
         .content_type("application/scim+json")
         .json(&user_data)
         .await;
@@ -255,7 +255,7 @@ async fn test_phone_no_validation() {
     let tenant_config = create_test_app_config();
     let app = common::setup_test_app(tenant_config).await.unwrap();
     let server = TestServer::new(app).unwrap();
-    let tenant_id = "3";
+    let _tenant_id = "3";
 
     // Test that any phone number format is accepted (no validation per SCIM 2.0)
     let user_data = json!({
@@ -286,7 +286,7 @@ async fn test_phone_no_validation() {
     });
 
     let response = server
-        .post(&format!("/scim/v2/Users"))
+        .post("/scim/v2/Users")
         .content_type("application/scim+json")
         .json(&user_data)
         .await;
@@ -307,7 +307,7 @@ async fn test_locale_timezone_validation() {
     let tenant_config = create_test_app_config();
     let app = common::setup_test_app(tenant_config).await.unwrap();
     let server = TestServer::new(app).unwrap();
-    let tenant_id = "3";
+    let _tenant_id = "3";
 
     // Test valid locale and timezone
     let user_data = json!({
@@ -318,7 +318,7 @@ async fn test_locale_timezone_validation() {
     });
 
     let response = server
-        .post(&format!("/scim/v2/Users"))
+        .post("/scim/v2/Users")
         .content_type("application/scim+json")
         .json(&user_data)
         .await;
@@ -333,7 +333,7 @@ async fn test_locale_timezone_validation() {
     });
 
     let response = server
-        .post(&format!("/scim/v2/Users"))
+        .post("/scim/v2/Users")
         .content_type("application/scim+json")
         .json(&user_data)
         .await;
@@ -353,7 +353,7 @@ async fn test_locale_timezone_validation() {
     });
 
     let response = server
-        .post(&format!("/scim/v2/Users"))
+        .post("/scim/v2/Users")
         .content_type("application/scim+json")
         .json(&user_data)
         .await;

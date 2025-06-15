@@ -26,7 +26,7 @@ impl SqliteGroupInserter {
 
     /// Convert JSON Value to String for SQLite TEXT storage
     fn json_value_to_string(&self, value: &Value) -> AppResult<String> {
-        serde_json::to_string(value).map_err(|e| AppError::Serialization(e))
+        serde_json::to_string(value).map_err(AppError::Serialization)
     }
 
     /// Check for case-insensitive duplicate displayName
@@ -93,8 +93,8 @@ impl GroupInserter for SqliteGroupInserter {
             .bind(&data_orig_str) // SQLite: JSON as TEXT
             .bind(&data_norm_str)
             .bind(1i64) // version = 1 for new records
-            .bind(&data.timestamp)
-            .bind(&data.timestamp)
+            .bind(data.timestamp)
+            .bind(data.timestamp)
             .execute(&mut *tx)
             .await
             .map_err(|e| super::user_insert_impl::map_database_error(e, "Group"))?;

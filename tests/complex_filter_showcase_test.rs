@@ -147,7 +147,7 @@ fn showcase_complex_filters() {
         "   ✅ Updated {} emails containing '@company'",
         company_emails.len()
     );
-    assert!(company_emails.len() >= 1);
+    assert!(!company_emails.is_empty());
 
     println!("\n✅ All complex filter expressions working correctly!");
     println!("📚 Supported operators: eq, ne, co, sw, ew, gt, lt, ge, le");

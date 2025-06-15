@@ -9,11 +9,11 @@ async fn test_patch_replace_operation() {
     let tenant_config = common::create_test_app_config();
     let app = common::setup_test_app(tenant_config).await.unwrap();
     let server = TestServer::new(app).unwrap();
-    let tenant_id = "1";
+    let _tenant_id = "1";
 
     // Create a user first
     let user = common::create_test_user_json("john.doe", "John", "Doe");
-    let create_response = server.post(&format!("/scim/v2/Users")).json(&user).await;
+    let create_response = server.post("/scim/v2/Users").json(&user).await;
     create_response.assert_status(StatusCode::CREATED);
     let created_user: Value = create_response.json();
     let user_id = created_user["id"].as_str().unwrap();
@@ -48,11 +48,11 @@ async fn test_patch_add_operation() {
     let tenant_config = common::create_test_app_config();
     let app = common::setup_test_app(tenant_config).await.unwrap();
     let server = TestServer::new(app).unwrap();
-    let tenant_id = "1";
+    let _tenant_id = "1";
 
     // Create a user first
     let user = common::create_test_user_json("jane.doe", "Jane", "Doe");
-    let create_response = server.post(&format!("/scim/v2/Users")).json(&user).await;
+    let create_response = server.post("/scim/v2/Users").json(&user).await;
     create_response.assert_status(StatusCode::CREATED);
     let created_user: Value = create_response.json();
     let user_id = created_user["id"].as_str().unwrap();
@@ -82,13 +82,13 @@ async fn test_patch_remove_operation() {
     let tenant_config = common::create_test_app_config();
     let app = common::setup_test_app(tenant_config).await.unwrap();
     let server = TestServer::new(app).unwrap();
-    let tenant_id = "1";
+    let _tenant_id = "1";
 
     // Create a user with a nickname first
     let mut user = common::create_test_user_json("bob.smith", "Bob", "Smith");
     user["nickName"] = json!("Bobby");
 
-    let create_response = server.post(&format!("/scim/v2/Users")).json(&user).await;
+    let create_response = server.post("/scim/v2/Users").json(&user).await;
     create_response.assert_status(StatusCode::CREATED);
     let created_user: Value = create_response.json();
     let user_id = created_user["id"].as_str().unwrap();
@@ -123,11 +123,11 @@ async fn test_patch_multiple_operations() {
     let tenant_config = common::create_test_app_config();
     let app = common::setup_test_app(tenant_config).await.unwrap();
     let server = TestServer::new(app).unwrap();
-    let tenant_id = "1";
+    let _tenant_id = "1";
 
     // Create a user first
     let user = common::create_test_user_json("alice.wonder", "Alice", "Wonder");
-    let create_response = server.post(&format!("/scim/v2/Users")).json(&user).await;
+    let create_response = server.post("/scim/v2/Users").json(&user).await;
     create_response.assert_status(StatusCode::CREATED);
     let created_user: Value = create_response.json();
     let user_id = created_user["id"].as_str().unwrap();
@@ -165,7 +165,7 @@ async fn test_patch_nonexistent_user() {
     let tenant_config = common::create_test_app_config();
     let app = common::setup_test_app(tenant_config).await.unwrap();
     let server = TestServer::new(app).unwrap();
-    let tenant_id = "1";
+    let _tenant_id = "1";
     let fake_user_id = "00000000-0000-0000-0000-000000000000";
 
     let patch_body = json!({
@@ -190,11 +190,11 @@ async fn test_patch_invalid_operation() {
     let tenant_config = common::create_test_app_config();
     let app = common::setup_test_app(tenant_config).await.unwrap();
     let server = TestServer::new(app).unwrap();
-    let tenant_id = "1";
+    let _tenant_id = "1";
 
     // Create a user first
     let user = common::create_test_user_json("invalid.test", "Invalid", "Test");
-    let create_response = server.post(&format!("/scim/v2/Users")).json(&user).await;
+    let create_response = server.post("/scim/v2/Users").json(&user).await;
     create_response.assert_status(StatusCode::CREATED);
     let created_user: Value = create_response.json();
     let user_id = created_user["id"].as_str().unwrap();

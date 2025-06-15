@@ -29,7 +29,7 @@ async fn user_crud_test(db_type: TestDatabaseType) {
         .await
         .unwrap();
     let server = TestServer::new(app).unwrap();
-    let tenant_id = "3";
+    let _tenant_id = "3";
 
     let db_prefix = match db_type {
         TestDatabaseType::Sqlite => "sqlite",
@@ -53,7 +53,7 @@ async fn user_crud_test(db_type: TestDatabaseType) {
     );
 
     let response = server
-        .post(&format!("/scim/v2/Users"))
+        .post("/scim/v2/Users")
         .content_type("application/scim+json")
         .json(&user_data)
         .await;
@@ -130,7 +130,7 @@ async fn group_crud_test(db_type: TestDatabaseType) {
         .await
         .unwrap();
     let server = TestServer::new(app).unwrap();
-    let tenant_id = "3";
+    let _tenant_id = "3";
 
     let db_prefix = match db_type {
         TestDatabaseType::Sqlite => "SQLite",
@@ -144,7 +144,7 @@ async fn group_crud_test(db_type: TestDatabaseType) {
     });
 
     let response = server
-        .post(&format!("/scim/v2/Groups"))
+        .post("/scim/v2/Groups")
         .content_type("application/scim+json")
         .json(&group_data)
         .await;
@@ -190,7 +190,7 @@ async fn group_membership_test(db_type: TestDatabaseType) {
         .await
         .unwrap();
     let server = TestServer::new(app).unwrap();
-    let tenant_id = "3";
+    let _tenant_id = "3";
 
     let db_prefix = match db_type {
         TestDatabaseType::Sqlite => "sqlite",
@@ -201,7 +201,7 @@ async fn group_membership_test(db_type: TestDatabaseType) {
     let user_data =
         common::create_test_user_json(&format!("member-{}", db_prefix), "Member", "User");
     let user_response = server
-        .post(&format!("/scim/v2/Users"))
+        .post("/scim/v2/Users")
         .content_type("application/scim+json")
         .json(&user_data)
         .await;
@@ -223,7 +223,7 @@ async fn group_membership_test(db_type: TestDatabaseType) {
     });
 
     let group_response = server
-        .post(&format!("/scim/v2/Groups"))
+        .post("/scim/v2/Groups")
         .content_type("application/scim+json")
         .json(&group_data)
         .await;
@@ -273,7 +273,7 @@ async fn group_to_group_membership_test(db_type: TestDatabaseType) {
         .await
         .unwrap();
     let server = TestServer::new(app).unwrap();
-    let tenant_id = "3";
+    let _tenant_id = "3";
 
     let db_prefix = match db_type {
         TestDatabaseType::Sqlite => "SQLite",
@@ -287,7 +287,7 @@ async fn group_to_group_membership_test(db_type: TestDatabaseType) {
     });
 
     let parent_response = server
-        .post(&format!("/scim/v2/Groups"))
+        .post("/scim/v2/Groups")
         .content_type("application/scim+json")
         .json(&parent_group_data)
         .await;
@@ -303,7 +303,7 @@ async fn group_to_group_membership_test(db_type: TestDatabaseType) {
     });
 
     let child_response = server
-        .post(&format!("/scim/v2/Groups"))
+        .post("/scim/v2/Groups")
         .content_type("application/scim+json")
         .json(&child_group_data)
         .await;
@@ -359,7 +359,7 @@ async fn group_list_test(db_type: TestDatabaseType) {
         .await
         .unwrap();
     let server = TestServer::new(app).unwrap();
-    let tenant_id = "3";
+    let _tenant_id = "3";
 
     let db_prefix = match db_type {
         TestDatabaseType::Sqlite => "SQLite",
@@ -373,7 +373,7 @@ async fn group_list_test(db_type: TestDatabaseType) {
     });
 
     let response = server
-        .post(&format!("/scim/v2/Groups"))
+        .post("/scim/v2/Groups")
         .content_type("application/scim+json")
         .json(&group_data)
         .await;
@@ -382,7 +382,7 @@ async fn group_list_test(db_type: TestDatabaseType) {
 
     // Test GET all groups
     let response = server
-        .get(&format!("/scim/v2/Groups"))
+        .get("/scim/v2/Groups")
         .add_header(http::header::ACCEPT, "application/scim+json")
         .await;
 
@@ -405,7 +405,7 @@ async fn group_patch_operations_test(db_type: TestDatabaseType) {
         .await
         .unwrap();
     let server = TestServer::new(app).unwrap();
-    let tenant_id = "3";
+    let _tenant_id = "3";
 
     let db_prefix = match db_type {
         TestDatabaseType::Sqlite => "sqlite",
@@ -415,7 +415,7 @@ async fn group_patch_operations_test(db_type: TestDatabaseType) {
     // Create a user first for testing membership
     let user_data = common::create_test_user_json(&format!("test-{}", db_prefix), "Test", "User");
     let user_response = server
-        .post(&format!("/scim/v2/Users"))
+        .post("/scim/v2/Users")
         .content_type("application/scim+json")
         .json(&user_data)
         .await;
@@ -431,7 +431,7 @@ async fn group_patch_operations_test(db_type: TestDatabaseType) {
     });
 
     let response = server
-        .post(&format!("/scim/v2/Groups"))
+        .post("/scim/v2/Groups")
         .content_type("application/scim+json")
         .json(&group_data)
         .await;
@@ -535,7 +535,7 @@ async fn group_error_scenarios_test(db_type: TestDatabaseType) {
         .await
         .unwrap();
     let server = TestServer::new(app).unwrap();
-    let tenant_id = "3";
+    let _tenant_id = "3";
     let invalid_tenant_id = "invalid-tenant";
 
     // Test creating group with invalid tenant
@@ -558,7 +558,7 @@ async fn group_error_scenarios_test(db_type: TestDatabaseType) {
     });
 
     let response = server
-        .post(&format!("/scim/v2/Groups"))
+        .post("/scim/v2/Groups")
         .content_type("application/scim+json")
         .json(&invalid_group_data)
         .await;
@@ -581,7 +581,7 @@ async fn enhanced_filter_search_test(db_type: TestDatabaseType) {
         .await
         .unwrap();
     let server = TestServer::new(app).unwrap();
-    let tenant_id = "3";
+    let _tenant_id = "3";
 
     let db_prefix = match db_type {
         TestDatabaseType::Sqlite => "sqlite",
@@ -635,7 +635,7 @@ async fn enhanced_filter_search_test(db_type: TestDatabaseType) {
         });
 
         let response = server
-            .post(&format!("/scim/v2/Users"))
+            .post("/scim/v2/Users")
             .content_type("application/scim+json")
             .json(&user_data)
             .await;
@@ -677,9 +677,7 @@ async fn enhanced_filter_search_test(db_type: TestDatabaseType) {
     // Test 2: nickName での検索（新機能）
     println!("\n   Test 2: nickName での検索");
     let response = server
-        .get(&format!(
-            "/scim/v2/Users?filter=nickName%20eq%20%22Bobby%22"
-        ))
+        .get("/scim/v2/Users?filter=nickName%20eq%20%22Bobby%22")
         .add_header(http::header::ACCEPT, "application/scim+json")
         .await;
 
@@ -695,9 +693,7 @@ async fn enhanced_filter_search_test(db_type: TestDatabaseType) {
     // Test 3: externalId での検索（case-exact）
     println!("\n   Test 3: externalId での検索（case-exact）");
     let response = server
-        .get(&format!(
-            "/scim/v2/Users?filter=externalId%20eq%20%22EXT-003%22"
-        ))
+        .get("/scim/v2/Users?filter=externalId%20eq%20%22EXT-003%22")
         .add_header(http::header::ACCEPT, "application/scim+json")
         .await;
 
@@ -713,9 +709,7 @@ async fn enhanced_filter_search_test(db_type: TestDatabaseType) {
     // Test 4: title での検索
     println!("\n   Test 4: title での検索");
     let response = server
-        .get(&format!(
-            "/scim/v2/Users?filter=title%20eq%20%22Product%20Manager%22"
-        ))
+        .get("/scim/v2/Users?filter=title%20eq%20%22Product%20Manager%22")
         .add_header(http::header::ACCEPT, "application/scim+json")
         .await;
 
@@ -731,9 +725,7 @@ async fn enhanced_filter_search_test(db_type: TestDatabaseType) {
     // Test 5: userType での検索（複数結果）
     println!("\n   Test 5: userType での検索（複数結果）");
     let response = server
-        .get(&format!(
-            "/scim/v2/Users?filter=userType%20eq%20%22Employee%22"
-        ))
+        .get("/scim/v2/Users?filter=userType%20eq%20%22Employee%22")
         .add_header(http::header::ACCEPT, "application/scim+json")
         .await;
 
@@ -748,9 +740,7 @@ async fn enhanced_filter_search_test(db_type: TestDatabaseType) {
     // Test 6: emails での検索（複合フィルター）
     println!("\n   Test 6: emails での検索（複合フィルター）");
     let response = server
-        .get(&format!(
-            "/scim/v2/Users?filter=emails.value%20eq%20%22diana%40company.com%22"
-        ))
+        .get("/scim/v2/Users?filter=emails.value%20eq%20%22diana%40company.com%22")
         .add_header(http::header::ACCEPT, "application/scim+json")
         .await;
 
@@ -766,9 +756,7 @@ async fn enhanced_filter_search_test(db_type: TestDatabaseType) {
     // Test 7: name.formatted での検索（ネストしたname属性）
     println!("\n   Test 7: name.formatted での検索（ネストしたname属性）");
     let response = server
-        .get(&format!(
-            "/scim/v2/Users?filter=name.formatted%20eq%20%22Alice%20Test%22"
-        ))
+        .get("/scim/v2/Users?filter=name.formatted%20eq%20%22Alice%20Test%22")
         .add_header(http::header::ACCEPT, "application/scim+json")
         .await;
 
@@ -784,9 +772,7 @@ async fn enhanced_filter_search_test(db_type: TestDatabaseType) {
     // Test 8: name.givenName での検索
     println!("\n   Test 8: name.givenName での検索");
     let response = server
-        .get(&format!(
-            "/scim/v2/Users?filter=name.givenName%20eq%20%22Bob%22"
-        ))
+        .get("/scim/v2/Users?filter=name.givenName%20eq%20%22Bob%22")
         .add_header(http::header::ACCEPT, "application/scim+json")
         .await;
 
@@ -802,9 +788,7 @@ async fn enhanced_filter_search_test(db_type: TestDatabaseType) {
     // Test 9: name.familyName での検索
     println!("\n   Test 9: name.familyName での検索");
     let response = server
-        .get(&format!(
-            "/scim/v2/Users?filter=name.familyName%20eq%20%22Test%22"
-        ))
+        .get("/scim/v2/Users?filter=name.familyName%20eq%20%22Test%22")
         .add_header(http::header::ACCEPT, "application/scim+json")
         .await;
 
@@ -820,9 +804,7 @@ async fn enhanced_filter_search_test(db_type: TestDatabaseType) {
     // Test 10: displayName での検索（case-insensitive）
     println!("\n   Test 10: displayName での検索（case-insensitive）");
     let response = server
-        .get(&format!(
-            "/scim/v2/Users?filter=displayName%20eq%20%22ali%20%28software%20engineer%29%22"
-        ))
+        .get("/scim/v2/Users?filter=displayName%20eq%20%22ali%20%28software%20engineer%29%22")
         .add_header(http::header::ACCEPT, "application/scim+json")
         .await;
 
@@ -838,9 +820,7 @@ async fn enhanced_filter_search_test(db_type: TestDatabaseType) {
     // Test 11: emails.type での検索（ネストした属性の別フィールド）
     println!("\n   Test 11: emails.type での検索");
     let response = server
-        .get(&format!(
-            "/scim/v2/Users?filter=emails.type%20eq%20%22work%22"
-        ))
+        .get("/scim/v2/Users?filter=emails.type%20eq%20%22work%22")
         .add_header(http::header::ACCEPT, "application/scim+json")
         .await;
 
@@ -856,9 +836,7 @@ async fn enhanced_filter_search_test(db_type: TestDatabaseType) {
     // Test 12: 存在しない値での検索
     println!("\n   Test 12: 存在しない値での検索");
     let response = server
-        .get(&format!(
-            "/scim/v2/Users?filter=userName%20eq%20%22nonexistent%22"
-        ))
+        .get("/scim/v2/Users?filter=userName%20eq%20%22nonexistent%22")
         .add_header(http::header::ACCEPT, "application/scim+json")
         .await;
 
@@ -876,7 +854,7 @@ async fn nested_attributes_filter_test(db_type: TestDatabaseType) {
         .await
         .unwrap();
     let server = TestServer::new(app).unwrap();
-    let tenant_id = "3";
+    let _tenant_id = "3";
 
     let db_prefix = match db_type {
         TestDatabaseType::Sqlite => "sqlite",
@@ -954,7 +932,7 @@ async fn nested_attributes_filter_test(db_type: TestDatabaseType) {
     });
 
     let response = server
-        .post(&format!("/scim/v2/Users"))
+        .post("/scim/v2/Users")
         .content_type("application/scim+json")
         .json(&complex_user_data)
         .await;
@@ -973,9 +951,7 @@ async fn nested_attributes_filter_test(db_type: TestDatabaseType) {
     // Test 1: name.middleName での検索
     println!("\n   Test 1: name.middleName での検索");
     let response = server
-        .get(&format!(
-            "/scim/v2/Users?filter=name.middleName%20eq%20%22Michael%22"
-        ))
+        .get("/scim/v2/Users?filter=name.middleName%20eq%20%22Michael%22")
         .add_header(http::header::ACCEPT, "application/scim+json")
         .await;
 
@@ -991,9 +967,7 @@ async fn nested_attributes_filter_test(db_type: TestDatabaseType) {
     // Test 2: name.honorificPrefix での検索
     println!("\n   Test 2: name.honorificPrefix での検索");
     let response = server
-        .get(&format!(
-            "/scim/v2/Users?filter=name.honorificPrefix%20eq%20%22Dr.%22"
-        ))
+        .get("/scim/v2/Users?filter=name.honorificPrefix%20eq%20%22Dr.%22")
         .add_header(http::header::ACCEPT, "application/scim+json")
         .await;
 
@@ -1005,9 +979,7 @@ async fn nested_attributes_filter_test(db_type: TestDatabaseType) {
     // Test 3: name.honorificSuffix での検索
     println!("\n   Test 3: name.honorificSuffix での検索");
     let response = server
-        .get(&format!(
-            "/scim/v2/Users?filter=name.honorificSuffix%20eq%20%22Jr.%22"
-        ))
+        .get("/scim/v2/Users?filter=name.honorificSuffix%20eq%20%22Jr.%22")
         .add_header(http::header::ACCEPT, "application/scim+json")
         .await;
 
@@ -1019,9 +991,7 @@ async fn nested_attributes_filter_test(db_type: TestDatabaseType) {
     // Test 4: profileUrl での検索
     println!("\n   Test 4: profileUrl での検索");
     let response = server
-        .get(&format!(
-            "/scim/v2/Users?filter=profileUrl%20eq%20%22https://example.com/profile/john%22"
-        ))
+        .get("/scim/v2/Users?filter=profileUrl%20eq%20%22https://example.com/profile/john%22")
         .add_header(http::header::ACCEPT, "application/scim+json")
         .await;
 
@@ -1033,9 +1003,7 @@ async fn nested_attributes_filter_test(db_type: TestDatabaseType) {
     // Test 5: phoneNumbers.value での検索
     println!("\n   Test 5: phoneNumbers.value での検索");
     let response = server
-        .get(&format!(
-            "/scim/v2/Users?filter=phoneNumbers.value%20eq%20%22%2B1-555-123-4567%22"
-        ))
+        .get("/scim/v2/Users?filter=phoneNumbers.value%20eq%20%22%2B1-555-123-4567%22")
         .add_header(http::header::ACCEPT, "application/scim+json")
         .await;
 
@@ -1047,9 +1015,7 @@ async fn nested_attributes_filter_test(db_type: TestDatabaseType) {
     // Test 6: phoneNumbers.type での検索
     println!("\n   Test 6: phoneNumbers.type での検索");
     let response = server
-        .get(&format!(
-            "/scim/v2/Users?filter=phoneNumbers.type%20eq%20%22mobile%22"
-        ))
+        .get("/scim/v2/Users?filter=phoneNumbers.type%20eq%20%22mobile%22")
         .add_header(http::header::ACCEPT, "application/scim+json")
         .await;
 
@@ -1061,9 +1027,7 @@ async fn nested_attributes_filter_test(db_type: TestDatabaseType) {
     // Test 7: addresses.locality での検索（住所のネスト属性）
     println!("\n   Test 7: addresses.locality での検索");
     let response = server
-        .get(&format!(
-            "/scim/v2/Users?filter=addresses.locality%20eq%20%22New%20York%22"
-        ))
+        .get("/scim/v2/Users?filter=addresses.locality%20eq%20%22New%20York%22")
         .add_header(http::header::ACCEPT, "application/scim+json")
         .await;
 
@@ -1075,9 +1039,7 @@ async fn nested_attributes_filter_test(db_type: TestDatabaseType) {
     // Test 8: addresses.region での検索
     println!("\n   Test 8: addresses.region での検索");
     let response = server
-        .get(&format!(
-            "/scim/v2/Users?filter=addresses.region%20eq%20%22NY%22"
-        ))
+        .get("/scim/v2/Users?filter=addresses.region%20eq%20%22NY%22")
         .add_header(http::header::ACCEPT, "application/scim+json")
         .await;
 
@@ -1089,9 +1051,7 @@ async fn nested_attributes_filter_test(db_type: TestDatabaseType) {
     // Test 9: addresses.postalCode での検索
     println!("\n   Test 9: addresses.postalCode での検索");
     let response = server
-        .get(&format!(
-            "/scim/v2/Users?filter=addresses.postalCode%20eq%20%2210001%22"
-        ))
+        .get("/scim/v2/Users?filter=addresses.postalCode%20eq%20%2210001%22")
         .add_header(http::header::ACCEPT, "application/scim+json")
         .await;
 
@@ -1103,9 +1063,7 @@ async fn nested_attributes_filter_test(db_type: TestDatabaseType) {
     // Test 10: addresses.country での検索
     println!("\n   Test 10: addresses.country での検索");
     let response = server
-        .get(&format!(
-            "/scim/v2/Users?filter=addresses.country%20eq%20%22USA%22"
-        ))
+        .get("/scim/v2/Users?filter=addresses.country%20eq%20%22USA%22")
         .add_header(http::header::ACCEPT, "application/scim+json")
         .await;
 
@@ -1117,9 +1075,7 @@ async fn nested_attributes_filter_test(db_type: TestDatabaseType) {
     // Test 11: preferredLanguage での検索
     println!("\n   Test 11: preferredLanguage での検索");
     let response = server
-        .get(&format!(
-            "/scim/v2/Users?filter=preferredLanguage%20eq%20%22en-US%22"
-        ))
+        .get("/scim/v2/Users?filter=preferredLanguage%20eq%20%22en-US%22")
         .add_header(http::header::ACCEPT, "application/scim+json")
         .await;
 
@@ -1131,9 +1087,7 @@ async fn nested_attributes_filter_test(db_type: TestDatabaseType) {
     // Test 12: timezone での検索
     println!("\n   Test 12: timezone での検索");
     let response = server
-        .get(&format!(
-            "/scim/v2/Users?filter=timezone%20eq%20%22America/New_York%22"
-        ))
+        .get("/scim/v2/Users?filter=timezone%20eq%20%22America/New_York%22")
         .add_header(http::header::ACCEPT, "application/scim+json")
         .await;
 
@@ -1145,9 +1099,7 @@ async fn nested_attributes_filter_test(db_type: TestDatabaseType) {
     // Test 13: 複数のemailsがある中で特定のtypeの検索
     println!("\n   Test 13: 特定のemails.typeの検索");
     let response = server
-        .get(&format!(
-            "/scim/v2/Users?filter=emails.type%20eq%20%22other%22"
-        ))
+        .get("/scim/v2/Users?filter=emails.type%20eq%20%22other%22")
         .add_header(http::header::ACCEPT, "application/scim+json")
         .await;
 
@@ -1165,7 +1117,7 @@ async fn multi_value_attributes_filter_test(db_type: TestDatabaseType) {
         .await
         .unwrap();
     let server = TestServer::new(app).unwrap();
-    let tenant_id = "3";
+    let _tenant_id = "3";
 
     let db_prefix = match db_type {
         TestDatabaseType::Sqlite => "sqlite",
@@ -1275,7 +1227,7 @@ async fn multi_value_attributes_filter_test(db_type: TestDatabaseType) {
     });
 
     let response = server
-        .post(&format!("/scim/v2/Users"))
+        .post("/scim/v2/Users")
         .content_type("application/scim+json")
         .json(&multi_value_user_data)
         .await;
@@ -1294,9 +1246,7 @@ async fn multi_value_attributes_filter_test(db_type: TestDatabaseType) {
     // Test 1: 複数emailsの中から1つ目をヒット
     println!("\n   Test 1: emails - 1つ目の値での検索");
     let response = server
-        .get(&format!(
-            "/scim/v2/Users?filter=emails%5Bvalue%20eq%20%22alice.work%40company.com%22%5D"
-        ))
+        .get("/scim/v2/Users?filter=emails%5Bvalue%20eq%20%22alice.work%40company.com%22%5D")
         .add_header(http::header::ACCEPT, "application/scim+json")
         .await;
 
@@ -1312,9 +1262,7 @@ async fn multi_value_attributes_filter_test(db_type: TestDatabaseType) {
     // Test 2: 複数emailsの中から2つ目をヒット
     println!("\n   Test 2: emails - 2つ目の値での検索");
     let response = server
-        .get(&format!(
-            "/scim/v2/Users?filter=emails%5Bvalue%20eq%20%22alice.personal%40gmail.com%22%5D"
-        ))
+        .get("/scim/v2/Users?filter=emails%5Bvalue%20eq%20%22alice.personal%40gmail.com%22%5D")
         .add_header(http::header::ACCEPT, "application/scim+json")
         .await;
 
@@ -1326,9 +1274,7 @@ async fn multi_value_attributes_filter_test(db_type: TestDatabaseType) {
     // Test 3: 複数emailsの中から最後の値をヒット
     println!("\n   Test 3: emails - 最後の値での検索");
     let response = server
-        .get(&format!(
-            "/scim/v2/Users?filter=emails%5Bvalue%20eq%20%22a.smith%40university.edu%22%5D"
-        ))
+        .get("/scim/v2/Users?filter=emails%5Bvalue%20eq%20%22a.smith%40university.edu%22%5D")
         .add_header(http::header::ACCEPT, "application/scim+json")
         .await;
 
@@ -1340,9 +1286,7 @@ async fn multi_value_attributes_filter_test(db_type: TestDatabaseType) {
     // Test 4: emails.type での検索（複数の"work"タイプが存在）
     println!("\n   Test 4: emails.type - 複数存在する 'work' タイプでの検索");
     let response = server
-        .get(&format!(
-            "/scim/v2/Users?filter=emails.type%20eq%20%22work%22"
-        ))
+        .get("/scim/v2/Users?filter=emails.type%20eq%20%22work%22")
         .add_header(http::header::ACCEPT, "application/scim+json")
         .await;
 
@@ -1354,9 +1298,7 @@ async fn multi_value_attributes_filter_test(db_type: TestDatabaseType) {
     // Test 5: emails.type での検索（1つしかない"other"タイプ）
     println!("\n   Test 5: emails.type - 1つしかない 'other' タイプでの検索");
     let response = server
-        .get(&format!(
-            "/scim/v2/Users?filter=emails.type%20eq%20%22other%22"
-        ))
+        .get("/scim/v2/Users?filter=emails.type%20eq%20%22other%22")
         .add_header(http::header::ACCEPT, "application/scim+json")
         .await;
 
@@ -1368,9 +1310,7 @@ async fn multi_value_attributes_filter_test(db_type: TestDatabaseType) {
     // Test 6: 複数phoneNumbersの中から特定の値をヒット
     println!("\n   Test 6: phoneNumbers - 特定の値での検索");
     let response = server
-        .get(&format!(
-            "/scim/v2/Users?filter=phoneNumbers.value%20eq%20%22%2B1-555-300-3003%22"
-        ))
+        .get("/scim/v2/Users?filter=phoneNumbers.value%20eq%20%22%2B1-555-300-3003%22")
         .add_header(http::header::ACCEPT, "application/scim+json")
         .await;
 
@@ -1382,9 +1322,7 @@ async fn multi_value_attributes_filter_test(db_type: TestDatabaseType) {
     // Test 7: phoneNumbers.type での検索
     println!("\n   Test 7: phoneNumbers.type - 'mobile' タイプでの検索");
     let response = server
-        .get(&format!(
-            "/scim/v2/Users?filter=phoneNumbers.type%20eq%20%22mobile%22"
-        ))
+        .get("/scim/v2/Users?filter=phoneNumbers.type%20eq%20%22mobile%22")
         .add_header(http::header::ACCEPT, "application/scim+json")
         .await;
 
@@ -1396,9 +1334,7 @@ async fn multi_value_attributes_filter_test(db_type: TestDatabaseType) {
     // Test 8: phoneNumbers.type での検索（存在しないタイプ）
     println!("\n   Test 8: phoneNumbers.type - 存在しない 'pager' タイプでの検索");
     let response = server
-        .get(&format!(
-            "/scim/v2/Users?filter=phoneNumbers.type%20eq%20%22pager%22"
-        ))
+        .get("/scim/v2/Users?filter=phoneNumbers.type%20eq%20%22pager%22")
         .add_header(http::header::ACCEPT, "application/scim+json")
         .await;
 
@@ -1410,9 +1346,7 @@ async fn multi_value_attributes_filter_test(db_type: TestDatabaseType) {
     // Test 9: 複数addressesの中から特定の都市名での検索
     println!("\n   Test 9: addresses.locality - 'San Francisco' での検索");
     let response = server
-        .get(&format!(
-            "/scim/v2/Users?filter=addresses.locality%20eq%20%22San%20Francisco%22"
-        ))
+        .get("/scim/v2/Users?filter=addresses.locality%20eq%20%22San%20Francisco%22")
         .add_header(http::header::ACCEPT, "application/scim+json")
         .await;
 
@@ -1424,9 +1358,7 @@ async fn multi_value_attributes_filter_test(db_type: TestDatabaseType) {
     // Test 10: 複数addressesの中から別の都市名での検索
     println!("\n   Test 10: addresses.locality - 'Berkeley' での検索");
     let response = server
-        .get(&format!(
-            "/scim/v2/Users?filter=addresses.locality%20eq%20%22Berkeley%22"
-        ))
+        .get("/scim/v2/Users?filter=addresses.locality%20eq%20%22Berkeley%22")
         .add_header(http::header::ACCEPT, "application/scim+json")
         .await;
 
@@ -1438,9 +1370,7 @@ async fn multi_value_attributes_filter_test(db_type: TestDatabaseType) {
     // Test 11: 複数addressesの中から3つ目の都市名での検索
     println!("\n   Test 11: addresses.locality - 'Miami' での検索");
     let response = server
-        .get(&format!(
-            "/scim/v2/Users?filter=addresses.locality%20eq%20%22Miami%22"
-        ))
+        .get("/scim/v2/Users?filter=addresses.locality%20eq%20%22Miami%22")
         .add_header(http::header::ACCEPT, "application/scim+json")
         .await;
 
@@ -1452,9 +1382,7 @@ async fn multi_value_attributes_filter_test(db_type: TestDatabaseType) {
     // Test 12: addresses.region での検索（複数のCAがある中で）
     println!("\n   Test 12: addresses.region - 複数の 'CA' があるが正しくヒット");
     let response = server
-        .get(&format!(
-            "/scim/v2/Users?filter=addresses.region%20eq%20%22CA%22"
-        ))
+        .get("/scim/v2/Users?filter=addresses.region%20eq%20%22CA%22")
         .add_header(http::header::ACCEPT, "application/scim+json")
         .await;
 
@@ -1466,9 +1394,7 @@ async fn multi_value_attributes_filter_test(db_type: TestDatabaseType) {
     // Test 13: addresses.region での検索（1つしかないFL）
     println!("\n   Test 13: addresses.region - 1つしかない 'FL' での検索");
     let response = server
-        .get(&format!(
-            "/scim/v2/Users?filter=addresses.region%20eq%20%22FL%22"
-        ))
+        .get("/scim/v2/Users?filter=addresses.region%20eq%20%22FL%22")
         .add_header(http::header::ACCEPT, "application/scim+json")
         .await;
 
@@ -1480,9 +1406,7 @@ async fn multi_value_attributes_filter_test(db_type: TestDatabaseType) {
     // Test 14: addresses.postalCode での検索（複数の中から特定のものを検索）
     println!("\n   Test 14: addresses.postalCode - 特定の郵便番号での検索");
     let response = server
-        .get(&format!(
-            "/scim/v2/Users?filter=addresses.postalCode%20eq%20%2294704%22"
-        ))
+        .get("/scim/v2/Users?filter=addresses.postalCode%20eq%20%2294704%22")
         .add_header(http::header::ACCEPT, "application/scim+json")
         .await;
 
@@ -1494,9 +1418,7 @@ async fn multi_value_attributes_filter_test(db_type: TestDatabaseType) {
     // Test 15: 存在しないemail値での検索
     println!("\n   Test 15: emails[value eq ...] - 存在しない値での検索");
     let response = server
-        .get(&format!(
-            "/scim/v2/Users?filter=emails%5Bvalue%20eq%20%22nonexistent%40email.com%22%5D"
-        ))
+        .get("/scim/v2/Users?filter=emails%5Bvalue%20eq%20%22nonexistent%40email.com%22%5D")
         .add_header(http::header::ACCEPT, "application/scim+json")
         .await;
 
@@ -1518,7 +1440,7 @@ async fn enhanced_group_filter_search_test(db_type: TestDatabaseType) {
         .await
         .unwrap();
     let server = TestServer::new(app).unwrap();
-    let tenant_id = "3";
+    let _tenant_id = "3";
 
     let db_prefix = match db_type {
         TestDatabaseType::Sqlite => "SQLite",
@@ -1547,7 +1469,7 @@ async fn enhanced_group_filter_search_test(db_type: TestDatabaseType) {
         });
 
         let response = server
-            .post(&format!("/scim/v2/Groups"))
+            .post("/scim/v2/Groups")
             .content_type("application/scim+json")
             .json(&group_data)
             .await;
@@ -1594,9 +1516,7 @@ async fn enhanced_group_filter_search_test(db_type: TestDatabaseType) {
     // Test 2: externalId での検索（case-exact）
     println!("\n   Test 2: externalId での検索（case-exact）");
     let response = server
-        .get(&format!(
-            "/scim/v2/Groups?filter=externalId%20eq%20%22GRP-002%22"
-        ))
+        .get("/scim/v2/Groups?filter=externalId%20eq%20%22GRP-002%22")
         .add_header(http::header::ACCEPT, "application/scim+json")
         .await;
 
@@ -1608,9 +1528,7 @@ async fn enhanced_group_filter_search_test(db_type: TestDatabaseType) {
     // Test 3: 存在しないグループでの検索
     println!("\n   Test 3: 存在しないグループでの検索");
     let response = server
-        .get(&format!(
-            "/scim/v2/Groups?filter=displayName%20eq%20%22NonExistent%20Group%22"
-        ))
+        .get("/scim/v2/Groups?filter=displayName%20eq%20%22NonExistent%20Group%22")
         .add_header(http::header::ACCEPT, "application/scim+json")
         .await;
 
@@ -1631,7 +1549,7 @@ async fn case_sensitivity_filtering_test(db_type: TestDatabaseType) {
         .await
         .unwrap();
     let server = TestServer::new(app).unwrap();
-    let tenant_id = "3";
+    let _tenant_id = "3";
 
     let db_prefix = match db_type {
         TestDatabaseType::Sqlite => "sqlite",
@@ -1655,7 +1573,7 @@ async fn case_sensitivity_filtering_test(db_type: TestDatabaseType) {
     });
 
     let response = server
-        .post(&format!("/scim/v2/Users"))
+        .post("/scim/v2/Users")
         .content_type("application/scim+json")
         .json(&user_data)
         .await;
@@ -1666,9 +1584,7 @@ async fn case_sensitivity_filtering_test(db_type: TestDatabaseType) {
     // Test 1: externalId（case-exact）- 正確なケース
     println!("\n   Test 1: externalId (case-exact) - 正確なケース");
     let response = server
-        .get(&format!(
-            "/scim/v2/Users?filter=externalId%20eq%20%22EXT-CASE-001%22"
-        ))
+        .get("/scim/v2/Users?filter=externalId%20eq%20%22EXT-CASE-001%22")
         .add_header(http::header::ACCEPT, "application/scim+json")
         .await;
 
@@ -1680,9 +1596,7 @@ async fn case_sensitivity_filtering_test(db_type: TestDatabaseType) {
     // Test 2: externalId（case-exact）- 間違ったケース
     println!("\n   Test 2: externalId (case-exact) - 間違ったケース");
     let response = server
-        .get(&format!(
-            "/scim/v2/Users?filter=externalId%20eq%20%22ext-case-001%22"
-        ))
+        .get("/scim/v2/Users?filter=externalId%20eq%20%22ext-case-001%22")
         .add_header(http::header::ACCEPT, "application/scim+json")
         .await;
 
@@ -1694,9 +1608,7 @@ async fn case_sensitivity_filtering_test(db_type: TestDatabaseType) {
     // Test 3: nickName（case-insensitive）- 大文字小文字無視
     println!("\n   Test 3: nickName (case-insensitive) - 大文字小文字無視");
     let response = server
-        .get(&format!(
-            "/scim/v2/Users?filter=nickName%20eq%20%22testnick%22"
-        ))
+        .get("/scim/v2/Users?filter=nickName%20eq%20%22testnick%22")
         .add_header(http::header::ACCEPT, "application/scim+json")
         .await;
 
@@ -1714,7 +1626,7 @@ async fn complex_query_patterns_test(db_type: TestDatabaseType) {
         .await
         .unwrap();
     let server = TestServer::new(app).unwrap();
-    let tenant_id = "3";
+    let _tenant_id = "3";
 
     let db_prefix = match db_type {
         TestDatabaseType::Sqlite => "sqlite",
@@ -1845,7 +1757,7 @@ async fn complex_query_patterns_test(db_type: TestDatabaseType) {
         });
 
         let response = server
-            .post(&format!("/scim/v2/Users"))
+            .post("/scim/v2/Users")
             .content_type("application/scim+json")
             .json(&user_data)
             .await;
@@ -1868,9 +1780,7 @@ async fn complex_query_patterns_test(db_type: TestDatabaseType) {
     // Pattern 1: 複合条件 - Engineering部門のEmployee
     println!("\n   Pattern 1: 部門とユーザータイプの組み合わせ");
     let response = server
-        .get(&format!(
-            "/scim/v2/Users?filter=department%20eq%20%22Engineering%22"
-        ))
+        .get("/scim/v2/Users?filter=department%20eq%20%22Engineering%22")
         .add_header(http::header::ACCEPT, "application/scim+json")
         .await;
 
@@ -1886,7 +1796,7 @@ async fn complex_query_patterns_test(db_type: TestDatabaseType) {
     // Pattern 2: タイトルでの部分一致 - "Senior"を含む
     println!("\n   Pattern 2: タイトルでの部分一致検索");
     let response = server
-        .get(&format!("/scim/v2/Users?filter=title%20co%20%22Senior%22"))
+        .get("/scim/v2/Users?filter=title%20co%20%22Senior%22")
         .add_header(http::header::ACCEPT, "application/scim+json")
         .await;
 
@@ -1902,9 +1812,7 @@ async fn complex_query_patterns_test(db_type: TestDatabaseType) {
     // Pattern 3: プレフィックス検索 - "ENG"で始まるコストセンター
     println!("\n   Pattern 3: コストセンターのプレフィックス検索");
     let response = server
-        .get(&format!(
-            "/scim/v2/Users?filter=costCenter%20sw%20%22ENG%22"
-        ))
+        .get("/scim/v2/Users?filter=costCenter%20sw%20%22ENG%22")
         .add_header(http::header::ACCEPT, "application/scim+json")
         .await;
 
@@ -1920,9 +1828,7 @@ async fn complex_query_patterns_test(db_type: TestDatabaseType) {
     // Pattern 4: サフィックス検索 - "Engineer"で終わるタイトル
     println!("\n   Pattern 4: タイトルのサフィックス検索");
     let response = server
-        .get(&format!(
-            "/scim/v2/Users?filter=title%20ew%20%22Engineer%22"
-        ))
+        .get("/scim/v2/Users?filter=title%20ew%20%22Engineer%22")
         .add_header(http::header::ACCEPT, "application/scim+json")
         .await;
 
@@ -1938,9 +1844,7 @@ async fn complex_query_patterns_test(db_type: TestDatabaseType) {
     // Pattern 5: 否定検索 - Employeeでないユーザー
     println!("\n   Pattern 5: 否定条件での検索");
     let response = server
-        .get(&format!(
-            "/scim/v2/Users?filter=userType%20ne%20%22Employee%22"
-        ))
+        .get("/scim/v2/Users?filter=userType%20ne%20%22Employee%22")
         .add_header(http::header::ACCEPT, "application/scim+json")
         .await;
 
@@ -1956,7 +1860,7 @@ async fn complex_query_patterns_test(db_type: TestDatabaseType) {
     // Pattern 6: 存在チェック - departmentフィールドが存在する
     println!("\n   Pattern 6: フィールド存在チェック");
     let response = server
-        .get(&format!("/scim/v2/Users?filter=department%20pr"))
+        .get("/scim/v2/Users?filter=department%20pr")
         .add_header(http::header::ACCEPT, "application/scim+json")
         .await;
 
@@ -1972,9 +1876,7 @@ async fn complex_query_patterns_test(db_type: TestDatabaseType) {
     // Pattern 7: 複雑なEmailドメイン検索
     println!("\n   Pattern 7: メールアドレスドメイン検索");
     let response = server
-        .get(&format!(
-            "/scim/v2/Users?filter=emails.value%20ew%20%22%40company.com%22"
-        ))
+        .get("/scim/v2/Users?filter=emails.value%20ew%20%22%40company.com%22")
         .add_header(http::header::ACCEPT, "application/scim+json")
         .await;
 
@@ -1990,9 +1892,7 @@ async fn complex_query_patterns_test(db_type: TestDatabaseType) {
     // Pattern 8: 名前のフォーマット検索
     println!("\n   Pattern 8: フォーマット済み名前での検索");
     let response = server
-        .get(&format!(
-            "/scim/v2/Users?filter=name.formatted%20co%20%22Alice%22"
-        ))
+        .get("/scim/v2/Users?filter=name.formatted%20co%20%22Alice%22")
         .add_header(http::header::ACCEPT, "application/scim+json")
         .await;
 
@@ -2005,7 +1905,7 @@ async fn complex_query_patterns_test(db_type: TestDatabaseType) {
     // Pattern 9: 非アクティブユーザー検索
     println!("\n   Pattern 9: 非アクティブユーザーの検索");
     let response = server
-        .get(&format!("/scim/v2/Users?filter=active%20eq%20false"))
+        .get("/scim/v2/Users?filter=active%20eq%20false")
         .add_header(http::header::ACCEPT, "application/scim+json")
         .await;
 
@@ -2040,9 +1940,7 @@ async fn complex_query_patterns_test(db_type: TestDatabaseType) {
     // Pattern 10: 特定のメールタイプ検索
     println!("\n   Pattern 10: 特定のメールタイプでの検索");
     let response = server
-        .get(&format!(
-            "/scim/v2/Users?filter=emails.type%20eq%20%22home%22"
-        ))
+        .get("/scim/v2/Users?filter=emails.type%20eq%20%22home%22")
         .add_header(http::header::ACCEPT, "application/scim+json")
         .await;
 
@@ -2068,7 +1966,7 @@ async fn advanced_filter_operators_test(db_type: TestDatabaseType) {
         .await
         .unwrap();
     let server = TestServer::new(app).unwrap();
-    let tenant_id = "3";
+    let _tenant_id = "3";
 
     let db_prefix = match db_type {
         TestDatabaseType::Sqlite => "sqlite",
@@ -2117,7 +2015,7 @@ async fn advanced_filter_operators_test(db_type: TestDatabaseType) {
         });
 
         let response = server
-            .post(&format!("/scim/v2/Users"))
+            .post("/scim/v2/Users")
             .content_type("application/scim+json")
             .json(&user_data)
             .await;
@@ -2140,7 +2038,7 @@ async fn advanced_filter_operators_test(db_type: TestDatabaseType) {
     // Test 1: Greater Than (gt) - 30歳より上
     println!("\n   Test 1: gt (Greater Than) - 30歳より上");
     let response = server
-        .get(&format!("/scim/v2/Users?filter=age%20gt%20%2230%22"))
+        .get("/scim/v2/Users?filter=age%20gt%20%2230%22")
         .add_header(http::header::ACCEPT, "application/scim+json")
         .await;
 
@@ -2158,7 +2056,7 @@ async fn advanced_filter_operators_test(db_type: TestDatabaseType) {
     // Test 2: Greater Than or Equal (ge) - 給与85000以上
     println!("\n   Test 2: ge (Greater Than or Equal) - 給与85000以上");
     let response = server
-        .get(&format!("/scim/v2/Users?filter=salary%20ge%20%2285000%22"))
+        .get("/scim/v2/Users?filter=salary%20ge%20%2285000%22")
         .add_header(http::header::ACCEPT, "application/scim+json")
         .await;
 
@@ -2174,7 +2072,7 @@ async fn advanced_filter_operators_test(db_type: TestDatabaseType) {
     // Test 3: Less Than (lt) - 30歳未満
     println!("\n   Test 3: lt (Less Than) - 30歳未満");
     let response = server
-        .get(&format!("/scim/v2/Users?filter=age%20lt%20%2230%22"))
+        .get("/scim/v2/Users?filter=age%20lt%20%2230%22")
         .add_header(http::header::ACCEPT, "application/scim+json")
         .await;
 
@@ -2187,7 +2085,7 @@ async fn advanced_filter_operators_test(db_type: TestDatabaseType) {
     // Test 4: Less Than or Equal (le) - 給与70000以下
     println!("\n   Test 4: le (Less Than or Equal) - 給与70000以下");
     let response = server
-        .get(&format!("/scim/v2/Users?filter=salary%20le%20%2270000%22"))
+        .get("/scim/v2/Users?filter=salary%20le%20%2270000%22")
         .add_header(http::header::ACCEPT, "application/scim+json")
         .await;
 
@@ -2203,9 +2101,7 @@ async fn advanced_filter_operators_test(db_type: TestDatabaseType) {
     // Test 5: Not Equal (ne) - マネージャーレベル1でない
     println!("\n   Test 5: ne (Not Equal) - マネージャーレベル1でない");
     let response = server
-        .get(&format!(
-            "/scim/v2/Users?filter=managerLevel%20ne%20%221%22"
-        ))
+        .get("/scim/v2/Users?filter=managerLevel%20ne%20%221%22")
         .add_header(http::header::ACCEPT, "application/scim+json")
         .await;
 
@@ -2221,9 +2117,7 @@ async fn advanced_filter_operators_test(db_type: TestDatabaseType) {
     // Test 6: Contains (co) - メールアドレスに\"old\"を含む
     println!("\n   Test 6: co (Contains) - メールアドレスに'old'を含む");
     let response = server
-        .get(&format!(
-            "/scim/v2/Users?filter=emails.value%20co%20%22old%22"
-        ))
+        .get("/scim/v2/Users?filter=emails.value%20co%20%22old%22")
         .add_header(http::header::ACCEPT, "application/scim+json")
         .await;
 
@@ -2258,7 +2152,7 @@ async fn advanced_filter_operators_test(db_type: TestDatabaseType) {
     // Test 8: Ends With (ew) - 雇用日が\"05\"で終わる (xx-xx-05)
     println!("\n   Test 8: ew (Ends With) - 雇用日が'05'で終わる");
     let response = server
-        .get(&format!("/scim/v2/Users?filter=hireDate%20ew%20%2205%22"))
+        .get("/scim/v2/Users?filter=hireDate%20ew%20%2205%22")
         .add_header(http::header::ACCEPT, "application/scim+json")
         .await;
 
@@ -2271,7 +2165,7 @@ async fn advanced_filter_operators_test(db_type: TestDatabaseType) {
     // Test 9: Present (pr) - performanceScoreフィールドが存在する
     println!("\n   Test 9: pr (Present) - performanceScoreフィールドが存在する");
     let response = server
-        .get(&format!("/scim/v2/Users?filter=performanceScore%20pr"))
+        .get("/scim/v2/Users?filter=performanceScore%20pr")
         .add_header(http::header::ACCEPT, "application/scim+json")
         .await;
 
@@ -2289,7 +2183,7 @@ async fn advanced_filter_operators_test(db_type: TestDatabaseType) {
 
     // 30歳以上のユーザーを取得
     let response_age = server
-        .get(&format!("/scim/v2/Users?filter=age%20ge%20%2230%22"))
+        .get("/scim/v2/Users?filter=age%20ge%20%2230%22")
         .add_header(http::header::ACCEPT, "application/scim+json")
         .await;
     response_age.assert_status(StatusCode::OK);
@@ -2298,7 +2192,7 @@ async fn advanced_filter_operators_test(db_type: TestDatabaseType) {
 
     // 給与90000以上のユーザーを取得
     let response_salary = server
-        .get(&format!("/scim/v2/Users?filter=salary%20ge%20%2290000%22"))
+        .get("/scim/v2/Users?filter=salary%20ge%20%2290000%22")
         .add_header(http::header::ACCEPT, "application/scim+json")
         .await;
     response_salary.assert_status(StatusCode::OK);
@@ -2327,7 +2221,7 @@ async fn edge_case_filtering_test(db_type: TestDatabaseType) {
         .await
         .unwrap();
     let server = TestServer::new(app).unwrap();
-    let tenant_id = "3";
+    let _tenant_id = "3";
 
     let db_prefix = match db_type {
         TestDatabaseType::Sqlite => "sqlite",
@@ -2420,7 +2314,7 @@ async fn edge_case_filtering_test(db_type: TestDatabaseType) {
         }
 
         let response = server
-            .post(&format!("/scim/v2/Users"))
+            .post("/scim/v2/Users")
             .content_type("application/scim+json")
             .json(&user_data)
             .await;
@@ -2443,9 +2337,7 @@ async fn edge_case_filtering_test(db_type: TestDatabaseType) {
     // Edge Case 1: 特殊文字を含むユーザー名での検索
     println!("\n   Edge Case 1: 特殊文字を含むユーザー名での検索");
     let response = server
-        .get(&format!(
-            "/scim/v2/Users?filter=userName%20co%20%22special%40chars%22"
-        ))
+        .get("/scim/v2/Users?filter=userName%20co%20%22special%40chars%22")
         .add_header(http::header::ACCEPT, "application/scim+json")
         .await;
 
@@ -2461,9 +2353,7 @@ async fn edge_case_filtering_test(db_type: TestDatabaseType) {
     // Edge Case 2: Unicode文字を含む表示名での検索
     println!("\n   Edge Case 2: Unicode文字を含む表示名での検索");
     let response = server
-        .get(&format!(
-            "/scim/v2/Users?filter=displayName%20co%20%22Jos%C3%A9%22"
-        ))
+        .get("/scim/v2/Users?filter=displayName%20co%20%22Jos%C3%A9%22")
         .add_header(http::header::ACCEPT, "application/scim+json")
         .await;
 
@@ -2479,9 +2369,7 @@ async fn edge_case_filtering_test(db_type: TestDatabaseType) {
     // Edge Case 3: スペースを含むユーザー名での検索
     println!("\n   Edge Case 3: スペースを含むユーザー名での検索");
     let response = server
-        .get(&format!(
-            "/scim/v2/Users?filter=userName%20co%20%22with%20spaces%22"
-        ))
+        .get("/scim/v2/Users?filter=userName%20co%20%22with%20spaces%22")
         .add_header(http::header::ACCEPT, "application/scim+json")
         .await;
 
@@ -2497,9 +2385,7 @@ async fn edge_case_filtering_test(db_type: TestDatabaseType) {
     // Edge Case 4: 大文字小文字混在での検索（case-insensitive）
     println!("\n   Edge Case 4: 大文字小文字混在での検索");
     let response = server
-        .get(&format!(
-            "/scim/v2/Users?filter=userName%20co%20%22uppercase%22"
-        ))
+        .get("/scim/v2/Users?filter=userName%20co%20%22uppercase%22")
         .add_header(http::header::ACCEPT, "application/scim+json")
         .await;
 
@@ -2512,7 +2398,7 @@ async fn edge_case_filtering_test(db_type: TestDatabaseType) {
     // Edge Case 5: 数字を含むユーザー名での検索
     println!("\n   Edge Case 5: 数字を含むユーザー名での検索");
     let response = server
-        .get(&format!("/scim/v2/Users?filter=userName%20co%20%22123%22"))
+        .get("/scim/v2/Users?filter=userName%20co%20%22123%22")
         .add_header(http::header::ACCEPT, "application/scim+json")
         .await;
 
@@ -2525,9 +2411,7 @@ async fn edge_case_filtering_test(db_type: TestDatabaseType) {
     // Edge Case 6: ハイフンを含むユーザー名での検索
     println!("\n   Edge Case 6: ハイフンを含むユーザー名での検索");
     let response = server
-        .get(&format!(
-            "/scim/v2/Users?filter=userName%20co%20%22dashes%22"
-        ))
+        .get("/scim/v2/Users?filter=userName%20co%20%22dashes%22")
         .add_header(http::header::ACCEPT, "application/scim+json")
         .await;
 
@@ -2543,9 +2427,7 @@ async fn edge_case_filtering_test(db_type: TestDatabaseType) {
     // Edge Case 7: 複雑なメールドメインでの検索
     println!("\n   Edge Case 7: 複雑なメールドメインでの検索");
     let response = server
-        .get(&format!(
-            "/scim/v2/Users?filter=emails.value%20ew%20%22.co.uk%22"
-        ))
+        .get("/scim/v2/Users?filter=emails.value%20ew%20%22.co.uk%22")
         .add_header(http::header::ACCEPT, "application/scim+json")
         .await;
 
@@ -2561,9 +2443,7 @@ async fn edge_case_filtering_test(db_type: TestDatabaseType) {
     // Edge Case 8: アポストロフィを含む名前での検索
     println!("\n   Edge Case 8: アポストロフィを含む名前での検索");
     let response = server
-        .get(&format!(
-            "/scim/v2/Users?filter=displayName%20co%20%22O%27Connor%22"
-        ))
+        .get("/scim/v2/Users?filter=displayName%20co%20%22O%27Connor%22")
         .add_header(http::header::ACCEPT, "application/scim+json")
         .await;
 
@@ -2579,9 +2459,7 @@ async fn edge_case_filtering_test(db_type: TestDatabaseType) {
     // Edge Case 9: 日本語文字での検索
     println!("\n   Edge Case 9: 日本語文字での検索");
     let response = server
-        .get(&format!(
-            "/scim/v2/Users?filter=displayName%20co%20%22%E7%94%B0%E4%B8%AD%22"
-        ))
+        .get("/scim/v2/Users?filter=displayName%20co%20%22%E7%94%B0%E4%B8%AD%22")
         .add_header(http::header::ACCEPT, "application/scim+json")
         .await;
 
@@ -2594,7 +2472,7 @@ async fn edge_case_filtering_test(db_type: TestDatabaseType) {
     // Edge Case 10: フィールドが存在しない場合のPresent検索
     println!("\n   Edge Case 10: フィールドが存在しない場合のPresent検索");
     let response = server
-        .get(&format!("/scim/v2/Users?filter=nickName%20pr"))
+        .get("/scim/v2/Users?filter=nickName%20pr")
         .add_header(http::header::ACCEPT, "application/scim+json")
         .await;
 
@@ -2610,7 +2488,7 @@ async fn edge_case_filtering_test(db_type: TestDatabaseType) {
     // Edge Case 11: 空文字列での検索（存在するが空）
     println!("\n   Edge Case 11: 空文字列フィールドでの検索");
     let response = server
-        .get(&format!("/scim/v2/Users?filter=title%20eq%20%22%5D"))
+        .get("/scim/v2/Users?filter=title%20eq%20%22%5D")
         .add_header(http::header::ACCEPT, "application/scim+json")
         .await;
 

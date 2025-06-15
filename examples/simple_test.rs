@@ -1,5 +1,4 @@
 use scim_server::parser::patch_parser::ScimPath;
-use serde_json::json;
 
 fn main() {
     println!("Testing complex filter...");

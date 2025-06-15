@@ -77,6 +77,6 @@ mod tests {
         let pool = create_test_pool().await;
         let deleter = SqliteUserDeleter::new(pool);
         // Just verify the deleter can be created
-        assert!(format!("{:?}", &deleter as *const _).len() > 0);
+        assert!(!format!("{:?}", &deleter as *const _).is_empty());
     }
 }

@@ -11,7 +11,7 @@ async fn test_users_by_group_search() {
     let tenant_config = create_test_app_config();
     let app = common::setup_test_app(tenant_config).await.unwrap();
     let server = TestServer::new(app).unwrap();
-    let tenant_id = "3";
+    let _tenant_id = "3";
 
     // Create two users
     let user1_data = json!({
@@ -33,7 +33,7 @@ async fn test_users_by_group_search() {
     });
 
     let response1 = server
-        .post(&format!("/scim/v2/Users"))
+        .post("/scim/v2/Users")
         .content_type("application/scim+json")
         .json(&user1_data)
         .await;
@@ -42,7 +42,7 @@ async fn test_users_by_group_search() {
     let user1_id = user1["id"].as_str().unwrap();
 
     let response2 = server
-        .post(&format!("/scim/v2/Users"))
+        .post("/scim/v2/Users")
         .content_type("application/scim+json")
         .json(&user2_data)
         .await;
@@ -67,7 +67,7 @@ async fn test_users_by_group_search() {
     });
 
     let response = server
-        .post(&format!("/scim/v2/Groups"))
+        .post("/scim/v2/Groups")
         .content_type("application/scim+json")
         .json(&group_data)
         .await;
@@ -105,7 +105,7 @@ async fn test_groups_by_user_search() {
     let tenant_config = create_test_app_config();
     let app = common::setup_test_app(tenant_config).await.unwrap();
     let server = TestServer::new(app).unwrap();
-    let tenant_id = "3";
+    let _tenant_id = "3";
 
     // Create a user
     let user_data = json!({
@@ -118,7 +118,7 @@ async fn test_groups_by_user_search() {
     });
 
     let response = server
-        .post(&format!("/scim/v2/Users"))
+        .post("/scim/v2/Users")
         .content_type("application/scim+json")
         .json(&user_data)
         .await;
@@ -150,7 +150,7 @@ async fn test_groups_by_user_search() {
     });
 
     let response1 = server
-        .post(&format!("/scim/v2/Groups"))
+        .post("/scim/v2/Groups")
         .content_type("application/scim+json")
         .json(&group1_data)
         .await;
@@ -159,7 +159,7 @@ async fn test_groups_by_user_search() {
     let group1_id = group1["id"].as_str().unwrap();
 
     let response2 = server
-        .post(&format!("/scim/v2/Groups"))
+        .post("/scim/v2/Groups")
         .content_type("application/scim+json")
         .json(&group2_data)
         .await;
@@ -205,7 +205,7 @@ async fn test_empty_group_search() {
     let tenant_config = create_test_app_config();
     let app = common::setup_test_app(tenant_config).await.unwrap();
     let server = TestServer::new(app).unwrap();
-    let tenant_id = "3";
+    let _tenant_id = "3";
 
     // Create a group with no members
     let group_data = json!({
@@ -214,7 +214,7 @@ async fn test_empty_group_search() {
     });
 
     let response = server
-        .post(&format!("/scim/v2/Groups"))
+        .post("/scim/v2/Groups")
         .content_type("application/scim+json")
         .json(&group_data)
         .await;
@@ -247,7 +247,7 @@ async fn test_user_not_in_any_group() {
     let tenant_config = create_test_app_config();
     let app = common::setup_test_app(tenant_config).await.unwrap();
     let server = TestServer::new(app).unwrap();
-    let tenant_id = "3";
+    let _tenant_id = "3";
 
     // Create a user
     let user_data = json!({
@@ -260,7 +260,7 @@ async fn test_user_not_in_any_group() {
     });
 
     let response = server
-        .post(&format!("/scim/v2/Users"))
+        .post("/scim/v2/Users")
         .content_type("application/scim+json")
         .json(&user_data)
         .await;

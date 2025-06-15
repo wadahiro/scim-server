@@ -58,7 +58,7 @@ impl PostgresGroupReader {
             _ => {
                 // Normalize attribute name to lowercase for JSON path
                 let normalized_attr = sort_spec.attribute.to_lowercase();
-                let json_path = normalized_attr.replace('.', ".");
+                let json_path = normalized_attr;
                 format!("LOWER(data_orig->>'{}'))", json_path)
             }
         }
@@ -106,7 +106,7 @@ impl PostgresGroupReader {
         match row {
             Some(row) => {
                 let mut group: Group = serde_json::from_value(row.get("data_orig"))
-                    .map_err(|e| AppError::Serialization(e))?;
+                    .map_err(AppError::Serialization)?;
 
                 // Set version in meta (ensure meta exists)
                 let version: i64 = row.get("version");
@@ -463,8 +463,7 @@ impl GroupReader for PostgresGroupReader {
             let scim_path = ScimPath::parse(&operation.path.clone().unwrap_or_default())?;
 
             // Convert group to JSON for patch operations
-            let mut group_json =
-                serde_json::to_value(&group).map_err(|e| AppError::Serialization(e))?;
+            let mut group_json = serde_json::to_value(&group).map_err(AppError::Serialization)?;
 
             // Apply the operation
             scim_path.apply_operation(
@@ -474,7 +473,7 @@ impl GroupReader for PostgresGroupReader {
             )?;
 
             // Convert back to Group
-            group = serde_json::from_value(group_json).map_err(|e| AppError::Serialization(e))?;
+            group = serde_json::from_value(group_json).map_err(AppError::Serialization)?;
         }
 
         // Use the new update system to save the patched group

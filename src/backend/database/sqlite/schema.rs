@@ -91,7 +91,7 @@ async fn create_indexes(pool: &SqlitePool, tenant_id: u32) -> AppResult<()> {
     let sanitized_tenant_id = tenant_id;
 
     // Users table indexes
-    let user_indexes = vec![
+    let user_indexes = [
         format!(
             "CREATE INDEX IF NOT EXISTS idx_{}_users_username ON {} (LOWER(username))",
             sanitized_tenant_id, users_table
@@ -107,7 +107,7 @@ async fn create_indexes(pool: &SqlitePool, tenant_id: u32) -> AppResult<()> {
     ];
 
     // Groups table indexes
-    let group_indexes = vec![
+    let group_indexes = [
         format!(
             "CREATE INDEX IF NOT EXISTS idx_{}_groups_display_name ON {} (LOWER(display_name))",
             sanitized_tenant_id, groups_table
@@ -123,7 +123,7 @@ async fn create_indexes(pool: &SqlitePool, tenant_id: u32) -> AppResult<()> {
     ];
 
     // Memberships table indexes
-    let membership_indexes = vec![
+    let membership_indexes = [
         format!(
             "CREATE INDEX IF NOT EXISTS idx_{}_memberships_group_id ON {} (group_id)",
             sanitized_tenant_id, memberships_table

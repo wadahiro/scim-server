@@ -61,8 +61,8 @@ impl UserInserter for PostgresUserInserter {
             .bind(&data.data_orig) // PostgreSQL: direct JSONB binding
             .bind(&data.data_norm)
             .bind(1i64) // version = 1 for new records
-            .bind(&data.timestamp)
-            .bind(&data.timestamp)
+            .bind(data.timestamp)
+            .bind(data.timestamp)
             .execute(&self.pool)
             .await
             .map_err(|e| map_database_error(e, "User"))?;

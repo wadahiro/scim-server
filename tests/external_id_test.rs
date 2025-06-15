@@ -4,8 +4,10 @@ use serde_json::json;
 
 #[test]
 fn test_user_with_external_id_serialization() {
-    let mut scim_user = ScimUser::default();
-    scim_user.user_name = "testuser@example.com".to_string();
+    let scim_user = ScimUser {
+        user_name: "testuser@example.com".to_string(),
+        ..Default::default()
+    };
 
     let user_with_external = User::with_external_id(scim_user, Some("ext-123".to_string()));
     let user_json = serde_json::to_value(&user_with_external).unwrap();
@@ -21,8 +23,10 @@ fn test_user_with_external_id_serialization() {
 
 #[test]
 fn test_user_without_external_id_serialization() {
-    let mut scim_user = ScimUser::default();
-    scim_user.user_name = "testuser@example.com".to_string();
+    let scim_user = ScimUser {
+        user_name: "testuser@example.com".to_string(),
+        ..Default::default()
+    };
 
     let user_without_external = User::from_scim_user(scim_user);
     let user_json = serde_json::to_value(&user_without_external).unwrap();
@@ -34,8 +38,10 @@ fn test_user_without_external_id_serialization() {
 
 #[test]
 fn test_group_with_external_id_serialization() {
-    let mut scim_group = ScimGroup::default();
-    scim_group.display_name = "Test Group".to_string();
+    let scim_group = ScimGroup {
+        display_name: "Test Group".to_string(),
+        ..Default::default()
+    };
 
     let group_with_external = Group::with_external_id(scim_group, Some("ext-grp-456".to_string()));
     let group_json = serde_json::to_value(&group_with_external).unwrap();
@@ -51,8 +57,10 @@ fn test_group_with_external_id_serialization() {
 
 #[test]
 fn test_group_without_external_id_serialization() {
-    let mut scim_group = ScimGroup::default();
-    scim_group.display_name = "Test Group".to_string();
+    let scim_group = ScimGroup {
+        display_name: "Test Group".to_string(),
+        ..Default::default()
+    };
 
     let group_without_external = Group::from_scim_group(scim_group);
     let group_json = serde_json::to_value(&group_without_external).unwrap();

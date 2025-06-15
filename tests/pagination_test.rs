@@ -9,7 +9,7 @@ async fn test_pagination_basic() {
     let tenant_config = common::create_test_app_config();
     let app = common::setup_test_app(tenant_config).await.unwrap();
     let server = TestServer::new(app).unwrap();
-    let tenant_id = "1";
+    let _tenant_id = "1";
 
     // Create multiple users for pagination testing
     let users_data = vec![
@@ -26,12 +26,12 @@ async fn test_pagination_basic() {
     // Create all users
     for (username, given_name, family_name) in &users_data {
         let user = common::create_test_user_json(username, given_name, family_name);
-        let response = server.post(&format!("/scim/v2/Users")).json(&user).await;
+        let response = server.post("/scim/v2/Users").json(&user).await;
         response.assert_status(StatusCode::CREATED);
     }
 
     // Test basic pagination with count=3
-    let response = server.get(&format!("/scim/v2/Users?count=3")).await;
+    let response = server.get("/scim/v2/Users?count=3").await;
     response.assert_status_ok();
 
     let list_response: Value = response.json();
@@ -46,7 +46,7 @@ async fn test_pagination_start_index() {
     let tenant_config = common::create_test_app_config();
     let app = common::setup_test_app(tenant_config).await.unwrap();
     let server = TestServer::new(app).unwrap();
-    let tenant_id = "1";
+    let _tenant_id = "1";
 
     // Create 5 users
     let users_data = vec![
@@ -59,14 +59,12 @@ async fn test_pagination_start_index() {
 
     for (username, given_name, family_name) in &users_data {
         let user = common::create_test_user_json(username, given_name, family_name);
-        let response = server.post(&format!("/scim/v2/Users")).json(&user).await;
+        let response = server.post("/scim/v2/Users").json(&user).await;
         response.assert_status(StatusCode::CREATED);
     }
 
     // Test pagination starting from index 3, count=2
-    let response = server
-        .get(&format!("/scim/v2/Users?startIndex=3&count=2"))
-        .await;
+    let response = server.get("/scim/v2/Users?startIndex=3&count=2").await;
     response.assert_status_ok();
 
     let list_response: Value = response.json();
@@ -81,20 +79,18 @@ async fn test_pagination_last_page() {
     let tenant_config = common::create_test_app_config();
     let app = common::setup_test_app(tenant_config).await.unwrap();
     let server = TestServer::new(app).unwrap();
-    let tenant_id = "1";
+    let _tenant_id = "1";
 
     // Create 7 users
     for i in 1..=7 {
         let user =
             common::create_test_user_json(&format!("user{}", i), "User", &format!("Number{}", i));
-        let response = server.post(&format!("/scim/v2/Users")).json(&user).await;
+        let response = server.post("/scim/v2/Users").json(&user).await;
         response.assert_status(StatusCode::CREATED);
     }
 
     // Test last page: startIndex=6, count=3 (should return only 2 items)
-    let response = server
-        .get(&format!("/scim/v2/Users?startIndex=6&count=3"))
-        .await;
+    let response = server.get("/scim/v2/Users?startIndex=6&count=3").await;
     response.assert_status_ok();
 
     let list_response: Value = response.json();
@@ -109,20 +105,18 @@ async fn test_pagination_out_of_bounds() {
     let tenant_config = common::create_test_app_config();
     let app = common::setup_test_app(tenant_config).await.unwrap();
     let server = TestServer::new(app).unwrap();
-    let tenant_id = "1";
+    let _tenant_id = "1";
 
     // Create 3 users
     for i in 1..=3 {
         let user =
             common::create_test_user_json(&format!("user{}", i), "User", &format!("Number{}", i));
-        let response = server.post(&format!("/scim/v2/Users")).json(&user).await;
+        let response = server.post("/scim/v2/Users").json(&user).await;
         response.assert_status(StatusCode::CREATED);
     }
 
     // Test startIndex beyond available users
-    let response = server
-        .get(&format!("/scim/v2/Users?startIndex=10&count=2"))
-        .await;
+    let response = server.get("/scim/v2/Users?startIndex=10&count=2").await;
     response.assert_status_ok();
 
     let list_response: Value = response.json();
@@ -137,18 +131,18 @@ async fn test_pagination_default_values() {
     let tenant_config = common::create_test_app_config();
     let app = common::setup_test_app(tenant_config).await.unwrap();
     let server = TestServer::new(app).unwrap();
-    let tenant_id = "1";
+    let _tenant_id = "1";
 
     // Create 5 users
     for i in 1..=5 {
         let user =
             common::create_test_user_json(&format!("user{}", i), "User", &format!("Number{}", i));
-        let response = server.post(&format!("/scim/v2/Users")).json(&user).await;
+        let response = server.post("/scim/v2/Users").json(&user).await;
         response.assert_status(StatusCode::CREATED);
     }
 
     // Test default pagination (no parameters)
-    let response = server.get(&format!("/scim/v2/Users")).await;
+    let response = server.get("/scim/v2/Users").await;
     response.assert_status_ok();
 
     let list_response: Value = response.json();
@@ -165,18 +159,18 @@ async fn test_pagination_zero_count() {
     let tenant_config = common::create_test_app_config();
     let app = common::setup_test_app(tenant_config).await.unwrap();
     let server = TestServer::new(app).unwrap();
-    let tenant_id = "1";
+    let _tenant_id = "1";
 
     // Create 3 users
     for i in 1..=3 {
         let user =
             common::create_test_user_json(&format!("user{}", i), "User", &format!("Number{}", i));
-        let response = server.post(&format!("/scim/v2/Users")).json(&user).await;
+        let response = server.post("/scim/v2/Users").json(&user).await;
         response.assert_status(StatusCode::CREATED);
     }
 
     // Test count=0 (should return no items but correct metadata)
-    let response = server.get(&format!("/scim/v2/Users?count=0")).await;
+    let response = server.get("/scim/v2/Users?count=0").await;
     response.assert_status_ok();
 
     let list_response: Value = response.json();
@@ -191,18 +185,18 @@ async fn test_pagination_large_count() {
     let tenant_config = common::create_test_app_config();
     let app = common::setup_test_app(tenant_config).await.unwrap();
     let server = TestServer::new(app).unwrap();
-    let tenant_id = "1";
+    let _tenant_id = "1";
 
     // Create 3 users
     for i in 1..=3 {
         let user =
             common::create_test_user_json(&format!("user{}", i), "User", &format!("Number{}", i));
-        let response = server.post(&format!("/scim/v2/Users")).json(&user).await;
+        let response = server.post("/scim/v2/Users").json(&user).await;
         response.assert_status(StatusCode::CREATED);
     }
 
     // Test count=100 (larger than available users)
-    let response = server.get(&format!("/scim/v2/Users?count=100")).await;
+    let response = server.get("/scim/v2/Users?count=100").await;
     response.assert_status_ok();
 
     let list_response: Value = response.json();
@@ -222,10 +216,7 @@ async fn test_pagination_multi_tenant_isolation() {
     for i in 1..=5 {
         let user =
             common::create_test_user_json(&format!("user{}", i), "User", &format!("NumberA{}", i));
-        let response = server
-            .post(&format!("/tenant-a/scim/v2/Users"))
-            .json(&user)
-            .await;
+        let response = server.post("/tenant-a/scim/v2/Users").json(&user).await;
         response.assert_status(StatusCode::CREATED);
     }
 
@@ -233,10 +224,7 @@ async fn test_pagination_multi_tenant_isolation() {
     for i in 1..=3 {
         let user =
             common::create_test_user_json(&format!("user{}", i), "User", &format!("NumberB{}", i));
-        let response = server
-            .post(&format!("/tenant-b/scim/v2/Users"))
-            .json(&user)
-            .await;
+        let response = server.post("/tenant-b/scim/v2/Users").json(&user).await;
         response.assert_status(StatusCode::CREATED);
     }
 
@@ -268,15 +256,15 @@ async fn test_pagination_response_schema() {
     let tenant_config = common::create_test_app_config();
     let app = common::setup_test_app(tenant_config).await.unwrap();
     let server = TestServer::new(app).unwrap();
-    let tenant_id = "1";
+    let _tenant_id = "1";
 
     // Create a user
     let user = common::create_test_user_json("testuser", "Test", "User");
-    let response = server.post(&format!("/scim/v2/Users")).json(&user).await;
+    let response = server.post("/scim/v2/Users").json(&user).await;
     response.assert_status(StatusCode::CREATED);
 
     // Test pagination response structure
-    let response = server.get(&format!("/scim/v2/Users?count=1")).await;
+    let response = server.get("/scim/v2/Users?count=1").await;
     response.assert_status_ok();
 
     let list_response: Value = response.json();

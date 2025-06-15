@@ -79,7 +79,7 @@ impl UserUpdater for PostgresUserUpdater {
             .bind(&data.external_id)
             .bind(&data.data_orig) // PostgreSQL uses JSONB
             .bind(&data.data_norm) // PostgreSQL uses JSONB
-            .bind(&data.timestamp)
+            .bind(data.timestamp)
             .bind(&data.id)
             .execute(&self.pool)
             .await
@@ -130,6 +130,7 @@ pub fn map_database_error(e: sqlx::Error, resource_type: &str) -> AppError {
 mod tests {
     use super::*;
 
+    #[allow(dead_code)]
     async fn create_test_pool() -> PgPool {
         // Note: This would need a real PostgreSQL instance for integration tests
         // For unit tests, we just verify the updater can be created

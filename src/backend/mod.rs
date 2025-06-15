@@ -28,12 +28,14 @@ pub trait Backend: Send + Sync {
         Self: Sized;
 
     /// Check if the storage backend is healthy and accessible
+    #[allow(dead_code)]
     async fn health_check(&self) -> AppResult<()>;
 
     /// Initialize tenant-specific schemas/tables if needed
     async fn init_tenant(&self, tenant_id: u32) -> AppResult<()>;
 
     /// Clean up resources when storage is no longer needed
+    #[allow(dead_code)]
     async fn cleanup(&self) -> AppResult<()> {
         Ok(())
     }
@@ -57,6 +59,7 @@ pub trait UserBackend: Backend {
     ) -> AppResult<Option<User>>;
 
     /// Find a user by username (case-insensitive per SCIM 2.0)
+    #[allow(dead_code)]
     async fn find_user_by_username(
         &self,
         tenant_id: u32,
@@ -130,6 +133,7 @@ pub trait GroupBackend: Backend {
     async fn find_group_by_id(&self, tenant_id: u32, id: &str) -> AppResult<Option<Group>>;
 
     /// Find a group by display name (case-insensitive per SCIM 2.0)
+    #[allow(dead_code)]
     async fn find_group_by_display_name(
         &self,
         tenant_id: u32,

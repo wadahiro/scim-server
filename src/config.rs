@@ -105,6 +105,7 @@ pub struct ResolvedUrl {
     pub scheme: String,
     pub host: String,
     pub port: Option<u16>,
+    #[allow(dead_code)]
     pub path: String,
 }
 
@@ -258,6 +259,7 @@ impl TenantConfig {
 
     /// Build the base URL without path for this tenant - returns just protocol://host:port
     /// Used for constructing individual resource URLs where path is added separately
+    #[allow(dead_code)]
     pub fn build_base_url_no_path(&self, request_info: &RequestInfo) -> String {
         if let Some(override_url) = &self.override_base_url {
             // Use configured override_base_url without path
@@ -323,15 +325,15 @@ impl TenantConfig {
                 return None;
             }
 
-            return Some(resolved);
+            Some(resolved)
         } else {
             // No host config - path matching is sufficient
-            return Some(ResolvedUrl {
+            Some(ResolvedUrl {
                 scheme: "http".to_string(),
                 host: request_info.host_header.unwrap_or("localhost").to_string(),
                 port: None,
                 path: request_info.path.to_string(),
-            });
+            })
         }
     }
 
@@ -662,6 +664,7 @@ impl AppConfig {
 
     /// Resolve tenant ID from URL path segment
     /// This should be used in handlers to convert URL path tenant identifier to actual tenant ID
+    #[allow(dead_code)]
     pub fn resolve_tenant_id_from_path(&self, path_tenant: &str) -> Option<u32> {
         // Try to find tenant by exact ID match only
         if let Ok(numeric_id) = path_tenant.parse::<u32>() {

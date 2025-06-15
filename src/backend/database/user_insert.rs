@@ -57,13 +57,12 @@ impl UserInsertProcessor {
         Self::set_user_metadata(&mut user, &timestamp);
 
         // Serialize user data
-        let data_orig = serde_json::to_value(&user).map_err(|e| AppError::Serialization(e))?;
+        let data_orig = serde_json::to_value(&user).map_err(AppError::Serialization)?;
         let normalized_data = crate::schema::normalization::normalize_scim_data(
             &data_orig,
             crate::parser::ResourceType::User,
         );
-        let data_norm =
-            serde_json::to_value(&normalized_data).map_err(|e| AppError::Serialization(e))?;
+        let data_norm = serde_json::to_value(&normalized_data).map_err(AppError::Serialization)?;
 
         Ok(PreparedUserData {
             user,

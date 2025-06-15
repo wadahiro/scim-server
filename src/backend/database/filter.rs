@@ -25,19 +25,23 @@ pub trait FilterConverter: Send + Sync {
     /// For example:
     /// - PostgreSQL: $1, $2, $3...
     /// - SQLite: ?1, ?2, ?3... or just ?
+    #[allow(dead_code)]
     fn get_param_placeholder(&self, index: usize) -> String;
 
     /// Check if a given attribute requires case-insensitive comparison
+    #[allow(dead_code)]
     fn is_case_insensitive_attribute(&self, attr: &str, resource_type: ResourceType) -> bool;
 
     /// Get the JSON path expression for an attribute
     ///
     /// This handles differences in JSON syntax between databases
+    #[allow(dead_code)]
     fn get_json_path(&self, attr: &str, resource_type: ResourceType) -> String;
 
     /// Get the LOWER function syntax for case-insensitive comparisons
     ///
     /// Most databases use LOWER(), but this allows for customization
+    #[allow(dead_code)]
     fn get_lower_function(&self, expression: &str) -> String {
         format!("LOWER({})", expression)
     }

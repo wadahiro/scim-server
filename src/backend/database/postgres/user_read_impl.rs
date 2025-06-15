@@ -55,7 +55,7 @@ impl PostgresUserReader {
             _ => {
                 // Normalize attribute name to lowercase for JSON path
                 let normalized_attr = sort_spec.attribute.to_lowercase();
-                let json_path = normalized_attr.replace('.', ".");
+                let json_path = normalized_attr;
                 format!("LOWER(data_orig->>'{}'))", json_path)
             }
         }
@@ -98,7 +98,7 @@ impl PostgresUserReader {
         match row {
             Some(row) => {
                 let mut user: User = serde_json::from_value(row.get("data_orig"))
-                    .map_err(|e| AppError::Serialization(e))?;
+                    .map_err(AppError::Serialization)?;
 
                 // Ensure ID is set from database (in case data_orig doesn't have it)
                 let db_id: Uuid = row.get("id");

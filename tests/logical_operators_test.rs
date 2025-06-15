@@ -13,7 +13,7 @@ async fn test_simple_and_operator_with_columns() {
     let tenant_config = common::create_test_app_config();
     let app = common::setup_test_app(tenant_config).await.unwrap();
     let server = TestServer::new(app).unwrap();
-    let tenant_id = "3";
+    let _tenant_id = "3";
 
     // Create test users
     let users = vec![
@@ -40,7 +40,7 @@ async fn test_simple_and_operator_with_columns() {
     let mut user_ids = Vec::new();
     for user_data in users {
         let response = server
-            .post(&format!("/scim/v2/Users"))
+            .post("/scim/v2/Users")
             .add_header("content-type", "application/scim+json")
             .json(&user_data)
             .await;
@@ -64,7 +64,7 @@ async fn test_simple_and_operator_with_columns() {
 
     // First test just the active filter
     let active_response = server
-        .get(&format!("/scim/v2/Users?filter=active%20eq%20true"))
+        .get("/scim/v2/Users?filter=active%20eq%20true")
         .add_header("accept", "application/scim+json")
         .await;
 
@@ -77,7 +77,7 @@ async fn test_simple_and_operator_with_columns() {
 
     // Then test just the userName filter
     let username_response = server
-        .get(&format!("/scim/v2/Users?filter=userName%20co%20%22john%22"))
+        .get("/scim/v2/Users?filter=userName%20co%20%22john%22")
         .add_header("accept", "application/scim+json")
         .await;
 
@@ -91,9 +91,7 @@ async fn test_simple_and_operator_with_columns() {
     // Test 1: userName contains "john" AND active eq true
     // This should match only john.doe
     let response = server
-        .get(&format!(
-            "/scim/v2/Users?filter=userName%20co%20%22john%22%20and%20active%20eq%20true"
-        ))
+        .get("/scim/v2/Users?filter=userName%20co%20%22john%22%20and%20active%20eq%20true")
         .add_header("accept", "application/scim+json")
         .await;
 
@@ -120,7 +118,7 @@ async fn test_simple_or_operator_with_columns() {
     let tenant_config = common::create_test_app_config();
     let app = common::setup_test_app(tenant_config).await.unwrap();
     let server = TestServer::new(app).unwrap();
-    let tenant_id = "3";
+    let _tenant_id = "3";
 
     // Create test users
     let users = vec![
@@ -144,7 +142,7 @@ async fn test_simple_or_operator_with_columns() {
     let mut user_ids = Vec::new();
     for user_data in users {
         let response = server
-            .post(&format!("/scim/v2/Users"))
+            .post("/scim/v2/Users")
             .add_header("content-type", "application/scim+json")
             .json(&user_data)
             .await;
@@ -156,7 +154,7 @@ async fn test_simple_or_operator_with_columns() {
     // Test 1: userName contains "admin" OR displayName contains "Manager"
     // This should match admin.user and regular.user
     let response = server
-        .get(&format!("/scim/v2/Users?filter=userName%20co%20%22admin%22%20or%20displayName%20co%20%22Manager%22"))
+        .get("/scim/v2/Users?filter=userName%20co%20%22admin%22%20or%20displayName%20co%20%22Manager%22")
         .add_header("accept", "application/scim+json")
         .await;
 
@@ -185,7 +183,7 @@ async fn test_mixed_column_and_json_conditions() {
     let tenant_config = common::create_test_app_config();
     let app = common::setup_test_app(tenant_config).await.unwrap();
     let server = TestServer::new(app).unwrap();
-    let tenant_id = "3";
+    let _tenant_id = "3";
 
     // Create test users with custom attributes
     let users = vec![
@@ -221,7 +219,7 @@ async fn test_mixed_column_and_json_conditions() {
     let mut user_ids = Vec::new();
     for user_data in users {
         let response = server
-            .post(&format!("/scim/v2/Users"))
+            .post("/scim/v2/Users")
             .add_header("content-type", "application/scim+json")
             .json(&user_data)
             .await;
@@ -233,7 +231,7 @@ async fn test_mixed_column_and_json_conditions() {
     // Test: userName contains "developer" AND name.givenName eq "John"
     // This mixes a dedicated column (userName) with JSON field (name.givenName)
     let response = server
-        .get(&format!("/scim/v2/Users?filter=userName%20co%20%22developer%22%20and%20name.givenName%20eq%20%22John%22"))
+        .get("/scim/v2/Users?filter=userName%20co%20%22developer%22%20and%20name.givenName%20eq%20%22John%22")
         .add_header("accept", "application/scim+json")
         .await;
 
@@ -255,12 +253,12 @@ async fn test_complex_logical_expressions() {
     let tenant_config = common::create_test_app_config();
     let app = common::setup_test_app(tenant_config).await.unwrap();
     let server = TestServer::new(app).unwrap();
-    let tenant_id = "3";
+    let _tenant_id = "3";
 
     // Test: (userName co "admin" OR userName co "manager") AND active eq true
     // This tests precedence and grouping
     let response = server
-        .get(&format!("/scim/v2/Users?filter=(userName%20co%20%22admin%22%20or%20userName%20co%20%22manager%22)%20and%20active%20eq%20true"))
+        .get("/scim/v2/Users?filter=(userName%20co%20%22admin%22%20or%20userName%20co%20%22manager%22)%20and%20active%20eq%20true")
         .add_header("accept", "application/scim+json")
         .await;
 

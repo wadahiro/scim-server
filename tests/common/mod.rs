@@ -18,11 +18,13 @@ use testcontainers_modules::postgres::Postgres;
 use url::Url;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
+#[allow(dead_code)]
 pub enum TestDatabaseType {
     Sqlite,
     Postgres,
 }
 
+#[allow(dead_code)]
 pub struct TestDatabase {
     pub database_type: TestDatabaseType,
     #[cfg(test)]
@@ -53,6 +55,7 @@ pub async fn setup_test_database() -> Result<Arc<dyn ScimBackend>, Box<dyn std::
 
 /// Create backend for testing with PostgreSQL using TestContainers
 #[cfg(test)]
+#[allow(dead_code)]
 pub async fn setup_postgres_test_database(
 ) -> Result<(Arc<dyn ScimBackend>, ContainerAsync<Postgres>), Box<dyn std::error::Error>> {
     use testcontainers::runners::AsyncRunner;
@@ -203,6 +206,7 @@ pub async fn setup_test_app(app_config: AppConfig) -> Result<Router, Box<dyn std
 
 /// Create a test app with PostgreSQL using TestContainers
 #[cfg(test)]
+#[allow(dead_code)]
 pub async fn setup_postgres_test_app(
     app_config: AppConfig,
 ) -> Result<(Router, ContainerAsync<Postgres>), Box<dyn std::error::Error>> {
@@ -319,6 +323,7 @@ pub async fn setup_postgres_test_app(
 }
 
 /// Unified setup function for any database type
+#[allow(dead_code)]
 pub async fn setup_test_app_with_db(
     app_config: AppConfig,
     db_type: TestDatabaseType,
@@ -356,6 +361,7 @@ pub async fn setup_test_app_with_db(
 }
 
 /// Helper function to create a test app configuration
+#[allow(dead_code)]
 pub fn create_test_app_config() -> AppConfig {
     AppConfig {
         server: ServerConfig {
@@ -452,6 +458,7 @@ pub fn create_token_auth_config() -> AppConfig {
     }
 }
 
+#[allow(dead_code)]
 pub fn create_bearer_auth_config() -> AppConfig {
     AppConfig {
         server: ServerConfig {
@@ -484,6 +491,7 @@ pub fn create_bearer_auth_config() -> AppConfig {
     }
 }
 
+#[allow(dead_code)]
 pub fn create_test_user_json(
     username: &str,
     given_name: &str,

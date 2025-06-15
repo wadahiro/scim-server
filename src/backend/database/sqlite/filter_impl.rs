@@ -11,6 +11,12 @@ use serde_json::Value;
 /// JSON queries with proper parameter binding and SQL injection prevention.
 pub struct SqliteFilterConverter;
 
+impl Default for SqliteFilterConverter {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl SqliteFilterConverter {
     pub fn new() -> Self {
         Self

@@ -1,6 +1,6 @@
 //! Simple test to verify the PATCH fix works
 use scim_server::parser::patch_parser::ScimPath;
-use serde_json::{json, Value};
+use serde_json::json;
 
 #[test]
 fn test_patch_remove_emails_simple() {

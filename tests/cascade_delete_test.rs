@@ -558,7 +558,7 @@ async fn test_child_group_delete_removes_from_parent_members() {
 #[tokio::test]
 #[cfg(feature = "postgresql")]
 async fn test_cascade_delete_postgres() {
-    let app_config = common::create_postgres_test_app_config().await;
+    let app_config = common::create_test_app_config();
     let (app, _postgres_container) = common::setup_postgres_test_app(app_config).await.unwrap();
     let server = TestServer::new(app).unwrap();
 

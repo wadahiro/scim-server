@@ -11,7 +11,7 @@ async fn test_password_algorithm_integration() {
     let tenant_config = create_test_app_config();
     let app = common::setup_test_app(tenant_config).await.unwrap();
     let server = TestServer::new(app).unwrap();
-    let tenant_id = "3";
+    let _tenant_id = "3";
 
     // Test creating user with password (should be hashed with Argon2id by default)
     let user_data = json!({
@@ -30,7 +30,7 @@ async fn test_password_algorithm_integration() {
     });
 
     let response = server
-        .post(&format!("/scim/v2/Users"))
+        .post("/scim/v2/Users")
         .content_type("application/scim+json")
         .json(&user_data)
         .await;
@@ -133,7 +133,7 @@ async fn test_password_algorithm_integration() {
     });
 
     let response = server
-        .post(&format!("/scim/v2/Users"))
+        .post("/scim/v2/Users")
         .content_type("application/scim+json")
         .json(&weak_password_data)
         .await;
@@ -191,11 +191,11 @@ async fn test_service_provider_config_password_support() {
     let tenant_config = create_test_app_config();
     let app = common::setup_test_app(tenant_config).await.unwrap();
     let server = TestServer::new(app).unwrap();
-    let tenant_id = "3";
+    let _tenant_id = "3";
 
     // Test ServiceProviderConfig shows password change support
     let response = server
-        .get(&format!("/scim/v2/ServiceProviderConfig"))
+        .get("/scim/v2/ServiceProviderConfig")
         .add_header(http::header::ACCEPT, "application/scim+json")
         .await;
 

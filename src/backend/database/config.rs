@@ -26,6 +26,7 @@ pub struct DatabaseBackendConfig {
     /// Additional backend-specific options
     /// This allows for database-specific configurations without
     /// polluting the main config structure
+    #[allow(dead_code)]
     pub options: HashMap<String, String>,
 }
 
@@ -42,11 +43,13 @@ impl DatabaseBackendConfig {
     }
 
     /// Create a PostgreSQL configuration
+    #[allow(dead_code)]
     pub fn postgres(connection_path: String) -> Self {
         Self::new(DatabaseType::PostgreSQL, connection_path)
     }
 
     /// Create a SQLite configuration
+    #[allow(dead_code)]
     pub fn sqlite(connection_path: String) -> Self {
         Self::new(DatabaseType::SQLite, connection_path)
     }
@@ -57,29 +60,34 @@ impl DatabaseBackendConfig {
     }
 
     /// Set maximum connections
+    #[allow(dead_code)]
     pub fn with_max_connections(mut self, max_connections: u32) -> Self {
         self.max_connections = max_connections;
         self
     }
 
     /// Set connection timeout
+    #[allow(dead_code)]
     pub fn with_connection_timeout(mut self, timeout_seconds: u64) -> Self {
         self.connection_timeout = timeout_seconds;
         self
     }
 
     /// Add a backend-specific option
+    #[allow(dead_code)]
     pub fn with_option(mut self, key: String, value: String) -> Self {
         self.options.insert(key, value);
         self
     }
 
     /// Get a backend-specific option
+    #[allow(dead_code)]
     pub fn get_option(&self, key: &str) -> Option<&String> {
         self.options.get(key)
     }
 
     /// Check if this is an in-memory database
+    #[allow(dead_code)]
     pub fn is_memory_database(&self) -> bool {
         self.connection_path == ":memory:"
     }
@@ -87,6 +95,7 @@ impl DatabaseBackendConfig {
     /// Get the table name for a specific resource and tenant
     /// Tables are named as: t{tenant_id}_{resource}
     /// e.g., t1_users, t2_groups, etc.
+    #[allow(dead_code)]
     pub fn table_name(&self, resource: &str, tenant_id: u32) -> String {
         format!("t{}_{}", tenant_id, resource)
     }

@@ -40,6 +40,7 @@ pub fn format_epoch_datetime(dt: DateTime<Utc>) -> i64 {
 /// let rfc3339 = format_datetime_with_type(now, "rfc3339");
 /// let epoch = format_datetime_with_type(now, "epoch");
 /// ```
+#[allow(dead_code)]
 pub fn format_datetime_with_type(dt: DateTime<Utc>, format_type: &str) -> String {
     match format_type {
         "epoch" => format_epoch_datetime(dt).to_string(),
@@ -125,8 +126,9 @@ pub fn handle_user_groups_inclusion_for_response(
 /// This function modifies User's groups array based on the show_empty_groups_members setting.
 /// - true: Keep empty arrays as []
 /// - false: Remove empty arrays from the response
-/// Note: This only applies if groups field is included (see handle_user_groups_inclusion_for_response)
-/// IMPORTANT: Only operates on existing groups, respects include_user_groups setting
+///   Note: This only applies if groups field is included (see handle_user_groups_inclusion_for_response)
+///   
+///   IMPORTANT: Only operates on existing groups, respects include_user_groups setting
 pub fn handle_user_empty_groups_for_response(
     mut user: crate::models::User,
     show_empty_groups_members: bool,

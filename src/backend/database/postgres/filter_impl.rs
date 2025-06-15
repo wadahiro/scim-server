@@ -17,6 +17,12 @@ impl PostgresFilterConverter {
     }
 }
 
+impl Default for PostgresFilterConverter {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl FilterConverter for PostgresFilterConverter {
     fn to_where_clause(
         &self,

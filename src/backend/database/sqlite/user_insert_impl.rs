@@ -20,7 +20,7 @@ impl SqliteUserInserter {
 
     /// Convert JSON Value to String for SQLite TEXT storage
     fn json_value_to_string(&self, value: &Value) -> AppResult<String> {
-        serde_json::to_string(value).map_err(|e| AppError::Serialization(e))
+        serde_json::to_string(value).map_err(AppError::Serialization)
     }
 
     /// Check for case-insensitive duplicate username
@@ -71,8 +71,8 @@ impl UserInserter for SqliteUserInserter {
             .bind(&data_orig_str) // SQLite: JSON as TEXT
             .bind(&data_norm_str)
             .bind(1i64) // version = 1 for new records
-            .bind(&data.timestamp)
-            .bind(&data.timestamp)
+            .bind(data.timestamp)
+            .bind(data.timestamp)
             .execute(&self.pool)
             .await
             .map_err(|e| map_database_error(e, "User"))?;

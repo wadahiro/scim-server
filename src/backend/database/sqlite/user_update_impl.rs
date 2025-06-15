@@ -79,7 +79,7 @@ impl UserUpdater for SqliteUserUpdater {
             .bind(&data.external_id)
             .bind(&data_orig_str) // SQLite uses TEXT
             .bind(&data_norm_str) // SQLite uses TEXT
-            .bind(&data.timestamp)
+            .bind(data.timestamp)
             .bind(&data.id)
             .execute(&self.pool)
             .await
@@ -97,7 +97,7 @@ impl UserUpdater for SqliteUserUpdater {
 ///
 /// This ensures consistent JSON serialization for SQLite databases.
 fn json_value_to_string(value: &Value) -> AppResult<String> {
-    serde_json::to_string(value).map_err(|e| AppError::Serialization(e))
+    serde_json::to_string(value).map_err(AppError::Serialization)
 }
 
 /// Map SQLite-specific database errors to appropriate application errors
@@ -146,7 +146,7 @@ mod tests {
         let pool = create_test_pool().await;
         let updater = SqliteUserUpdater::new(pool);
         // Just verify the updater can be created
-        assert!(format!("{:?}", &updater as *const _).len() > 0);
+        assert!(!format!("{:?}", &updater as *const _).is_empty());
     }
 
     #[test]

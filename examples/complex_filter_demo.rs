@@ -9,7 +9,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("=====================================\n");
 
     // Sample user data for demonstration
-    let mut user = json!({
+    let user = json!({
         "schemas": ["urn:ietf:params:scim:schemas:core:2.0:User"],
         "userName": "demo.user",
         "emails": [

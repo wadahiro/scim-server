@@ -100,8 +100,8 @@ fn parse_simple_filter(filter_str: &str) -> AppResult<FilterOperator> {
     let trimmed = filter_str.trim();
 
     // Handle "pr" (present) operator
-    if trimmed.ends_with(" pr") {
-        let attr = trimmed[..trimmed.len() - 3].trim();
+    if let Some(stripped) = trimmed.strip_suffix(" pr") {
+        let attr = stripped.trim();
         return Ok(FilterOperator::Present(attr.to_string()));
     }
 

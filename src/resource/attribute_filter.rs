@@ -109,7 +109,7 @@ impl AttributeFilter {
                     included.insert(attr.name.to_string());
                     // Add sub-attributes for complex types
                     self.add_sub_attributes_recursive(
-                        &attr.name,
+                        attr.name,
                         &attr.sub_attributes,
                         &mut included,
                     );
@@ -150,6 +150,7 @@ impl AttributeFilter {
     }
 
     /// Recursively add sub-attributes
+    #[allow(clippy::only_used_in_recursion)]
     fn add_sub_attributes_recursive(
         &self,
         parent_path: &str,
@@ -193,7 +194,7 @@ impl AttributeFilter {
         for attr in &schema.attributes {
             if matches!(attr.returned, Returned::Always) {
                 included.insert(attr.name.to_string());
-                self.add_sub_attributes_recursive(&attr.name, &attr.sub_attributes, included);
+                self.add_sub_attributes_recursive(attr.name, &attr.sub_attributes, included);
             }
         }
     }
@@ -348,7 +349,7 @@ impl AttributeFilter {
                             // Clean array elements
                             let cleaned_array: Vec<Value> = arr
                                 .iter()
-                                .map(|item| Self::remove_null_fields(item))
+                                .map(Self::remove_null_fields)
                                 .filter(|item| {
                                     if item.is_null() {
                                         false // Remove null array elements
@@ -379,7 +380,7 @@ impl AttributeFilter {
                 // Clean array elements
                 let cleaned_array: Vec<Value> = arr
                     .iter()
-                    .map(|item| Self::remove_null_fields(item))
+                    .map(Self::remove_null_fields)
                     .filter(|item| !item.is_null())
                     .collect();
                 Value::Array(cleaned_array)

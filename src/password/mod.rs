@@ -34,6 +34,7 @@ pub trait PasswordHasher: Send + Sync {
     fn hash_password(&self, password: &str) -> AppResult<String>;
 
     /// Verify a plaintext password against a hash
+    #[allow(dead_code)]
     fn verify_password(&self, password: &str, hash: &str) -> AppResult<bool>;
 
     /// Check if a string is a hash created by this algorithm
@@ -106,6 +107,7 @@ impl PasswordManager {
     }
 
     /// Verify a plaintext password against any supported hash format
+    #[allow(dead_code)]
     pub fn verify_password(&self, password: &str, hash: &str) -> AppResult<bool> {
         // Try each hasher until one can handle this hash format
         for hasher in &self.hashers {
@@ -123,6 +125,7 @@ impl PasswordManager {
     }
 
     /// Detect the algorithm used for a given hash
+    #[allow(dead_code)]
     pub fn detect_algorithm(&self, hash: &str) -> Option<PasswordAlgorithm> {
         self.hashers
             .iter()
@@ -182,11 +185,13 @@ impl PasswordManager {
     }
 
     /// Get the current default algorithm
+    #[allow(dead_code)]
     pub fn current_algorithm(&self) -> PasswordAlgorithm {
         self.current_algorithm
     }
 
     /// Set the current default algorithm for new passwords
+    #[allow(dead_code)]
     pub fn set_current_algorithm(&mut self, algorithm: PasswordAlgorithm) {
         self.current_algorithm = algorithm;
     }

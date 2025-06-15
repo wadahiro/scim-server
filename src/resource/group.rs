@@ -239,16 +239,14 @@ pub async fn create_group(
         let members: Vec<scim_v2::models::group::Member> = members_array
             .iter()
             .filter_map(|m| {
-                if let Some(value) = m.get("value").and_then(|v| v.as_str()) {
-                    Some(scim_v2::models::group::Member {
+                m.get("value").and_then(|v| v.as_str()).map(|value| {
+                    scim_v2::models::group::Member {
                         value: Some(value.to_string()),
                         ref_: m.get("$ref").and_then(|v| v.as_str()).map(String::from),
                         display: m.get("display").and_then(|v| v.as_str()).map(String::from),
                         type_: m.get("type").and_then(|v| v.as_str()).map(String::from),
-                    })
-                } else {
-                    None
-                }
+                    }
+                })
             })
             .collect();
 
@@ -662,16 +660,14 @@ pub async fn update_group(
         let members: Vec<scim_v2::models::group::Member> = members_array
             .iter()
             .filter_map(|m| {
-                if let Some(value) = m.get("value").and_then(|v| v.as_str()) {
-                    Some(scim_v2::models::group::Member {
+                m.get("value").and_then(|v| v.as_str()).map(|value| {
+                    scim_v2::models::group::Member {
                         value: Some(value.to_string()),
                         ref_: m.get("$ref").and_then(|v| v.as_str()).map(String::from),
                         display: m.get("display").and_then(|v| v.as_str()).map(String::from),
                         type_: m.get("type").and_then(|v| v.as_str()).map(String::from),
-                    })
-                } else {
-                    None
-                }
+                    }
+                })
             })
             .collect();
 

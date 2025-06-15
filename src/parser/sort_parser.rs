@@ -5,6 +5,7 @@ pub enum SortOrder {
 }
 
 impl SortOrder {
+    #[allow(clippy::should_implement_trait)]
     pub fn from_str(s: &str) -> SortOrder {
         match s.to_lowercase().as_str() {
             "descending" | "desc" => SortOrder::Descending,

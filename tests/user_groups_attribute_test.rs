@@ -11,7 +11,7 @@ async fn test_user_groups_attribute() {
     let tenant_config = create_test_app_config();
     let app = common::setup_test_app(tenant_config).await.unwrap();
     let server = TestServer::new(app).unwrap();
-    let tenant_id = "3";
+    let _tenant_id = "3";
 
     // Create a user
     let user_data = json!({
@@ -25,7 +25,7 @@ async fn test_user_groups_attribute() {
     });
 
     let response = server
-        .post(&format!("/scim/v2/Users"))
+        .post("/scim/v2/Users")
         .content_type("application/scim+json")
         .json(&user_data)
         .await;
@@ -34,7 +34,7 @@ async fn test_user_groups_attribute() {
     let user_id = user["id"].as_str().unwrap();
 
     // Initially, user should have no groups
-    assert!(user["groups"].is_null() || user["groups"].as_array().map_or(true, |g| g.is_empty()));
+    assert!(user["groups"].is_null() || user["groups"].as_array().is_none_or(|g| g.is_empty()));
 
     // Create two groups
     let group1_data = json!({
@@ -48,7 +48,7 @@ async fn test_user_groups_attribute() {
     });
 
     let response1 = server
-        .post(&format!("/scim/v2/Groups"))
+        .post("/scim/v2/Groups")
         .content_type("application/scim+json")
         .json(&group1_data)
         .await;
@@ -57,7 +57,7 @@ async fn test_user_groups_attribute() {
     let group1_id = group1["id"].as_str().unwrap();
 
     let response2 = server
-        .post(&format!("/scim/v2/Groups"))
+        .post("/scim/v2/Groups")
         .content_type("application/scim+json")
         .json(&group2_data)
         .await;
@@ -130,7 +130,7 @@ async fn test_user_groups_attribute() {
 
     // Test listing all users - groups should be populated
     let response = server
-        .get(&format!("/scim/v2/Users"))
+        .get("/scim/v2/Users")
         .add_header(http::header::ACCEPT, "application/scim+json")
         .await;
 
@@ -196,7 +196,7 @@ async fn test_user_with_no_groups() {
     let tenant_config = create_test_app_config();
     let app = common::setup_test_app(tenant_config).await.unwrap();
     let server = TestServer::new(app).unwrap();
-    let tenant_id = "3";
+    let _tenant_id = "3";
 
     // Create a user
     let user_data = json!({
@@ -209,7 +209,7 @@ async fn test_user_with_no_groups() {
     });
 
     let response = server
-        .post(&format!("/scim/v2/Users"))
+        .post("/scim/v2/Users")
         .content_type("application/scim+json")
         .json(&user_data)
         .await;
@@ -218,7 +218,7 @@ async fn test_user_with_no_groups() {
     let user_id = user["id"].as_str().unwrap();
 
     // Verify groups attribute is not present or empty
-    assert!(user["groups"].is_null() || user["groups"].as_array().map_or(true, |g| g.is_empty()));
+    assert!(user["groups"].is_null() || user["groups"].as_array().is_none_or(|g| g.is_empty()));
 
     // Get user by ID
     let response = server
@@ -234,6 +234,6 @@ async fn test_user_with_no_groups() {
         fetched_user["groups"].is_null()
             || fetched_user["groups"]
                 .as_array()
-                .map_or(true, |g| g.is_empty())
+                .is_none_or(|g| g.is_empty())
     );
 }

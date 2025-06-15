@@ -12,6 +12,7 @@ pub enum AppError {
     #[allow(dead_code)]
     FilterParse(String),
     Configuration(String),
+    #[allow(dead_code)]
     PreconditionFailed,
 }
 
@@ -82,11 +83,11 @@ pub fn scim_error_response(
 
 // HTTPレスポンスへの変換
 impl AppError {
-    pub fn to_response(self) -> (StatusCode, Json<serde_json::Value>) {
+    pub fn to_response(&self) -> (StatusCode, Json<serde_json::Value>) {
         let (status, message) = match self {
             AppError::Database(e) => {
                 eprintln!("Database error: {}", e);
-                (StatusCode::INTERNAL_SERVER_ERROR, e)
+                (StatusCode::INTERNAL_SERVER_ERROR, e.clone())
             }
             AppError::Rusqlite(e) => {
                 eprintln!("SQLite error: {}", e);
@@ -96,15 +97,15 @@ impl AppError {
                 eprintln!("Serialization error: {}", e);
                 (StatusCode::INTERNAL_SERVER_ERROR, e.to_string())
             }
-            AppError::BadRequest(e) => (StatusCode::BAD_REQUEST, e),
+            AppError::BadRequest(e) => (StatusCode::BAD_REQUEST, e.clone()),
             AppError::Internal(e) => {
                 eprintln!("Internal error: {}", e);
-                (StatusCode::INTERNAL_SERVER_ERROR, e)
+                (StatusCode::INTERNAL_SERVER_ERROR, e.clone())
             }
-            AppError::FilterParse(e) => (StatusCode::BAD_REQUEST, e),
+            AppError::FilterParse(e) => (StatusCode::BAD_REQUEST, e.clone()),
             AppError::Configuration(e) => {
                 eprintln!("Configuration error: {}", e);
-                (StatusCode::INTERNAL_SERVER_ERROR, e)
+                (StatusCode::INTERNAL_SERVER_ERROR, e.clone())
             }
             AppError::PreconditionFailed => {
                 return scim_error_response(

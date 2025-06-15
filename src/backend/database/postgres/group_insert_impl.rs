@@ -83,8 +83,8 @@ impl GroupInserter for PostgresGroupInserter {
             .bind(&data.data_orig) // PostgreSQL: direct JSONB binding
             .bind(&data.data_norm)
             .bind(1i64) // version = 1 for new records
-            .bind(&data.timestamp)
-            .bind(&data.timestamp)
+            .bind(data.timestamp)
+            .bind(data.timestamp)
             .execute(&mut *tx)
             .await
             .map_err(|e| super::user_insert_impl::map_database_error(e, "Group"))?;

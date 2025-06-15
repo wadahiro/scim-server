@@ -63,8 +63,7 @@ impl UserPatchProcessor {
             let scim_path = ScimPath::parse(&operation.path.clone().unwrap_or_default())?;
 
             // Convert user to JSON for patch operations
-            let mut user_json =
-                serde_json::to_value(&user).map_err(|e| AppError::Serialization(e))?;
+            let mut user_json = serde_json::to_value(&user).map_err(AppError::Serialization)?;
 
             // Apply the operation
             scim_path.apply_operation(
@@ -74,7 +73,7 @@ impl UserPatchProcessor {
             )?;
 
             // Convert back to User
-            user = serde_json::from_value(user_json).map_err(|e| AppError::Serialization(e))?;
+            user = serde_json::from_value(user_json).map_err(AppError::Serialization)?;
         }
 
         // Prepare user data for database storage
@@ -109,16 +108,15 @@ impl UserPatchProcessor {
         let external_id = user.external_id.clone();
 
         // Serialize user data for storage
-        let data_orig = serde_json::to_value(&user).map_err(|e| AppError::Serialization(e))?;
+        let data_orig = serde_json::to_value(&user).map_err(AppError::Serialization)?;
 
         // Normalize data for filtering capabilities
-        let user_value = serde_json::to_value(&user).map_err(|e| AppError::Serialization(e))?;
+        let user_value = serde_json::to_value(&user).map_err(AppError::Serialization)?;
         let normalized_data = crate::schema::normalization::normalize_scim_data(
             &user_value,
             crate::parser::ResourceType::User,
         );
-        let data_norm =
-            serde_json::to_value(&normalized_data).map_err(|e| AppError::Serialization(e))?;
+        let data_norm = serde_json::to_value(&normalized_data).map_err(AppError::Serialization)?;
 
         Ok(PreparedUserPatchData {
             user,

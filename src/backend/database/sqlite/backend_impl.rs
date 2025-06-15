@@ -25,6 +25,7 @@ use super::filter_impl::SqliteFilterConverter;
 /// with support for JSON columns, complex filtering, and tenant isolation.
 pub struct SqliteBackend {
     pool: SqlitePool,
+    #[allow(dead_code)]
     filter_converter: SqliteFilterConverter,
     // New operations
     user_insert_ops: UnifiedUserInsertOps<SqliteUserInserter>,
@@ -69,32 +70,38 @@ impl SqliteBackend {
     }
 
     /// Get the connection pool reference
+    #[allow(dead_code)]
     pub fn pool(&self) -> &SqlitePool {
         &self.pool
     }
 
     /// Get the filter converter reference
+    #[allow(dead_code)]
     pub fn filter_converter(&self) -> &SqliteFilterConverter {
         &self.filter_converter
     }
 
     /// Generate table name for a resource type and tenant
     /// Tables are named as: t{tenant_id}_{resource}
+    #[allow(dead_code)]
     pub fn table_name(&self, resource: &str, tenant_id: u32) -> String {
         format!("t{}_{}", tenant_id, resource)
     }
 
     /// Get users table name for a tenant
+    #[allow(dead_code)]
     pub fn users_table(&self, tenant_id: u32) -> String {
         self.table_name("users", tenant_id)
     }
 
     /// Get groups table name for a tenant
+    #[allow(dead_code)]
     pub fn groups_table(&self, tenant_id: u32) -> String {
         self.table_name("groups", tenant_id)
     }
 
     /// Get group memberships table name for a tenant
+    #[allow(dead_code)]
     pub fn memberships_table(&self, tenant_id: u32) -> String {
         self.table_name("group_memberships", tenant_id)
     }
@@ -208,7 +215,6 @@ impl UserBackend for SqliteBackend {
     }
 
     async fn update_user(&self, tenant_id: u32, id: &str, user: &User) -> AppResult<Option<User>> {
-        let tenant_id = tenant_id;
         // Perform the update using the unified operations
         match self
             .user_update_ops
@@ -231,7 +237,6 @@ impl UserBackend for SqliteBackend {
         id: &str,
         patch_ops: &crate::models::ScimPatchOp,
     ) -> AppResult<Option<User>> {
-        let tenant_id = tenant_id;
         // Perform the patch using the unified operations
         match self
             .user_patch_ops

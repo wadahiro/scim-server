@@ -23,7 +23,7 @@ pub struct ScimPatchOp {
 impl ScimPatchOp {}
 
 /// Extended User model with externalId support and arbitrary additional fields
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Default)]
 pub struct User {
     #[serde(flatten)]
     pub base: ScimUser,
@@ -37,6 +37,7 @@ pub struct User {
 
 impl User {
     /// Create a new User from ScimUser
+    #[allow(dead_code)]
     pub fn from_scim_user(base: ScimUser) -> Self {
         Self {
             base,
@@ -46,6 +47,7 @@ impl User {
     }
 
     /// Create a new User with externalId
+    #[allow(dead_code)]
     pub fn with_external_id(base: ScimUser, external_id: Option<String>) -> Self {
         Self {
             base,
@@ -55,6 +57,7 @@ impl User {
     }
 
     // Delegate common fields to base for easier access
+    #[allow(dead_code)]
     pub fn id(&self) -> &Option<String> {
         &self.base.id
     }
@@ -93,18 +96,8 @@ impl Clone for User {
     }
 }
 
-impl Default for User {
-    fn default() -> Self {
-        Self {
-            base: ScimUser::default(),
-            external_id: None,
-            additional_fields: std::collections::HashMap::new(),
-        }
-    }
-}
-
 /// Extended Group model with externalId support
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Default)]
 pub struct Group {
     #[serde(flatten)]
     pub base: ScimGroup,
@@ -115,6 +108,7 @@ pub struct Group {
 
 impl Group {
     /// Create a new Group from ScimGroup
+    #[allow(dead_code)]
     pub fn from_scim_group(base: ScimGroup) -> Self {
         Self {
             base,
@@ -123,11 +117,13 @@ impl Group {
     }
 
     /// Create a new Group with externalId
+    #[allow(dead_code)]
     pub fn with_external_id(base: ScimGroup, external_id: Option<String>) -> Self {
         Self { base, external_id }
     }
 
     // Delegate common fields to base for easier access
+    #[allow(dead_code)]
     pub fn id(&self) -> &String {
         &self.base.id
     }
@@ -158,15 +154,6 @@ impl Clone for Group {
         Self {
             base: cloned_base,
             external_id: self.external_id.clone(),
-        }
-    }
-}
-
-impl Default for Group {
-    fn default() -> Self {
-        Self {
-            base: ScimGroup::default(),
-            external_id: None,
         }
     }
 }

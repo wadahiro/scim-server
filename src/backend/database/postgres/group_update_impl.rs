@@ -73,7 +73,7 @@ impl PostgresGroupUpdater {
         match row {
             Some(row) => {
                 let mut group: Group = serde_json::from_value(row.get("data_orig"))
-                    .map_err(|e| AppError::Serialization(e))?;
+                    .map_err(AppError::Serialization)?;
 
                 // Set version in meta (ensure meta exists)
                 let version: i64 = row.get("version");
@@ -209,7 +209,7 @@ impl GroupUpdater for PostgresGroupUpdater {
             .bind(&data.external_id)
             .bind(&data.data_orig) // PostgreSQL uses JSONB
             .bind(&data.data_norm) // PostgreSQL uses JSONB
-            .bind(&data.timestamp)
+            .bind(data.timestamp)
             .bind(&data.id)
             .execute(&mut *tx)
             .await
@@ -272,6 +272,7 @@ impl GroupUpdater for PostgresGroupUpdater {
 mod tests {
     use super::*;
 
+    #[allow(dead_code)]
     async fn create_test_pool() -> PgPool {
         // Note: This would need a real PostgreSQL instance for integration tests
         // For unit tests, we just verify the updater can be created

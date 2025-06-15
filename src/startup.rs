@@ -3,6 +3,7 @@ use crate::backend::BackendFactory;
 use crate::config::AppConfig;
 use crate::error::AppResult;
 
+#[allow(dead_code)]
 pub async fn initialize_tenant_schemas(config: &AppConfig) -> AppResult<()> {
     // Create backend configuration from app config
     if config.backend.backend_type != "database" {

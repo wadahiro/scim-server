@@ -188,7 +188,7 @@ async fn test_simple_mode_schemas_endpoint() {
         .expect("User schema should exist");
 
     assert_eq!(user_schema["name"], "User");
-    assert!(user_schema["attributes"].as_array().unwrap().len() > 0);
+    assert!(!user_schema["attributes"].as_array().unwrap().is_empty());
 }
 
 #[tokio::test]

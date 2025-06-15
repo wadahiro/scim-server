@@ -111,8 +111,8 @@ impl ScimPath {
         // Extract sub-attribute if present
         let sub_attr = if bracket_end + 1 < path.len() {
             let remaining = &path[bracket_end + 1..];
-            if remaining.starts_with('.') {
-                Some(remaining[1..].to_string())
+            if let Some(stripped) = remaining.strip_prefix('.') {
+                Some(stripped.to_string())
             } else {
                 return Err(AppError::BadRequest(format!(
                     "Invalid value path: malformed sub-attribute in {}",
@@ -288,6 +288,7 @@ impl ScimPath {
                     // Special handling for multi-value attributes with value array
                     // This handles cases like: path="emails", value=[{items to remove}]
                     if !value.is_null() && value.is_array() {
+                        #[allow(clippy::collapsible_match)]
                         if let Some(current_array) = obj.get_mut(final_key) {
                             if let Value::Array(attribute_array) = current_array {
                                 if let Value::Array(to_remove) = value {
@@ -342,7 +343,7 @@ impl ScimPath {
             // For type-based matching, also ensure it's the primary match criterion
             if existing_type == remove_type {
                 // If remove_item only specifies type, match by type
-                if remove_item.as_object().map_or(false, |obj| obj.len() == 1) {
+                if remove_item.as_object().is_some_and(|obj| obj.len() == 1) {
                     return true;
                 }
                 // If more fields are specified, require exact match on all fields
@@ -575,22 +576,23 @@ impl ScimFilter {
         self.extract_first_condition(&self.filter_op)
     }
 
+    #[allow(clippy::only_used_in_recursion)]
     fn extract_first_condition<'a>(
         &self,
         filter_op: &'a FilterOperator,
     ) -> (&'a str, &'a str, &'a str) {
         match filter_op {
-            FilterOperator::Equal(attr, val) => (attr, "eq", &val.as_str().unwrap_or("")),
-            FilterOperator::NotEqual(attr, val) => (attr, "ne", &val.as_str().unwrap_or("")),
-            FilterOperator::Contains(attr, val) => (attr, "co", &val.as_str().unwrap_or("")),
-            FilterOperator::StartsWith(attr, val) => (attr, "sw", &val.as_str().unwrap_or("")),
-            FilterOperator::EndsWith(attr, val) => (attr, "ew", &val.as_str().unwrap_or("")),
-            FilterOperator::GreaterThan(attr, val) => (attr, "gt", &val.as_str().unwrap_or("")),
+            FilterOperator::Equal(attr, val) => (attr, "eq", val.as_str().unwrap_or("")),
+            FilterOperator::NotEqual(attr, val) => (attr, "ne", val.as_str().unwrap_or("")),
+            FilterOperator::Contains(attr, val) => (attr, "co", val.as_str().unwrap_or("")),
+            FilterOperator::StartsWith(attr, val) => (attr, "sw", val.as_str().unwrap_or("")),
+            FilterOperator::EndsWith(attr, val) => (attr, "ew", val.as_str().unwrap_or("")),
+            FilterOperator::GreaterThan(attr, val) => (attr, "gt", val.as_str().unwrap_or("")),
             FilterOperator::GreaterThanOrEqual(attr, val) => {
-                (attr, "ge", &val.as_str().unwrap_or(""))
+                (attr, "ge", val.as_str().unwrap_or(""))
             }
-            FilterOperator::LessThan(attr, val) => (attr, "lt", &val.as_str().unwrap_or("")),
-            FilterOperator::LessThanOrEqual(attr, val) => (attr, "le", &val.as_str().unwrap_or("")),
+            FilterOperator::LessThan(attr, val) => (attr, "lt", val.as_str().unwrap_or("")),
+            FilterOperator::LessThanOrEqual(attr, val) => (attr, "le", val.as_str().unwrap_or("")),
             FilterOperator::Present(attr) => (attr, "pr", ""),
             FilterOperator::And(left, _) | FilterOperator::Or(left, _) => {
                 self.extract_first_condition(left)

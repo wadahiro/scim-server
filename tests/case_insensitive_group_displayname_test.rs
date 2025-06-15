@@ -61,7 +61,7 @@ async fn test_case_insensitive_group_displayname_variations() {
     let app = common::setup_test_app(tenant_config).await.unwrap();
     let server = TestServer::new(app).unwrap();
 
-    let test_cases = vec![
+    let test_cases = [
         "Engineering Team",
         "ENGINEERING TEAM",
         "Engineering team",

@@ -21,7 +21,7 @@ impl SqliteUserPatcher {
 
     /// Convert JSON Value to String for SQLite TEXT storage
     fn json_value_to_string(&self, value: &Value) -> AppResult<String> {
-        serde_json::to_string(value).map_err(|e| AppError::Serialization(e))
+        serde_json::to_string(value).map_err(AppError::Serialization)
     }
 
     /// Check for case-insensitive duplicate username excluding current user
@@ -84,7 +84,7 @@ impl UserPatcher for SqliteUserPatcher {
             .bind(&data.external_id)
             .bind(&data_orig_str) // SQLite uses TEXT
             .bind(&data_norm_str) // SQLite uses TEXT
-            .bind(&data.timestamp)
+            .bind(data.timestamp)
             .bind(&data.id)
             .execute(&self.pool)
             .await
@@ -114,7 +114,7 @@ impl UserPatcher for SqliteUserPatcher {
             Some(row) => {
                 let data_orig: String = row.get("data_orig");
                 let mut user: User =
-                    serde_json::from_str(&data_orig).map_err(|e| AppError::Serialization(e))?;
+                    serde_json::from_str(&data_orig).map_err(AppError::Serialization)?;
 
                 // Ensure ID is set from database (in case data_orig doesn't have it)
                 let db_id: String = row.get("id");
@@ -176,7 +176,7 @@ mod tests {
         let pool = create_test_pool().await;
         let patcher = SqliteUserPatcher::new(pool);
         // Just verify the patcher can be created
-        assert!(format!("{:?}", &patcher as *const _).len() > 0);
+        assert!(!format!("{:?}", &patcher as *const _).is_empty());
     }
 
     #[test]
