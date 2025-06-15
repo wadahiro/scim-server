@@ -84,7 +84,7 @@ impl SqliteUserReader {
     ) -> AppResult<Option<User>> {
         let table_name = self.users_table(tenant_id);
         let sql = format!(
-            "SELECT id, username, external_id, data_orig, data_norm, created_at, updated_at FROM {} WHERE id = ?1",
+            "SELECT id, username, external_id, data_orig, data_norm, version, created_at, updated_at FROM {} WHERE id = ?1",
             table_name
         );
 
@@ -106,6 +106,27 @@ impl SqliteUserReader {
 
                 // Remove password from response
                 *user.password_mut() = None;
+
+                // Set version in meta (ensure meta exists)
+                let version: i64 = row.get("version");
+                if user.meta().is_none() {
+                    // Create meta if it doesn't exist
+                    let created_at: String = row.get("created_at");
+                    let updated_at: String = row.get("updated_at");
+                    let meta = scim_v2::models::scim_schema::Meta {
+                        resource_type: Some("User".to_string()),
+                        created: Some(created_at),
+                        last_modified: Some(updated_at),
+                        location: None,
+                        version: Some(format!("W/\"{}\"", version)),
+                    };
+                    *user.meta_mut() = Some(meta);
+                } else {
+                    // Update existing meta with version
+                    if let Some(ref mut meta) = user.meta_mut() {
+                        meta.version = Some(format!("W/\"{}\"", version));
+                    }
+                }
 
                 // Only fetch groups if include_groups is true
                 if include_groups {
@@ -237,7 +258,7 @@ impl UserReader for SqliteUserReader {
         let limit = count.unwrap_or(100).min(1000); // Max 1000 per page
 
         let sql = format!(
-            "SELECT id, username, external_id, data_orig, data_norm, created_at, updated_at FROM {} ORDER BY created_at LIMIT ?1 OFFSET ?2",
+            "SELECT id, username, external_id, data_orig, data_norm, version, created_at, updated_at FROM {} ORDER BY created_at LIMIT ?1 OFFSET ?2",
             table_name
         );
 
@@ -291,7 +312,7 @@ impl UserReader for SqliteUserReader {
 
         let order_by = self.build_order_by(sort_spec);
         let sql = format!(
-            "SELECT id, username, external_id, data_orig, data_norm, created_at, updated_at FROM {}{} LIMIT ?1 OFFSET ?2",
+            "SELECT id, username, external_id, data_orig, data_norm, version, created_at, updated_at FROM {}{} LIMIT ?1 OFFSET ?2",
             table_name, order_by
         );
 
@@ -355,7 +376,7 @@ impl UserReader for SqliteUserReader {
 
         let order_by = self.build_order_by(sort_spec);
         let sql = format!(
-            "SELECT id, username, external_id, data_orig, data_norm, created_at, updated_at FROM {} WHERE ({}){} LIMIT ?{} OFFSET ?{}",
+            "SELECT id, username, external_id, data_orig, data_norm, version, created_at, updated_at FROM {} WHERE ({}){} LIMIT ?{} OFFSET ?{}",
             table_name, where_clause, order_by, params.len() + 1, params.len() + 2
         );
 
@@ -395,7 +416,7 @@ impl UserReader for SqliteUserReader {
 
         let sql = format!(
             r#"
-            SELECT u.id, u.username, u.external_id, u.data_orig, u.data_norm, u.created_at, u.updated_at
+            SELECT u.id, u.username, u.external_id, u.data_orig, u.data_norm, u.version, u.created_at, u.updated_at
             FROM {} u
             INNER JOIN {} m ON u.id = m.member_id
             WHERE m.group_id = ?1 AND m.member_type = 'User'

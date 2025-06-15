@@ -85,7 +85,7 @@ impl PostgresUserReader {
     ) -> AppResult<Option<User>> {
         let table_name = self.users_table(tenant_id);
         let sql = format!(
-            "SELECT id, username, external_id, data_orig, data_norm, created_at, updated_at FROM {} WHERE id = $1::uuid",
+            "SELECT id, username, external_id, data_orig, data_norm, version, created_at, updated_at FROM {} WHERE id = $1::uuid",
             table_name
         );
 
@@ -106,6 +106,27 @@ impl PostgresUserReader {
 
                 // Remove password from response
                 *user.password_mut() = None;
+
+                // Set version in meta (ensure meta exists)
+                let version: i64 = row.get("version");
+                if user.meta().is_none() {
+                    // Create meta if it doesn't exist
+                    let created_at: chrono::DateTime<chrono::Utc> = row.get("created_at");
+                    let updated_at: chrono::DateTime<chrono::Utc> = row.get("updated_at");
+                    let meta = scim_v2::models::scim_schema::Meta {
+                        resource_type: Some("User".to_string()),
+                        created: Some(crate::utils::format_scim_datetime(created_at)),
+                        last_modified: Some(crate::utils::format_scim_datetime(updated_at)),
+                        location: None,
+                        version: Some(format!("W/\"{}\"", version)),
+                    };
+                    *user.meta_mut() = Some(meta);
+                } else {
+                    // Update existing meta with version
+                    if let Some(ref mut meta) = user.meta_mut() {
+                        meta.version = Some(format!("W/\"{}\"", version));
+                    }
+                }
 
                 // Only fetch groups if include_groups is true
                 if include_groups {

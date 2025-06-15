@@ -50,7 +50,7 @@ impl UserInserter for PostgresUserInserter {
 
         let table_name = format!("t{}_users", tenant_id);
         let sql = format!(
-            "INSERT INTO {} (id, username, external_id, data_orig, data_norm, created_at, updated_at) VALUES ($1::uuid, $2, $3, $4, $5, $6, $7)",
+            "INSERT INTO {} (id, username, external_id, data_orig, data_norm, version, created_at, updated_at) VALUES ($1::uuid, $2, $3, $4, $5, $6, $7, $8)",
             table_name
         );
 
@@ -60,6 +60,7 @@ impl UserInserter for PostgresUserInserter {
             .bind(&data.external_id)
             .bind(&data.data_orig) // PostgreSQL: direct JSONB binding
             .bind(&data.data_norm)
+            .bind(1i64) // version = 1 for new records
             .bind(&data.timestamp)
             .bind(&data.timestamp)
             .execute(&self.pool)

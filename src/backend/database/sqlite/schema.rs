@@ -19,6 +19,7 @@ pub async fn init_tenant_schema(pool: &SqlitePool, tenant_id: u32) -> AppResult<
             external_id TEXT UNIQUE,
             data_orig TEXT NOT NULL,
             data_norm TEXT NOT NULL,
+            version INTEGER NOT NULL DEFAULT 1,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )
@@ -40,6 +41,7 @@ pub async fn init_tenant_schema(pool: &SqlitePool, tenant_id: u32) -> AppResult<
             external_id TEXT UNIQUE,
             data_orig TEXT NOT NULL,
             data_norm TEXT NOT NULL,
+            version INTEGER NOT NULL DEFAULT 1,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )

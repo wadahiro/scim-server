@@ -80,9 +80,16 @@ impl UserInsertProcessor {
     ///
     /// This handles common post-processing:
     /// - Password removal from response
+    /// - Version setting for new users
     pub fn finalize_user_response(mut user: User) -> User {
         // Remove password from response for SCIM 2.0 compliance
         *user.password_mut() = None;
+
+        // Set version for newly created user (always version 1)
+        if let Some(ref mut meta) = user.meta_mut() {
+            meta.version = Some("W/\"1\"".to_string());
+        }
+
         user
     }
 

@@ -56,7 +56,7 @@ impl UserInserter for SqliteUserInserter {
 
         let table_name = format!("t{}_users", tenant_id);
         let sql = format!(
-            "INSERT INTO {} (id, username, external_id, data_orig, data_norm, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            "INSERT INTO {} (id, username, external_id, data_orig, data_norm, version, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
             table_name
         );
 
@@ -70,6 +70,7 @@ impl UserInserter for SqliteUserInserter {
             .bind(&data.external_id)
             .bind(&data_orig_str) // SQLite: JSON as TEXT
             .bind(&data_norm_str)
+            .bind(1i64) // version = 1 for new records
             .bind(&data.timestamp)
             .bind(&data.timestamp)
             .execute(&self.pool)

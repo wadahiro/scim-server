@@ -87,7 +87,7 @@ impl SqliteGroupReader {
 
         let table_name = self.groups_table(tenant_id);
         let sql = format!(
-            "SELECT id, display_name, external_id, data_orig, data_norm, created_at, updated_at FROM {} WHERE id = ?1",
+            "SELECT id, display_name, external_id, data_orig, data_norm, version, created_at, updated_at FROM {} WHERE id = ?1",
             table_name
         );
 
@@ -102,6 +102,27 @@ impl SqliteGroupReader {
                 let data_orig: String = row.get("data_orig");
                 let mut group: Group =
                     serde_json::from_str(&data_orig).map_err(|e| AppError::Serialization(e))?;
+
+                // Set version in meta (ensure meta exists)
+                let version: i64 = row.get("version");
+                if group.meta().is_none() {
+                    // Create meta if it doesn't exist
+                    let created_at: String = row.get("created_at");
+                    let updated_at: String = row.get("updated_at");
+                    let meta = scim_v2::models::scim_schema::Meta {
+                        resource_type: Some("Group".to_string()),
+                        created: Some(created_at),
+                        last_modified: Some(updated_at),
+                        location: None,
+                        version: Some(format!("W/\"{}\"", version)),
+                    };
+                    *group.meta_mut() = Some(meta);
+                } else {
+                    // Update existing meta with version
+                    if let Some(ref mut meta) = group.meta_mut() {
+                        meta.version = Some(format!("W/\"{}\"", version));
+                    }
+                }
 
                 // Fetch members
                 let members = self.fetch_group_members(tenant_id, id).await?;

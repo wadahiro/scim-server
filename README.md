@@ -31,10 +31,10 @@ A SCIM (System for Cross-domain Identity Management) v2.0 server implementation 
 - ✅ **Sorting and pagination**: Basic SCIM query parameter support
 - ✅ **ServiceProviderConfig**: Server capabilities endpoint
 - ✅ **Resource Type discovery**: Schema and resource type endpoints
+- ✅ **ETag/Versioning**: Full RFC 7232 conditional request support with optimistic concurrency control
 
 **In Development:**
 - 🚧 **Schema extensions**: Custom schema definitions
-- 🚧 **Resource versioning**: ETags and versioning support
 
 **Not Yet Implemented:**
 - ❌ **Bulk operations**: Batch resource operations
@@ -49,6 +49,7 @@ A SCIM (System for Cross-domain Identity Management) v2.0 server implementation 
 - **Password hashing**: Argon2, bcrypt, and SSHA algorithm support
 - **ExternalId support**: Optional client-defined identifiers with uniqueness constraints
 - **Input sanitization**: Comprehensive request validation and error handling
+- **Optimistic concurrency control**: ETag-based conflict prevention for concurrent updates
 
 ## 🚀 Quick Start
 
@@ -443,6 +444,81 @@ GET /scim/v2/Users?sortBy=name.familyName&sortOrder=ascending
 GET /scim/v2/Users?startIndex=1&count=10
 ```
 
+### ETag and Versioning Support
+
+The server supports RFC 7232 conditional requests for optimistic concurrency control:
+
+#### ETag Headers
+All resource responses include ETag headers with version information:
+```bash
+# Response includes ETag header
+HTTP/1.1 200 OK
+ETag: W/"1"
+Content-Type: application/scim+json
+
+{
+  "id": "user-123",
+  "meta": {
+    "version": "W/\"1\"",
+    "created": "2024-01-01T12:00:00Z",
+    "lastModified": "2024-01-01T12:00:00Z"
+  },
+  ...
+}
+```
+
+#### Conditional Requests
+```bash
+# Conditional GET (If-None-Match) - returns 304 if not modified
+GET /scim/v2/Users/user-123
+If-None-Match: W/"1"
+
+# Conditional UPDATE (If-Match) - prevents conflicts
+PUT /scim/v2/Users/user-123
+If-Match: W/"1"
+Content-Type: application/scim+json
+
+{
+  "schemas": ["urn:ietf:params:scim:schemas:core:2.0:User"],
+  "userName": "alice-updated",
+  ...
+}
+
+# Conditional PATCH with optimistic locking
+PATCH /scim/v2/Users/user-123
+If-Match: W/"2"
+Content-Type: application/scim+json
+
+{
+  "schemas": ["urn:ietf:params:scim:api:messages:2.0:PatchOp"],
+  "Operations": [
+    {
+      "op": "replace",
+      "path": "emails[type eq \"work\"].value",
+      "value": "newemail@example.com"
+    }
+  ]
+}
+```
+
+#### Error Responses
+```bash
+# 304 Not Modified - resource hasn't changed
+HTTP/1.1 304 Not Modified
+ETag: W/"1"
+
+# 412 Precondition Failed - version conflict
+HTTP/1.1 412 Precondition Failed
+Content-Type: application/scim+json
+
+{
+  "schemas": ["urn:ietf:params:scim:api:messages:2.0:Error"],
+  "detail": "Resource version mismatch",
+  "status": "412",
+  "scimType": "preconditionFailed"
+}
+```
+
 ## 🧪 Testing
 
 ### Basic Test
@@ -495,6 +571,23 @@ curl "http://localhost:3000/api/scim/Users" \
   -H "X-Forwarded-Proto: https" \
   -H "X-Forwarded-For: 192.168.1.100" \
   -H "Authorization: Bearer api-token"
+
+# Testing ETag functionality
+# GET with If-None-Match (conditional request)
+curl "http://localhost:3000/scim/v2/Users/user-123" \
+  -H "If-None-Match: W/\"1\"" \
+  -H "Authorization: Bearer your-token"
+
+# UPDATE with If-Match (optimistic locking)
+curl -X PUT "http://localhost:3000/scim/v2/Users/user-123" \
+  -H "Content-Type: application/scim+json" \
+  -H "If-Match: W/\"1\"" \
+  -H "Authorization: Bearer your-token" \
+  -d '{
+    "schemas": ["urn:ietf:params:scim:schemas:core:2.0:User"],
+    "userName": "alice-updated",
+    "emails": [{"value": "updated@example.com", "primary": true}]
+  }'
 ```
 
 ### Comprehensive Testing
@@ -509,6 +602,9 @@ cargo test --features postgresql
 
 # Run integration tests
 cargo test --test matrix_integration_test
+
+# Run ETag/versioning tests
+cargo test --test etag_version_test
 ```
 
 See [TESTING.md](TESTING.md) for detailed testing instructions including TestContainers setup.

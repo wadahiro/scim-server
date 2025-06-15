@@ -68,9 +68,9 @@ impl UserUpdater for PostgresUserUpdater {
         // Build table name
         let table_name = format!("t{}_users", tenant_id);
 
-        // PostgreSQL UPDATE SQL with UUID casting and JSONB storage
+        // PostgreSQL UPDATE SQL with UUID casting, JSONB storage, and version increment
         let sql = format!(
-            "UPDATE {} SET username = $1, external_id = $2, data_orig = $3, data_norm = $4, updated_at = $5 WHERE id = $6::uuid",
+            "UPDATE {} SET username = $1, external_id = $2, data_orig = $3, data_norm = $4, version = version + 1, updated_at = $5 WHERE id = $6::uuid",
             table_name
         );
 

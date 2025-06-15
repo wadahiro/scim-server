@@ -73,9 +73,9 @@ impl UserPatcher for SqliteUserPatcher {
         let data_orig_str = self.json_value_to_string(&data.data_orig)?;
         let data_norm_str = self.json_value_to_string(&data.data_norm)?;
 
-        // SQLite UPDATE SQL with TEXT-based parameter binding
+        // SQLite UPDATE SQL with TEXT-based parameter binding and version increment
         let sql = format!(
-            "UPDATE {} SET username = ?1, external_id = ?2, data_orig = ?3, data_norm = ?4, updated_at = ?5 WHERE id = ?6",
+            "UPDATE {} SET username = ?1, external_id = ?2, data_orig = ?3, data_norm = ?4, version = version + 1, updated_at = ?5 WHERE id = ?6",
             table_name
         );
 

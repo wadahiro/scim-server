@@ -48,6 +48,7 @@ cargo test                         # Run all tests
 cargo test --all-features         # Include PostgreSQL tests (requires Docker)
 cargo test --test attributes_filter_test  # Run specific test file
 cargo test test_user_attributes_parameter  # Run specific test function
+cargo test --test etag_version_test       # Run ETag/versioning tests
 ./run_tests.sh                    # Run automated test suite with summary
 ```
 
@@ -112,11 +113,12 @@ This is a fully compliant SCIM 2.0 server with enterprise-grade architecture:
 - **RFC 7644 Compliance**: Complete SCIM 2.0 specification implementation
 - **Multi-tenant architecture**: Path-based tenant isolation with optional host routing and per-tenant auth
 - **Dual database support**: PostgreSQL (production) and SQLite (development)
-- **Advanced features**: Attribute filtering, complex queries, PATCH operations
+- **Advanced features**: Attribute filtering, complex queries, PATCH operations, ETag/versioning
 - **Zero-configuration mode**: Run without config.yaml for development/testing
 - **Production ready**: Docker support, CI/CD, comprehensive testing
 - **Modern Rust**: Uses Rust 1.85+ with edition2024 support
 - **Optimized dependencies**: Latest cryptographic libraries (argon2 v0.5, base64ct v1.8.0)
+- **Optimistic concurrency control**: RFC 7232 conditional requests with ETag support
 
 ### Clean Architecture Pattern
 ```
@@ -590,6 +592,43 @@ GET /my-custom-path/Users?filter=userName eq "alice"
 - Handles complex nested JSON structures
 - Works with both User and Group resources
 
+### 2.5. ETag/Versioning Implementation
+
+**RFC 7232 HTTP Conditional Request Compliance:**
+- **ETag Headers**: All resource responses include `ETag: W/"<version>"` headers
+- **Version Field**: SCIM resources include `meta.version` field with ETag value
+- **Conditional GET**: Support for `If-None-Match` header (returns 304 Not Modified)
+- **Conditional UPDATE/PATCH/DELETE**: Support for `If-Match` header (optimistic concurrency control)
+- **Version Increment**: Automatic version increment on resource modifications
+- **Conflict Detection**: Returns 412 Precondition Failed for version mismatches
+
+**Implementation Details:**
+- **Database Schema**: `version` column in User and Group tables (starts at 1, increments on updates)
+- **Version Format**: Weak ETag format `W/"<integer>"` (e.g., `W/"1"`, `W/"2"`)
+- **Optimistic Locking**: Prevents lost updates in concurrent environments
+- **SCIM Error Format**: Proper 412 error responses with SCIM schemas
+- **Cross-Database Support**: Works with both PostgreSQL and SQLite
+- **Test Coverage**: Comprehensive test suite in `tests/etag_version_test.rs`
+
+**Example Usage:**
+```bash
+# GET with ETag response
+GET /scim/v2/Users/123
+→ ETag: W/"1"
+→ {"meta": {"version": "W/\"1\""}, ...}
+
+# Conditional GET (304 if not modified)
+GET /scim/v2/Users/123
+If-None-Match: W/"1"
+→ 304 Not Modified
+
+# Conditional UPDATE (prevents conflicts)
+PUT /scim/v2/Users/123
+If-Match: W/"1"
+→ 200 OK, ETag: W/"2" (if successful)
+→ 412 Precondition Failed (if version mismatch)
+```
+
 ### 3. Multi-Tenant Architecture
 
 **Path-Based Tenant Routing with Optional Host Resolution:**
@@ -612,6 +651,7 @@ CREATE TABLE t1_users (
     external_id TEXT UNIQUE,              -- Optional client identifier
     data_orig JSONB NOT NULL,             -- Original SCIM data
     data_norm JSONB NOT NULL,             -- Normalized data
+    version BIGINT NOT NULL DEFAULT 1,    -- ETag versioning for optimistic concurrency
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
@@ -622,6 +662,7 @@ CREATE TABLE t1_groups (
     external_id TEXT UNIQUE,              -- Optional client identifier
     data_orig JSONB NOT NULL,             -- Original SCIM data
     data_norm JSONB NOT NULL,             -- Normalized data
+    version BIGINT NOT NULL DEFAULT 1,    -- ETag versioning for optimistic concurrency
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
@@ -700,6 +741,7 @@ CREATE INDEX idx_1_memberships_group_id ON t1_group_memberships (group_id);
 - `tests/case_insensitive_*.rs`: SCIM case-insensitive compliance
 - `tests/matrix_integration_test.rs`: Cross-database compatibility
 - `tests/patch_operations_test.rs`: SCIM PATCH compliance
+- `tests/etag_version_test.rs`: RFC 7232 ETag/versioning and conditional requests
 
 ### TestContainers Integration
 

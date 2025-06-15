@@ -207,7 +207,7 @@ pub async fn create_user(
 
             let cleaned_user_json = AttributeFilter::remove_null_fields(&user_json);
 
-            // Create response with Location header
+            // Create response with Location and ETag headers
             let mut headers = HeaderMap::new();
             headers.insert(
                 "Location",
@@ -218,6 +218,21 @@ pub async fn create_user(
                     )
                 })?,
             );
+
+            // Add ETag header (Phase 2: ETag response headers)
+            if let Some(ref meta) = created_user.base.meta {
+                if let Some(ref version) = meta.version {
+                    headers.insert(
+                        "ETag",
+                        HeaderValue::from_str(version).map_err(|_| {
+                            (
+                                StatusCode::INTERNAL_SERVER_ERROR,
+                                Json(serde_json::json!({"message": "Invalid ETag header"})),
+                            )
+                        })?,
+                    );
+                }
+            }
 
             let mut response = Json(cleaned_user_json).into_response();
             *response.status_mut() = StatusCode::CREATED;
@@ -232,9 +247,10 @@ pub async fn create_user(
 pub async fn get_user(
     State((backend, app_config)): State<AppState>,
     Extension(tenant_info): Extension<TenantInfo>,
+    headers: HeaderMap,
     uri: Uri,
     Query(params): Query<HashMap<String, String>>,
-) -> Result<(StatusCode, Json<serde_json::Value>), (StatusCode, Json<serde_json::Value>)> {
+) -> Result<Response, (StatusCode, Json<serde_json::Value>)> {
     let tenant_id = tenant_info.tenant_id;
 
     // Extract user ID from URI
@@ -286,6 +302,27 @@ pub async fn get_user(
                 compatibility.show_empty_groups_members,
             );
 
+            // Phase 3: Handle conditional requests (If-None-Match)
+            if let Some(if_none_match) = headers.get("if-none-match") {
+                if let (Ok(if_none_match_str), Some(ref meta)) =
+                    (if_none_match.to_str(), &user.base.meta)
+                {
+                    if let Some(ref current_version) = meta.version {
+                        // If the ETag matches, return 304 Not Modified
+                        if if_none_match_str == current_version {
+                            let mut response =
+                                axum::response::Response::new(axum::body::Body::empty());
+                            *response.status_mut() = StatusCode::NOT_MODIFIED;
+                            // Add ETag header even for 304 responses
+                            if let Ok(etag_value) = HeaderValue::from_str(current_version) {
+                                response.headers_mut().insert("ETag", etag_value);
+                            }
+                            return Ok(response);
+                        }
+                    }
+                }
+            }
+
             // Convert to JSON and apply attribute filtering
             let user_json = serde_json::to_value(&user).map_err(|_| {
                 (
@@ -295,7 +332,27 @@ pub async fn get_user(
             })?;
 
             let filtered_user = attribute_filter.apply_to_resource(&user_json, ResourceType::User);
-            Ok((StatusCode::OK, Json(filtered_user)))
+
+            // Build response with ETag header (Phase 2: ETag response headers)
+            let mut headers = HeaderMap::new();
+            if let Some(ref meta) = user.base.meta {
+                if let Some(ref version) = meta.version {
+                    headers.insert(
+                        "ETag",
+                        HeaderValue::from_str(version).map_err(|_| {
+                            (
+                                StatusCode::INTERNAL_SERVER_ERROR,
+                                Json(json!({"message": "Invalid ETag header"})),
+                            )
+                        })?,
+                    );
+                }
+            }
+
+            let mut response = Json(filtered_user).into_response();
+            *response.status_mut() = StatusCode::OK;
+            response.headers_mut().extend(headers);
+            Ok(response)
         }
         Ok(None) => Err((
             StatusCode::NOT_FOUND,
@@ -499,9 +556,10 @@ pub async fn search_users(
 pub async fn update_user(
     State((backend, app_config)): State<AppState>,
     Extension(tenant_info): Extension<TenantInfo>,
+    headers: HeaderMap,
     uri: Uri,
     ScimJson(payload): ScimJson<serde_json::Value>,
-) -> Result<(StatusCode, Json<serde_json::Value>), (StatusCode, Json<serde_json::Value>)> {
+) -> Result<Response, (StatusCode, Json<serde_json::Value>)> {
     let tenant_id = tenant_info.tenant_id;
 
     // Extract user ID from URI
@@ -529,6 +587,40 @@ pub async fn update_user(
     // Validate user data
     if let Err(e) = validate_user(&user.base) {
         return Err(e.to_response());
+    }
+
+    // Phase 3: Handle conditional requests (If-Match) - Optimistic Concurrency Control
+    if let Some(if_match) = headers.get("if-match") {
+        if let Ok(if_match_str) = if_match.to_str() {
+            // First, get the current user to check its version
+            match backend.find_user_by_id(tenant_id, &id, false).await {
+                Ok(Some(current_user)) => {
+                    if let Some(ref meta) = current_user.base.meta {
+                        if let Some(ref current_version) = meta.version {
+                            // If the ETag doesn't match, return 412 Precondition Failed
+                            if if_match_str != current_version {
+                                return Err((
+                                    StatusCode::PRECONDITION_FAILED,
+                                    Json(json!({
+                                        "schemas": ["urn:ietf:params:scim:api:messages:2.0:Error"],
+                                        "detail": "Resource version mismatch",
+                                        "status": "412",
+                                        "scimType": "preconditionFailed"
+                                    })),
+                                ));
+                            }
+                        }
+                    }
+                }
+                Ok(None) => {
+                    return Err((
+                        StatusCode::NOT_FOUND,
+                        Json(json!({"message": "User not found"})),
+                    ));
+                }
+                Err(e) => return Err(e.to_response()),
+            }
+        }
     }
 
     match backend.update_user(tenant_id, &id, &user).await {
@@ -561,7 +653,26 @@ pub async fn update_user(
 
             let cleaned_user_json = AttributeFilter::remove_null_fields(&user_json);
 
-            Ok((StatusCode::OK, Json(cleaned_user_json)))
+            // Build response with ETag header (Phase 2: ETag response headers)
+            let mut headers = HeaderMap::new();
+            if let Some(ref meta) = updated_user.base.meta {
+                if let Some(ref version) = meta.version {
+                    headers.insert(
+                        "ETag",
+                        HeaderValue::from_str(version).map_err(|_| {
+                            (
+                                StatusCode::INTERNAL_SERVER_ERROR,
+                                Json(serde_json::json!({"message": "Invalid ETag header"})),
+                            )
+                        })?,
+                    );
+                }
+            }
+
+            let mut response = Json(cleaned_user_json).into_response();
+            *response.status_mut() = StatusCode::OK;
+            response.headers_mut().extend(headers);
+            Ok(response)
         }
         Ok(None) => Err((
             StatusCode::NOT_FOUND,
@@ -574,6 +685,7 @@ pub async fn update_user(
 pub async fn delete_user(
     State((backend, _)): State<AppState>,
     Extension(tenant_info): Extension<TenantInfo>,
+    headers: HeaderMap,
     uri: Uri,
 ) -> Result<StatusCode, (StatusCode, Json<serde_json::Value>)> {
     let tenant_id = tenant_info.tenant_id;
@@ -589,6 +701,40 @@ pub async fn delete_user(
         }
     };
 
+    // Phase 3: Handle conditional requests (If-Match) - Optimistic Concurrency Control
+    if let Some(if_match) = headers.get("if-match") {
+        if let Ok(if_match_str) = if_match.to_str() {
+            // First, get the current user to check its version
+            match backend.find_user_by_id(tenant_id, &id, false).await {
+                Ok(Some(current_user)) => {
+                    if let Some(ref meta) = current_user.base.meta {
+                        if let Some(ref current_version) = meta.version {
+                            // If the ETag doesn't match, return 412 Precondition Failed
+                            if if_match_str != current_version {
+                                return Err((
+                                    StatusCode::PRECONDITION_FAILED,
+                                    Json(json!({
+                                        "schemas": ["urn:ietf:params:scim:api:messages:2.0:Error"],
+                                        "detail": "Resource version mismatch",
+                                        "status": "412",
+                                        "scimType": "preconditionFailed"
+                                    })),
+                                ));
+                            }
+                        }
+                    }
+                }
+                Ok(None) => {
+                    return Err((
+                        StatusCode::NOT_FOUND,
+                        Json(json!({"message": "User not found"})),
+                    ));
+                }
+                Err(e) => return Err(e.to_response()),
+            }
+        }
+    }
+
     match backend.delete_user(tenant_id, &id).await {
         Ok(true) => Ok(StatusCode::NO_CONTENT),
         Ok(false) => Err((
@@ -602,9 +748,10 @@ pub async fn delete_user(
 pub async fn patch_user(
     State((backend, app_config)): State<AppState>,
     Extension(tenant_info): Extension<TenantInfo>,
+    headers: HeaderMap,
     uri: Uri,
     ScimJson(patch_ops): ScimJson<ScimPatchOp>,
-) -> Result<(StatusCode, Json<serde_json::Value>), (StatusCode, Json<serde_json::Value>)> {
+) -> Result<Response, (StatusCode, Json<serde_json::Value>)> {
     let tenant_id = tenant_info.tenant_id;
 
     // Extract user ID from URI
@@ -617,6 +764,40 @@ pub async fn patch_user(
             ))
         }
     };
+
+    // Phase 3: Handle conditional requests (If-Match) - Optimistic Concurrency Control
+    if let Some(if_match) = headers.get("if-match") {
+        if let Ok(if_match_str) = if_match.to_str() {
+            // First, get the current user to check its version
+            match backend.find_user_by_id(tenant_id, &id, false).await {
+                Ok(Some(current_user)) => {
+                    if let Some(ref meta) = current_user.base.meta {
+                        if let Some(ref current_version) = meta.version {
+                            // If the ETag doesn't match, return 412 Precondition Failed
+                            if if_match_str != current_version {
+                                return Err((
+                                    StatusCode::PRECONDITION_FAILED,
+                                    Json(json!({
+                                        "schemas": ["urn:ietf:params:scim:api:messages:2.0:Error"],
+                                        "detail": "Resource version mismatch",
+                                        "status": "412",
+                                        "scimType": "preconditionFailed"
+                                    })),
+                                ));
+                            }
+                        }
+                    }
+                }
+                Ok(None) => {
+                    return Err((
+                        StatusCode::NOT_FOUND,
+                        Json(json!({"message": "User not found"})),
+                    ));
+                }
+                Err(e) => return Err(e.to_response()),
+            }
+        }
+    }
 
     match backend.patch_user(tenant_id, &id, &patch_ops).await {
         Ok(Some(mut user)) => {
@@ -648,7 +829,26 @@ pub async fn patch_user(
 
             let cleaned_user_json = AttributeFilter::remove_null_fields(&user_json);
 
-            Ok((StatusCode::OK, Json(cleaned_user_json)))
+            // Build response with ETag header (Phase 2: ETag response headers)
+            let mut headers = HeaderMap::new();
+            if let Some(ref meta) = user.base.meta {
+                if let Some(ref version) = meta.version {
+                    headers.insert(
+                        "ETag",
+                        HeaderValue::from_str(version).map_err(|_| {
+                            (
+                                StatusCode::INTERNAL_SERVER_ERROR,
+                                Json(serde_json::json!({"message": "Invalid ETag header"})),
+                            )
+                        })?,
+                    );
+                }
+            }
+
+            let mut response = Json(cleaned_user_json).into_response();
+            *response.status_mut() = StatusCode::OK;
+            response.headers_mut().extend(headers);
+            Ok(response)
         }
         Ok(None) => Err((
             StatusCode::NOT_FOUND,

@@ -78,7 +78,7 @@ impl GroupInserter for SqliteGroupInserter {
         // Insert the group record
         let group_table = format!("t{}_groups", tenant_id);
         let group_sql = format!(
-            "INSERT INTO {} (id, display_name, external_id, data_orig, data_norm, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            "INSERT INTO {} (id, display_name, external_id, data_orig, data_norm, version, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
             group_table
         );
 
@@ -92,6 +92,7 @@ impl GroupInserter for SqliteGroupInserter {
             .bind(&data.external_id)
             .bind(&data_orig_str) // SQLite: JSON as TEXT
             .bind(&data_norm_str)
+            .bind(1i64) // version = 1 for new records
             .bind(&data.timestamp)
             .bind(&data.timestamp)
             .execute(&mut *tx)

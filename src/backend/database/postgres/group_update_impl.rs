@@ -60,7 +60,7 @@ impl PostgresGroupUpdater {
         }
         let table_name = format!("t{}_groups", tenant_id);
         let sql = format!(
-            "SELECT id, display_name, external_id, data_orig, data_norm, created_at, updated_at FROM {} WHERE id = $1::uuid",
+            "SELECT id, display_name, external_id, data_orig, data_norm, version, created_at, updated_at FROM {} WHERE id = $1::uuid",
             table_name
         );
 
@@ -74,6 +74,27 @@ impl PostgresGroupUpdater {
             Some(row) => {
                 let mut group: Group = serde_json::from_value(row.get("data_orig"))
                     .map_err(|e| AppError::Serialization(e))?;
+
+                // Set version in meta (ensure meta exists)
+                let version: i64 = row.get("version");
+                if group.meta().is_none() {
+                    // Create meta if it doesn't exist
+                    let created_at: chrono::DateTime<chrono::Utc> = row.get("created_at");
+                    let updated_at: chrono::DateTime<chrono::Utc> = row.get("updated_at");
+                    let meta = scim_v2::models::scim_schema::Meta {
+                        resource_type: Some("Group".to_string()),
+                        created: Some(crate::utils::format_scim_datetime(created_at)),
+                        last_modified: Some(crate::utils::format_scim_datetime(updated_at)),
+                        location: None,
+                        version: Some(format!("W/\"{}\"", version)),
+                    };
+                    *group.meta_mut() = Some(meta);
+                } else {
+                    // Update existing meta with version
+                    if let Some(ref mut meta) = group.meta_mut() {
+                        meta.version = Some(format!("W/\"{}\"", version));
+                    }
+                }
 
                 // Fetch members
                 let members = self.fetch_group_members(tenant_id, id).await?;
@@ -179,7 +200,7 @@ impl GroupUpdater for PostgresGroupUpdater {
 
         // Update the group record
         let group_sql = format!(
-            "UPDATE {} SET display_name = $1, external_id = $2, data_orig = $3, data_norm = $4, updated_at = $5 WHERE id = $6::uuid",
+            "UPDATE {} SET display_name = $1, external_id = $2, data_orig = $3, data_norm = $4, version = version + 1, updated_at = $5 WHERE id = $6::uuid",
             groups_table
         );
 

@@ -12,6 +12,7 @@ pub enum AppError {
     #[allow(dead_code)]
     FilterParse(String),
     Configuration(String),
+    PreconditionFailed,
 }
 
 impl fmt::Display for AppError {
@@ -24,6 +25,9 @@ impl fmt::Display for AppError {
             AppError::Internal(e) => write!(f, "Internal error: {}", e),
             AppError::FilterParse(e) => write!(f, "Filter parse error: {}", e),
             AppError::Configuration(e) => write!(f, "Configuration error: {}", e),
+            AppError::PreconditionFailed => {
+                write!(f, "Precondition failed: Resource version mismatch")
+            }
         }
     }
 }
@@ -101,6 +105,13 @@ impl AppError {
             AppError::Configuration(e) => {
                 eprintln!("Configuration error: {}", e);
                 (StatusCode::INTERNAL_SERVER_ERROR, e)
+            }
+            AppError::PreconditionFailed => {
+                return scim_error_response(
+                    StatusCode::PRECONDITION_FAILED,
+                    "preconditionFailed",
+                    "Resource version mismatch",
+                );
             }
         };
 

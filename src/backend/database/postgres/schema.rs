@@ -25,6 +25,7 @@ pub async fn init_tenant_schema(pool: &PgPool, tenant_id: u32) -> AppResult<()> 
             external_id TEXT UNIQUE,
             data_orig JSONB NOT NULL,
             data_norm JSONB NOT NULL,
+            version BIGINT NOT NULL DEFAULT 1,
             created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
             updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
         )
@@ -46,6 +47,7 @@ pub async fn init_tenant_schema(pool: &PgPool, tenant_id: u32) -> AppResult<()> 
             external_id TEXT UNIQUE,
             data_orig JSONB NOT NULL,
             data_norm JSONB NOT NULL,
+            version BIGINT NOT NULL DEFAULT 1,
             created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
             updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
         )
