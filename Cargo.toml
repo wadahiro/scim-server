@@ -35,7 +35,7 @@ url = "2.5"
 email_address = "0.2"
 langtag = "0.4"
 chrono-tz = "0.8"
-fluent-uri = "0.1"
+fluent-uri = "0.3"
 lazy_static = "1.4"
 ipnet = "2.9"
 
