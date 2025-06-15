@@ -285,7 +285,21 @@ impl ScimPath {
             }
             "remove" => {
                 if let Value::Object(obj) = current {
-                    obj.remove(final_key);
+                    // Special handling for multi-value attributes with value array
+                    // This handles cases like: path="emails", value=[{items to remove}]
+                    if !value.is_null() && value.is_array() {
+                        if let Some(current_array) = obj.get_mut(final_key) {
+                            if let Value::Array(attribute_array) = current_array {
+                                if let Value::Array(to_remove) = value {
+                                    // Apply selective removal based on the items in the value array
+                                    Self::remove_items_from_array(attribute_array, to_remove);
+                                }
+                            }
+                        }
+                    } else {
+                        // Standard remove operation - remove the entire attribute
+                        obj.remove(final_key);
+                    }
                 }
                 // Remove operation is idempotent - no error if key doesn't exist
             }
@@ -298,6 +312,72 @@ impl ScimPath {
         }
 
         Ok(())
+    }
+
+    /// Removes items from a multi-value array based on matching criteria
+    /// This method supports different matching strategies for different SCIM attributes
+    fn remove_items_from_array(attribute_array: &mut Vec<Value>, to_remove: &[Value]) {
+        for remove_item in to_remove {
+            // Try multiple matching strategies to handle different attribute types
+            attribute_array.retain(|existing_item| !Self::items_match(existing_item, remove_item));
+        }
+    }
+
+    /// Determines if two items match for removal purposes
+    /// Supports various matching criteria for different SCIM attribute types
+    fn items_match(existing_item: &Value, remove_item: &Value) -> bool {
+        // Strategy 1: Match by "value" field (emails, phoneNumbers, etc.)
+        if let (Some(existing_value), Some(remove_value)) = (
+            existing_item.get("value").and_then(|v| v.as_str()),
+            remove_item.get("value").and_then(|v| v.as_str()),
+        ) {
+            return existing_value == remove_value;
+        }
+
+        // Strategy 2: Match by "type" field (addresses, emails with type, etc.)
+        if let (Some(existing_type), Some(remove_type)) = (
+            existing_item.get("type").and_then(|v| v.as_str()),
+            remove_item.get("type").and_then(|v| v.as_str()),
+        ) {
+            // For type-based matching, also ensure it's the primary match criterion
+            if existing_type == remove_type {
+                // If remove_item only specifies type, match by type
+                if remove_item.as_object().map_or(false, |obj| obj.len() == 1) {
+                    return true;
+                }
+                // If more fields are specified, require exact match on all fields
+                return Self::objects_match_partially(existing_item, remove_item);
+            }
+        }
+
+        // Strategy 3: Match by multiple fields (complex objects)
+        if existing_item.is_object() && remove_item.is_object() {
+            return Self::objects_match_partially(existing_item, remove_item);
+        }
+
+        // Strategy 4: Exact value match (fallback)
+        existing_item == remove_item
+    }
+
+    /// Checks if an object matches based on all fields specified in the match criteria
+    fn objects_match_partially(existing_item: &Value, remove_item: &Value) -> bool {
+        if let (Some(existing_obj), Some(remove_obj)) =
+            (existing_item.as_object(), remove_item.as_object())
+        {
+            // All fields in remove_item must match the corresponding fields in existing_item
+            for (key, remove_value) in remove_obj {
+                if let Some(existing_value) = existing_obj.get(key) {
+                    if existing_value != remove_value {
+                        return false;
+                    }
+                } else {
+                    // Remove item specifies a field that doesn't exist in existing item
+                    return false;
+                }
+            }
+            return true;
+        }
+        false
     }
 
     fn apply_value_path_operation(
