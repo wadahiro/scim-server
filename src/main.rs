@@ -349,7 +349,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Enable graceful shutdown with proper cleanup
     let shutdown_future = shutdown_signal();
-    let server_future = axum::serve(listener, app).with_graceful_shutdown(shutdown_future);
+    let server_future = axum::serve(
+        listener,
+        app.into_make_service_with_connect_info::<SocketAddr>(),
+    )
+    .with_graceful_shutdown(shutdown_future);
 
     // Run server and handle shutdown
     let result = server_future.await;

@@ -1,7 +1,9 @@
+use ipnet::IpNet;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::net::IpAddr;
 use std::path::Path;
+use std::str::FromStr;
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct AppConfig {
@@ -61,6 +63,32 @@ pub struct HostResolutionConfig {
     pub resolution_type: HostResolutionType,
     #[serde(default)]
     pub trusted_proxies: Option<Vec<String>>,
+}
+
+impl HostResolutionConfig {
+    /// Check if a client IP is trusted for proxy headers
+    pub fn is_trusted_proxy(&self, client_ip: IpAddr) -> bool {
+        match &self.trusted_proxies {
+            // If no trusted_proxies configured, trust all (for backward compatibility)
+            None => true,
+            Some(trusted_ranges) => {
+                // Check if client IP matches any configured CIDR range
+                for range_str in trusted_ranges {
+                    if let Ok(range) = IpNet::from_str(range_str) {
+                        if range.contains(&client_ip) {
+                            return true;
+                        }
+                    } else if let Ok(ip) = IpAddr::from_str(range_str) {
+                        // Handle single IP addresses (without CIDR notation)
+                        if ip == client_ip {
+                            return true;
+                        }
+                    }
+                }
+                false
+            }
+        }
+    }
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq)]
@@ -405,9 +433,16 @@ impl TenantConfig {
     ) -> Option<ResolvedUrl> {
         let forwarded_header = request_info.forwarded_header?;
 
-        // TODO: Check trusted_proxies if configured
-        if let Some(_trusted_proxies) = &host_resolution.trusted_proxies {
-            // Add proxy validation logic here
+        // Check trusted_proxies if configured
+        if let Some(client_ip) = request_info.client_ip {
+            if !host_resolution.is_trusted_proxy(client_ip) {
+                // Client IP is not in trusted_proxies list, reject the request
+                tracing::warn!(
+                    "Rejecting Forwarded header from untrusted proxy: {}",
+                    client_ip
+                );
+                return None;
+            }
         }
 
         // Parse Forwarded header (simplified implementation)
@@ -457,9 +492,16 @@ impl TenantConfig {
         request_info: &RequestInfo,
         host_resolution: &HostResolutionConfig,
     ) -> Option<ResolvedUrl> {
-        // TODO: Check trusted_proxies if configured
-        if let Some(_trusted_proxies) = &host_resolution.trusted_proxies {
-            // Add proxy validation logic here
+        // Check trusted_proxies if configured
+        if let Some(client_ip) = request_info.client_ip {
+            if !host_resolution.is_trusted_proxy(client_ip) {
+                // Client IP is not in trusted_proxies list, reject the request
+                tracing::warn!(
+                    "Rejecting X-Forwarded headers from untrusted proxy: {}",
+                    client_ip
+                );
+                return None;
+            }
         }
 
         let scheme = request_info

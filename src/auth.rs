@@ -1,11 +1,12 @@
 use axum::{
-    extract::{Request, State},
+    extract::{ConnectInfo, Request, State},
     http::{HeaderMap, StatusCode, Uri},
     middleware::Next,
     response::Response,
     Json,
 };
 use serde_json::json;
+use std::net::SocketAddr;
 use std::sync::Arc;
 
 use crate::config::{AppConfig, AuthConfig, RequestInfo, TenantConfig};
@@ -28,6 +29,12 @@ pub async fn auth_middleware(
     let uri = request.uri().clone();
     let headers = request.headers().clone();
 
+    // Extract client IP from connection info if available
+    let client_ip = request
+        .extensions()
+        .get::<ConnectInfo<SocketAddr>>()
+        .map(|connect_info| connect_info.0.ip());
+
     // Skip authentication for non-SCIM endpoints (e.g., health checks)
     let path = uri.path();
     if path == "/" || path == "/health" {
@@ -35,7 +42,8 @@ pub async fn auth_middleware(
     }
 
     // Resolve tenant and validate authentication
-    let tenant_info = match resolve_tenant_and_authenticate(&app_config, &uri, &headers) {
+    let tenant_info = match resolve_tenant_and_authenticate(&app_config, &uri, &headers, client_ip)
+    {
         Ok(info) => info,
         Err(StatusCode::UNAUTHORIZED) => {
             return Err((
@@ -62,9 +70,10 @@ fn resolve_tenant_and_authenticate(
     app_config: &AppConfig,
     uri: &Uri,
     headers: &HeaderMap,
+    client_ip: Option<std::net::IpAddr>,
 ) -> Result<TenantInfo, StatusCode> {
     let path = uri.path();
-    let tenant_id = resolve_tenant_id_from_request(app_config, uri, headers)?;
+    let tenant_id = resolve_tenant_id_from_request(app_config, uri, headers, client_ip)?;
 
     // Find the tenant configuration
     let tenant = app_config
@@ -105,6 +114,7 @@ fn resolve_tenant_id_from_request(
     app_config: &AppConfig,
     uri: &Uri,
     headers: &HeaderMap,
+    client_ip: Option<std::net::IpAddr>,
 ) -> Result<u32, StatusCode> {
     let path = uri.path();
 
@@ -122,7 +132,7 @@ fn resolve_tenant_id_from_request(
         x_forwarded_port: headers
             .get("x-forwarded-port")
             .and_then(|h| h.to_str().ok()),
-        client_ip: None, // For now, we don't need the client IP for tenant resolution
+        client_ip,
     };
 
     // Use the unified find_tenant_by_request method that handles both SCIM and custom endpoints

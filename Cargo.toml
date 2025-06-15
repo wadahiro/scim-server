@@ -37,6 +37,7 @@ langtag = "0.4"
 chrono-tz = "0.8"
 fluent-uri = "0.1"
 lazy_static = "1.4"
+ipnet = "2.9"
 
 [dependencies.uuid]
 version = "1.14.0"
