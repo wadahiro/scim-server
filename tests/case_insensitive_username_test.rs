@@ -54,14 +54,16 @@ async fn test_case_insensitive_username_storage() {
         .await;
 
     // Should fail with conflict since userName is case-insensitive
-    response.assert_status(StatusCode::BAD_REQUEST);
+    response.assert_status(StatusCode::CONFLICT);
     let error_response: Value = response.json();
-    let message = error_response["error"]
+
+    // Check SCIM 2.0 error response format
+    assert_eq!(error_response["status"].as_str().unwrap(), "409");
+    assert_eq!(error_response["scimType"].as_str().unwrap(), "uniqueness");
+    assert!(error_response["detail"]
         .as_str()
-        .or_else(|| error_response["message"].as_str())
-        .or_else(|| error_response.as_str())
-        .unwrap_or("Unknown error");
-    assert!(message.contains("User already exists"));
+        .unwrap()
+        .contains("User with this userName already exists"));
 }
 
 #[tokio::test]
@@ -113,18 +115,20 @@ async fn test_case_insensitive_username_variations() {
             .await;
 
         // All should fail due to case-insensitive duplicate detection
-        response.assert_status(StatusCode::BAD_REQUEST);
+        response.assert_status(StatusCode::CONFLICT);
         let error_response: Value = response.json();
-        let message = error_response["error"]
-            .as_str()
-            .or_else(|| error_response["message"].as_str())
-            .or_else(|| error_response.as_str())
-            .unwrap_or("Unknown error");
+
+        // Check SCIM 2.0 error response format
+        assert_eq!(error_response["status"].as_str().unwrap(), "409");
+        assert_eq!(error_response["scimType"].as_str().unwrap(), "uniqueness");
         assert!(
-            message.contains("User already exists"),
-            "Failed for username: {}, got message: {}",
+            error_response["detail"]
+                .as_str()
+                .unwrap()
+                .contains("User with this userName already exists"),
+            "Failed for username: {}, got detail: {}",
             username,
-            message
+            error_response["detail"].as_str().unwrap_or("none")
         );
     }
 }
@@ -183,18 +187,20 @@ async fn test_case_insensitive_username_search() {
             .await;
 
         // Should fail because case-insensitive search finds the existing user
-        response.assert_status(StatusCode::BAD_REQUEST);
+        response.assert_status(StatusCode::CONFLICT);
         let error_response: Value = response.json();
-        let message = error_response["error"]
-            .as_str()
-            .or_else(|| error_response["message"].as_str())
-            .or_else(|| error_response.as_str())
-            .unwrap_or("Unknown error");
+
+        // Check SCIM 2.0 error response format
+        assert_eq!(error_response["status"].as_str().unwrap(), "409");
+        assert_eq!(error_response["scimType"].as_str().unwrap(), "uniqueness");
         assert!(
-            message.contains("User already exists"),
-            "Failed for search username: {}, got message: {}",
+            error_response["detail"]
+                .as_str()
+                .unwrap()
+                .contains("User with this userName already exists"),
+            "Failed for search username: {}, got detail: {}",
             search_username,
-            message
+            error_response["detail"].as_str().unwrap_or("none")
         );
     }
 

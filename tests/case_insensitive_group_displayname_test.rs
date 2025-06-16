@@ -45,14 +45,16 @@ async fn test_case_insensitive_group_displayname_storage() {
         .await;
 
     // Should fail with conflict since displayName is case-insensitive
-    response.assert_status(StatusCode::BAD_REQUEST);
+    response.assert_status(StatusCode::CONFLICT);
     let error_response: Value = response.json();
-    let message = error_response["error"]
+
+    // Check SCIM 2.0 error response format
+    assert_eq!(error_response["status"].as_str().unwrap(), "409");
+    assert_eq!(error_response["scimType"].as_str().unwrap(), "uniqueness");
+    assert!(error_response["detail"]
         .as_str()
-        .or_else(|| error_response["message"].as_str())
-        .or_else(|| error_response.as_str())
-        .unwrap_or("Unknown error");
-    assert!(message.contains("Group already exists"));
+        .unwrap()
+        .contains("Group with this displayName already exists"));
 }
 
 #[tokio::test]
@@ -95,18 +97,20 @@ async fn test_case_insensitive_group_displayname_variations() {
             .await;
 
         // All should fail due to case-insensitive duplicate detection
-        response.assert_status(StatusCode::BAD_REQUEST);
+        response.assert_status(StatusCode::CONFLICT);
         let error_response: Value = response.json();
-        let message = error_response["error"]
-            .as_str()
-            .or_else(|| error_response["message"].as_str())
-            .or_else(|| error_response.as_str())
-            .unwrap_or("Unknown error");
+
+        // Check SCIM 2.0 error response format
+        assert_eq!(error_response["status"].as_str().unwrap(), "409");
+        assert_eq!(error_response["scimType"].as_str().unwrap(), "uniqueness");
         assert!(
-            message.contains("Group already exists"),
-            "Failed for displayName: {}, got message: {}",
+            error_response["detail"]
+                .as_str()
+                .unwrap()
+                .contains("Group with this displayName already exists"),
+            "Failed for displayName: {}, got detail: {}",
             display_name,
-            message
+            error_response["detail"].as_str().unwrap_or("none")
         );
     }
 }
@@ -225,14 +229,16 @@ async fn test_case_insensitive_group_displayname_with_members() {
         .await;
 
     // Should fail with conflict since displayName is case-insensitive
-    response.assert_status(StatusCode::BAD_REQUEST);
+    response.assert_status(StatusCode::CONFLICT);
     let error_response: Value = response.json();
-    let message = error_response["error"]
+
+    // Check SCIM 2.0 error response format
+    assert_eq!(error_response["status"].as_str().unwrap(), "409");
+    assert_eq!(error_response["scimType"].as_str().unwrap(), "uniqueness");
+    assert!(error_response["detail"]
         .as_str()
-        .or_else(|| error_response["message"].as_str())
-        .or_else(|| error_response.as_str())
-        .unwrap_or("Unknown error");
-    assert!(message.contains("Group already exists"));
+        .unwrap()
+        .contains("Group with this displayName already exists"));
 
     // Verify the original group still exists with correct members
     let response = server
