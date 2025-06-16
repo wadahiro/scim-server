@@ -44,7 +44,9 @@ impl PostgresGroupInserter {
             })?;
 
         if count > 0 {
-            return Err(AppError::BadRequest("Group already exists".to_string()));
+            return Err(AppError::Conflict(
+                "Group with this displayName already exists".to_string(),
+            ));
         }
 
         Ok(())

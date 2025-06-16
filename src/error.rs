@@ -8,6 +8,7 @@ pub enum AppError {
     Rusqlite(rusqlite::Error),
     Serialization(serde_json::Error),
     BadRequest(String),
+    Conflict(String),
     Internal(String),
     #[allow(dead_code)]
     FilterParse(String),
@@ -23,6 +24,7 @@ impl fmt::Display for AppError {
             AppError::Rusqlite(e) => write!(f, "SQLite error: {}", e),
             AppError::Serialization(e) => write!(f, "Serialization error: {}", e),
             AppError::BadRequest(e) => write!(f, "Bad request: {}", e),
+            AppError::Conflict(e) => write!(f, "Conflict: {}", e),
             AppError::Internal(e) => write!(f, "Internal error: {}", e),
             AppError::FilterParse(e) => write!(f, "Filter parse error: {}", e),
             AppError::Configuration(e) => write!(f, "Configuration error: {}", e),
@@ -98,6 +100,9 @@ impl AppError {
                 (StatusCode::INTERNAL_SERVER_ERROR, e.to_string())
             }
             AppError::BadRequest(e) => (StatusCode::BAD_REQUEST, e.clone()),
+            AppError::Conflict(e) => {
+                return scim_error_response(StatusCode::CONFLICT, "uniqueness", e);
+            }
             AppError::Internal(e) => {
                 eprintln!("Internal error: {}", e);
                 (StatusCode::INTERNAL_SERVER_ERROR, e.clone())

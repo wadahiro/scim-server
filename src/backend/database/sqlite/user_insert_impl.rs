@@ -40,7 +40,9 @@ impl SqliteUserInserter {
             })?;
 
         if count > 0 {
-            return Err(AppError::BadRequest("User already exists".to_string()));
+            return Err(AppError::Conflict(
+                "User with this userName already exists".to_string(),
+            ));
         }
 
         Ok(())
@@ -86,13 +88,13 @@ pub fn map_database_error(error: sqlx::Error, resource_type: &str) -> AppError {
     let error_str = error.to_string();
     if error_str.contains("duplicate key") || error_str.contains("UNIQUE constraint") {
         if error_str.contains("username") {
-            AppError::BadRequest("Username already exists".to_string())
+            AppError::Conflict("User with this userName already exists".to_string())
         } else if error_str.contains("external_id") {
-            AppError::BadRequest("External ID already exists".to_string())
+            AppError::Conflict("User with this externalId already exists".to_string())
         } else if error_str.contains("display_name") {
-            AppError::BadRequest("Display name already exists".to_string())
+            AppError::Conflict("Group with this displayName already exists".to_string())
         } else {
-            AppError::BadRequest("User already exists".to_string())
+            AppError::Conflict("Resource already exists".to_string())
         }
     } else {
         AppError::Database(format!("Failed to create {}: {}", resource_type, error_str))
