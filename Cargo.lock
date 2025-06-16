@@ -2410,7 +2410,7 @@ dependencies = [
  "langtag",
  "lazy_static",
  "paste",
- "rand 0.8.5",
+ "rand 0.9.1",
  "regex",
  "rusqlite",
  "scim_proto",
