@@ -168,7 +168,7 @@ async fn test_edge_cases_in_search() {
         .await;
     response.assert_status(StatusCode::CREATED);
 
-    // Note: We cannot test malformed URIs (unencoded spaces/quotes) because 
+    // Note: We cannot test malformed URIs (unencoded spaces/quotes) because
     // the test framework itself rejects invalid URI characters at the HTTP client level.
     // In a real scenario, such requests would be rejected by HTTP clients or proxies
     // before reaching the SCIM server.

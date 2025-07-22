@@ -819,8 +819,10 @@ pub async fn patch_user(
                 // Check for special empty value pattern [{"value":""}]
                 if arr.len() == 1 {
                     if let Value::Object(ref item) = arr[0] {
-                        if item.len() == 1 && item.get("value") == Some(&Value::String("".to_string())) 
-                            && !compatibility.support_patch_replace_empty_value {
+                        if item.len() == 1
+                            && item.get("value") == Some(&Value::String("".to_string()))
+                            && !compatibility.support_patch_replace_empty_value
+                        {
                             return Err(scim_error_response(
                                 StatusCode::BAD_REQUEST,
                                 "unsupported",
@@ -833,7 +835,10 @@ pub async fn patch_user(
         }
     }
 
-    match backend.patch_user(tenant_id, &id, &patch_ops, compatibility).await {
+    match backend
+        .patch_user(tenant_id, &id, &patch_ops, compatibility)
+        .await
+    {
         Ok(Some(mut user)) => {
             // Set meta.location for SCIM compliance
             set_user_location(&tenant_info, &mut user);

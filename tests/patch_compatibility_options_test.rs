@@ -1,7 +1,7 @@
 use axum_test::TestServer;
 use http::StatusCode;
-use serde_json::{json, Value};
 use scim_server::config::CompatibilityConfig;
+use serde_json::{json, Value};
 
 mod common;
 
@@ -41,11 +41,11 @@ async fn test_patch_replace_empty_array_allowed_by_default() {
         .patch(&format!("/scim/v2/Users/{}", user_id))
         .json(&patch_body)
         .await;
-    
+
     // Should succeed by default
     patch_response.assert_status(StatusCode::OK);
     let patched_user: Value = patch_response.json();
-    
+
     // Emails should be removed
     assert!(patched_user.get("emails").is_none());
 }
@@ -58,7 +58,7 @@ async fn test_patch_replace_empty_array_disabled() {
         support_patch_replace_empty_array: false,
         ..Default::default()
     });
-    
+
     let app = common::setup_test_app(tenant_config).await.unwrap();
     let server = TestServer::new(app).unwrap();
 
@@ -92,16 +92,22 @@ async fn test_patch_replace_empty_array_disabled() {
         .patch(&format!("/scim/v2/Users/{}", user_id))
         .json(&patch_body)
         .await;
-    
+
     // Should be rejected with 400
     patch_response.assert_status(StatusCode::BAD_REQUEST);
     let error_response: Value = patch_response.json();
-    
+
     // Verify SCIM-compliant error response
-    assert_eq!(error_response["schemas"][0], "urn:ietf:params:scim:api:messages:2.0:Error");
+    assert_eq!(
+        error_response["schemas"][0],
+        "urn:ietf:params:scim:api:messages:2.0:Error"
+    );
     assert_eq!(error_response["scimType"], "unsupported");
     assert_eq!(error_response["status"], "400");
-    assert!(error_response["detail"].as_str().unwrap().contains("empty array is not supported"));
+    assert!(error_response["detail"]
+        .as_str()
+        .unwrap()
+        .contains("empty array is not supported"));
 }
 
 #[tokio::test]
@@ -140,16 +146,22 @@ async fn test_patch_replace_empty_value_disabled_by_default() {
         .patch(&format!("/scim/v2/Users/{}", user_id))
         .json(&patch_body)
         .await;
-    
+
     // Should be rejected with 400 by default
     patch_response.assert_status(StatusCode::BAD_REQUEST);
     let error_response: Value = patch_response.json();
-    
+
     // Verify SCIM-compliant error response
-    assert_eq!(error_response["schemas"][0], "urn:ietf:params:scim:api:messages:2.0:Error");
+    assert_eq!(
+        error_response["schemas"][0],
+        "urn:ietf:params:scim:api:messages:2.0:Error"
+    );
     assert_eq!(error_response["scimType"], "unsupported");
     assert_eq!(error_response["status"], "400");
-    assert!(error_response["detail"].as_str().unwrap().contains("empty value pattern is not supported"));
+    assert!(error_response["detail"]
+        .as_str()
+        .unwrap()
+        .contains("empty value pattern is not supported"));
 }
 
 #[tokio::test]
@@ -160,7 +172,7 @@ async fn test_patch_replace_empty_value_enabled() {
         support_patch_replace_empty_value: true,
         ..Default::default()
     });
-    
+
     let app = common::setup_test_app(tenant_config).await.unwrap();
     let server = TestServer::new(app).unwrap();
 
@@ -194,7 +206,7 @@ async fn test_patch_replace_empty_value_enabled() {
         .patch(&format!("/scim/v2/Users/{}", user_id))
         .json(&patch_body)
         .await;
-    
+
     // Should succeed when enabled
     // Note: The actual clearing is handled by the patch parser when the compatibility option is enabled
     patch_response.assert_status(StatusCode::OK);
@@ -209,7 +221,7 @@ async fn test_patch_replace_normal_values_always_allowed() {
         support_patch_replace_empty_value: false,
         ..Default::default()
     });
-    
+
     let app = common::setup_test_app(tenant_config).await.unwrap();
     let server = TestServer::new(app).unwrap();
 
@@ -245,11 +257,11 @@ async fn test_patch_replace_normal_values_always_allowed() {
         .patch(&format!("/scim/v2/Users/{}", user_id))
         .json(&patch_body)
         .await;
-    
+
     // Should always succeed with normal values
     patch_response.assert_status(StatusCode::OK);
     let patched_user: Value = patch_response.json();
-    
+
     // Should have the new email
     let emails = patched_user["emails"].as_array().unwrap();
     assert_eq!(emails.len(), 1);
@@ -265,7 +277,7 @@ async fn test_patch_remove_operations_not_affected() {
         support_patch_replace_empty_value: false,
         ..Default::default()
     });
-    
+
     let app = common::setup_test_app(tenant_config).await.unwrap();
     let server = TestServer::new(app).unwrap();
 
@@ -298,11 +310,11 @@ async fn test_patch_remove_operations_not_affected() {
         .patch(&format!("/scim/v2/Users/{}", user_id))
         .json(&patch_body)
         .await;
-    
+
     // Remove operations should not be affected by these compatibility settings
     patch_response.assert_status(StatusCode::OK);
     let patched_user: Value = patch_response.json();
-    
+
     // Emails should be removed
     assert!(patched_user.get("emails").is_none());
 }

@@ -461,7 +461,7 @@ async fn test_patch_remove_with_value_field_as_null() {
     // The implementation should accept this and treat it as remove without value
     patch_response.assert_status(StatusCode::OK);
     let patched_user: Value = patch_response.json();
-    
+
     // Emails should be removed
     assert!(patched_user.get("emails").is_none());
 }

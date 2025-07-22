@@ -147,9 +147,13 @@ impl ScimPath {
         compatibility: &CompatibilityConfig,
     ) -> AppResult<()> {
         match self {
-            ScimPath::AttrPath(path) => {
-                self.apply_attr_path_operation_with_compatibility(user_json, path, op, value, compatibility)
-            }
+            ScimPath::AttrPath(path) => self.apply_attr_path_operation_with_compatibility(
+                user_json,
+                path,
+                op,
+                value,
+                compatibility,
+            ),
             ScimPath::ValuePath {
                 attr_path,
                 filter,
@@ -175,7 +179,13 @@ impl ScimPath {
     ) -> AppResult<()> {
         // Use default compatibility config for backward compatibility
         let default_config = CompatibilityConfig::default();
-        self.apply_attr_path_operation_with_compatibility(user_json, path, op, value, &default_config)
+        self.apply_attr_path_operation_with_compatibility(
+            user_json,
+            path,
+            op,
+            value,
+            &default_config,
+        )
     }
 
     fn apply_attr_path_operation_with_compatibility(
@@ -320,11 +330,13 @@ impl ScimPath {
                                 obj.remove(final_key);
                                 return Ok(());
                             }
-                            
-                            // Handle special empty value pattern [{"value":""}] - remove attribute entirely  
+
+                            // Handle special empty value pattern [{"value":""}] - remove attribute entirely
                             if arr.len() == 1 {
                                 if let Value::Object(ref item) = arr[0] {
-                                    if item.len() == 1 && item.get("value") == Some(&Value::String("".to_string())) {
+                                    if item.len() == 1
+                                        && item.get("value") == Some(&Value::String("".to_string()))
+                                    {
                                         if compatibility.support_patch_replace_empty_value {
                                             // Remove the attribute entirely for this special pattern
                                             obj.remove(final_key);
@@ -334,7 +346,7 @@ impl ScimPath {
                                     }
                                 }
                             }
-                            
+
                             // Validate primary constraints for normal arrays
                             if let Value::Array(ref mut arr_mut) = new_value {
                                 crate::schema::enforce_single_primary(arr_mut)?;
@@ -459,7 +471,13 @@ impl ScimPath {
         // Use default compatibility config for backward compatibility
         let default_config = CompatibilityConfig::default();
         self.apply_value_path_operation_with_compatibility(
-            user_json, attr_path, filter, sub_attr, op, value, &default_config
+            user_json,
+            attr_path,
+            filter,
+            sub_attr,
+            op,
+            value,
+            &default_config,
         )
     }
 

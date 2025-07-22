@@ -198,7 +198,14 @@ impl<T: UserPatcher> UnifiedUserPatchOps<T> {
         UserPatchProcessor::validate_user_id(id)?;
 
         // Apply patch operations using shared business logic
-        UserPatchProcessor::apply_patch_operations(&self.patcher, tenant_id, id, patch_ops, compatibility).await
+        UserPatchProcessor::apply_patch_operations(
+            &self.patcher,
+            tenant_id,
+            id,
+            patch_ops,
+            compatibility,
+        )
+        .await
     }
 }
 
