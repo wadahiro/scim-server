@@ -115,3 +115,13 @@ tenants:
         response: "This is a plain text custom endpoint response"
         status_code: 200
         content_type: "text/plain"
+
+# Global compatibility settings (can be overridden per tenant)
+compatibility:
+  meta_datetime_format: "rfc3339"              # "rfc3339" (standard) or "epoch" (milliseconds)
+  show_empty_groups_members: true              # Show empty arrays as [] or omit them entirely
+  include_user_groups: true                    # Include or completely omit the groups field in User resources
+  support_group_members_filter: true          # Allow filtering Groups by members.value
+  support_group_displayname_filter: true      # Allow filtering Groups by displayName
+  support_patch_replace_empty_array: true     # Allow PATCH replace: {"op": "replace", "path": "roles", "value": []}
+  support_patch_replace_empty_value: false    # Reject PATCH replace: {"op": "replace", "path": "roles", "value": [{"value": ""}]}

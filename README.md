@@ -24,7 +24,7 @@ A SCIM (System for Cross-domain Identity Management) v2.0 server implementation 
 - ✅ **User Resource**: Basic user management with standard attributes
 - ✅ **Group Resource**: Group management with member relationships
 - ✅ **Complex filtering**: Advanced logical operators and nested expressions
-- ✅ **PATCH operations**: Complete RFC 7396 JSON Patch compliance
+- ✅ **PATCH operations**: Complete RFC 7644 compliance with configurable PATCH replace compatibility modes
 - ✅ **Enterprise User Schema**: Extended user attributes
 - ✅ **Attribute projection**: `attributes` and `excludedAttributes` parameter support
 - ✅ **Case-insensitive attributes**: userName and Group displayName per specification
@@ -231,6 +231,8 @@ tenants:
 | `include_user_groups` | bool | `true` | Include or completely omit the `groups` field in User resources |
 | `support_group_members_filter` | bool | `true` | Allow filtering Groups by `members.value` |
 | `support_group_displayname_filter` | bool | `true` | Allow filtering Groups by `displayName` |
+| `support_patch_replace_empty_array` | bool | `true` | Allow PATCH `op: "replace"` with empty array `[]` to clear multi-valued attributes |
+| `support_patch_replace_empty_value` | bool | `false` | Allow PATCH `op: "replace"` with `[{"value": ""}]` pattern to clear multi-valued attributes (non-RFC) |
 
 #### Use Cases
 
@@ -246,6 +248,13 @@ compatibility:
 compatibility:
   include_user_groups: false  # Server doesn't support User.groups
   support_group_members_filter: false  # Can't filter by members
+```
+
+**PATCH Replace Operation Compatibility**
+```yaml
+compatibility:
+  support_patch_replace_empty_array: false  # Some SCIM servers reject PATCH replace with empty arrays
+  support_patch_replace_empty_value: true   # Enable special PATCH replace empty value pattern
 ```
 
 ### Authentication Types
