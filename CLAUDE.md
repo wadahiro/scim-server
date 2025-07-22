@@ -276,6 +276,8 @@ compatibility:
   include_user_groups: true
   support_group_members_filter: true
   support_group_displayname_filter: true
+  support_patch_replace_empty_array: true    # Allow [] to clear multi-valued attributes
+  support_patch_replace_empty_value: false   # Reject [{"value":""}] pattern
 ```
 
 ### Authentication Types
@@ -493,6 +495,16 @@ tenants:
   - `"epoch"`: Unix timestamp in milliseconds like `1749895434374`
   - Applied to meta.created and meta.lastModified fields
   - **Important**: Only affects response format, storage remains RFC3339
+
+- **`support_patch_replace_empty_array`**: Controls PATCH replace with empty array for clearing multi-valued attributes
+  - `true` (default): Allow `{"op": "replace", "path": "emails", "value": []}` to clear all emails
+  - `false`: Reject PATCH operations that use empty arrays to clear multi-valued attributes
+  - Some SCIM servers don't support empty array clearing, so this provides compatibility
+
+- **`support_patch_replace_empty_value`**: Controls special empty value pattern for clearing
+  - `false` (default): Reject `{"op": "replace", "path": "emails", "value": [{"value": ""}]}` pattern
+  - `true`: Allow this non-standard pattern to clear multi-valued attributes
+  - **WARNING**: This is a non-RFC pattern used by some legacy SCIM implementations
 
 - **`show_empty_groups_members`**: Controls empty array display
   - `true` (default): Show empty arrays as `[]`

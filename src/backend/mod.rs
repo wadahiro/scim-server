@@ -1,3 +1,4 @@
+use crate::config::CompatibilityConfig;
 use crate::error::AppResult;
 use crate::models::ScimPatchOp;
 use crate::models::{Group, User};
@@ -106,6 +107,7 @@ pub trait UserBackend: Backend {
         tenant_id: u32,
         id: &str,
         patch_ops: &ScimPatchOp,
+        compatibility: &CompatibilityConfig,
     ) -> AppResult<Option<User>>;
 
     /// Delete a user from the tenant

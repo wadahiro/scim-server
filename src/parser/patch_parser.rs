@@ -1,3 +1,4 @@
+use crate::config::CompatibilityConfig;
 use crate::error::{AppError, AppResult};
 use crate::parser::filter_operator::FilterOperator;
 use crate::parser::filter_parser::parse_filter;
@@ -132,19 +133,35 @@ impl ScimPath {
 
     /// Apply SCIM PATCH operation to JSON object
     pub fn apply_operation(&self, user_json: &mut Value, op: &str, value: &Value) -> AppResult<()> {
+        // Use default compatibility config for backward compatibility
+        let default_config = CompatibilityConfig::default();
+        self.apply_operation_with_compatibility(user_json, op, value, &default_config)
+    }
+
+    /// Apply SCIM PATCH operation to JSON object with compatibility settings
+    pub fn apply_operation_with_compatibility(
+        &self,
+        user_json: &mut Value,
+        op: &str,
+        value: &Value,
+        compatibility: &CompatibilityConfig,
+    ) -> AppResult<()> {
         match self {
-            ScimPath::AttrPath(path) => self.apply_attr_path_operation(user_json, path, op, value),
+            ScimPath::AttrPath(path) => {
+                self.apply_attr_path_operation_with_compatibility(user_json, path, op, value, compatibility)
+            }
             ScimPath::ValuePath {
                 attr_path,
                 filter,
                 sub_attr,
-            } => self.apply_value_path_operation(
+            } => self.apply_value_path_operation_with_compatibility(
                 user_json,
                 attr_path,
                 filter,
                 sub_attr.as_deref(),
                 op,
                 value,
+                compatibility,
             ),
         }
     }
@@ -156,6 +173,19 @@ impl ScimPath {
         op: &str,
         value: &Value,
     ) -> AppResult<()> {
+        // Use default compatibility config for backward compatibility
+        let default_config = CompatibilityConfig::default();
+        self.apply_attr_path_operation_with_compatibility(user_json, path, op, value, &default_config)
+    }
+
+    fn apply_attr_path_operation_with_compatibility(
+        &self,
+        user_json: &mut Value,
+        path: &[String],
+        op: &str,
+        value: &Value,
+        compatibility: &CompatibilityConfig,
+    ) -> AppResult<()> {
         if path.is_empty() {
             return Err(AppError::BadRequest("Empty attribute path".to_string()));
         }
@@ -166,7 +196,7 @@ impl ScimPath {
 
         // Navigate to the parent and apply operation
         let final_key_name = final_key.clone();
-        self.navigate_and_apply(user_json, path, op, value)?;
+        self.navigate_and_apply_with_compatibility(user_json, path, op, value, compatibility)?;
 
         // Handle schema updates for fully qualified names after modifying the tree
         if needs_schema_update && op != "remove" {
@@ -182,6 +212,19 @@ impl ScimPath {
         path: &[String],
         op: &str,
         value: &Value,
+    ) -> AppResult<()> {
+        // Use default compatibility config for backward compatibility
+        let default_config = CompatibilityConfig::default();
+        self.navigate_and_apply_with_compatibility(user_json, path, op, value, &default_config)
+    }
+
+    fn navigate_and_apply_with_compatibility(
+        &self,
+        user_json: &mut Value,
+        path: &[String],
+        op: &str,
+        value: &Value,
+        compatibility: &CompatibilityConfig,
     ) -> AppResult<()> {
         // Navigate to the target location
         let mut current = user_json;
@@ -269,10 +312,33 @@ impl ScimPath {
                 if let Value::Object(obj) = current {
                     let mut new_value = value.clone();
 
-                    // Validate primary constraints for multi-valued attributes
+                    // Handle multi-valued attributes clearing and validation
                     if is_multi_valued_attribute(final_key) {
-                        if let Value::Array(arr) = &mut new_value {
-                            crate::schema::enforce_single_primary(arr)?;
+                        if let Value::Array(arr) = &new_value {
+                            // Handle empty array clearing - remove attribute entirely
+                            if arr.is_empty() {
+                                obj.remove(final_key);
+                                return Ok(());
+                            }
+                            
+                            // Handle special empty value pattern [{"value":""}] - remove attribute entirely  
+                            if arr.len() == 1 {
+                                if let Value::Object(ref item) = arr[0] {
+                                    if item.len() == 1 && item.get("value") == Some(&Value::String("".to_string())) {
+                                        if compatibility.support_patch_replace_empty_value {
+                                            // Remove the attribute entirely for this special pattern
+                                            obj.remove(final_key);
+                                            return Ok(());
+                                        }
+                                        // If not supported, continue with normal processing (will store the empty value)
+                                    }
+                                }
+                            }
+                            
+                            // Validate primary constraints for normal arrays
+                            if let Value::Array(ref mut arr_mut) = new_value {
+                                crate::schema::enforce_single_primary(arr_mut)?;
+                            }
                         }
                     }
 
@@ -389,6 +455,23 @@ impl ScimPath {
         sub_attr: Option<&str>,
         op: &str,
         value: &Value,
+    ) -> AppResult<()> {
+        // Use default compatibility config for backward compatibility
+        let default_config = CompatibilityConfig::default();
+        self.apply_value_path_operation_with_compatibility(
+            user_json, attr_path, filter, sub_attr, op, value, &default_config
+        )
+    }
+
+    fn apply_value_path_operation_with_compatibility(
+        &self,
+        user_json: &mut Value,
+        attr_path: &[String],
+        filter: &ScimFilter,
+        sub_attr: Option<&str>,
+        op: &str,
+        value: &Value,
+        _compatibility: &CompatibilityConfig,
     ) -> AppResult<()> {
         // Navigate to the multi-valued attribute
         let mut current = user_json;

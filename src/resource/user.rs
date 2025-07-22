@@ -4,7 +4,7 @@ use axum::{
     response::{IntoResponse, Response},
     Json,
 };
-use serde_json::json;
+use serde_json::{json, Value};
 use std::{collections::HashMap, sync::Arc};
 
 use crate::extractors::ScimJson;
@@ -13,6 +13,7 @@ use super::attribute_filter::AttributeFilter;
 use crate::auth::TenantInfo;
 use crate::backend::ScimBackend;
 use crate::config::AppConfig;
+use crate::error::scim_error_response;
 use crate::models::{ScimListResponse, ScimPatchOp, User};
 use crate::parser::filter_parser::parse_filter;
 use crate::parser::{ResourceType, SortSpec};
@@ -799,7 +800,40 @@ pub async fn patch_user(
         }
     }
 
-    match backend.patch_user(tenant_id, &id, &patch_ops).await {
+    // Get compatibility settings for PATCH operation validation
+    let compatibility = app_config.get_effective_compatibility(tenant_id);
+
+    // Validate PATCH operations based on compatibility settings
+    // Only reject operations that are explicitly disabled
+    for operation in &patch_ops.operations {
+        if operation.op == "replace" {
+            if let Some(Value::Array(arr)) = &operation.value {
+                // Check for empty array replacement (clearing multi-valued attributes)
+                if arr.is_empty() && !compatibility.support_patch_replace_empty_array {
+                    return Err(scim_error_response(
+                        StatusCode::BAD_REQUEST,
+                        "unsupported",
+                        "PATCH replace with empty array is not supported for this tenant",
+                    ));
+                }
+                // Check for special empty value pattern [{"value":""}]
+                if arr.len() == 1 {
+                    if let Value::Object(ref item) = arr[0] {
+                        if item.len() == 1 && item.get("value") == Some(&Value::String("".to_string())) 
+                            && !compatibility.support_patch_replace_empty_value {
+                            return Err(scim_error_response(
+                                StatusCode::BAD_REQUEST,
+                                "unsupported",
+                                "PATCH replace with empty value pattern is not supported for this tenant",
+                            ));
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    match backend.patch_user(tenant_id, &id, &patch_ops, compatibility).await {
         Ok(Some(mut user)) => {
             // Set meta.location for SCIM compliance
             set_user_location(&tenant_info, &mut user);

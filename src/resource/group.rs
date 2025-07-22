@@ -459,9 +459,10 @@ pub async fn search_groups(
         if filter_str.starts_with("members[value eq ") && filter_str.ends_with("]") {
             // Check if group members filter is supported
             if !compatibility.support_group_members_filter {
-                return Err((
+                return Err(scim_error_response(
                     StatusCode::BAD_REQUEST,
-                    Json(json!({"message": "Filtering Groups by members is not supported"})),
+                    "unsupported",
+                    "Filtering Groups by members is not supported",
                 ));
             }
             // Extract user ID from filter
@@ -524,9 +525,10 @@ pub async fn search_groups(
         if (filter_str.contains("displayName") || filter_str.contains("displayname"))
             && !compatibility.support_group_displayname_filter
         {
-            return Err((
+            return Err(scim_error_response(
                 StatusCode::BAD_REQUEST,
-                Json(json!({"message": "Filtering Groups by displayName is not supported"})),
+                "unsupported",
+                "Filtering Groups by displayName is not supported",
             ));
         }
 

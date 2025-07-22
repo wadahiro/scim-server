@@ -237,11 +237,12 @@ impl UserBackend for PostgresBackend {
         tenant_id: u32,
         id: &str,
         patch_ops: &ScimPatchOp,
+        compatibility: &crate::config::CompatibilityConfig,
     ) -> AppResult<Option<User>> {
         // Perform the patch using the unified operations
         match self
             .user_patch_ops
-            .patch_user(tenant_id, id, patch_ops)
+            .patch_user(tenant_id, id, patch_ops, compatibility)
             .await?
         {
             Some(_) => {

@@ -146,6 +146,10 @@ pub struct CompatibilityConfig {
     pub support_group_members_filter: bool,
     #[serde(default = "default_support_group_displayname_filter")]
     pub support_group_displayname_filter: bool,
+    #[serde(default = "default_support_patch_replace_empty_array")]
+    pub support_patch_replace_empty_array: bool,
+    #[serde(default = "default_support_patch_replace_empty_value")]
+    pub support_patch_replace_empty_value: bool,
 }
 
 fn default_meta_datetime_format() -> String {
@@ -168,6 +172,14 @@ fn default_support_group_displayname_filter() -> bool {
     true // true: support filtering Groups by displayName, false: reject such filters
 }
 
+fn default_support_patch_replace_empty_array() -> bool {
+    true // true: support op=replace with value=[] to clear multi-valued attributes, false: reject such operations
+}
+
+fn default_support_patch_replace_empty_value() -> bool {
+    false // false: reject op=replace with value=[{"value":""}] pattern, true: allow this non-standard clearing method
+}
+
 impl Default for CompatibilityConfig {
     fn default() -> Self {
         Self {
@@ -176,6 +188,8 @@ impl Default for CompatibilityConfig {
             include_user_groups: default_include_user_groups(),
             support_group_members_filter: default_support_group_members_filter(),
             support_group_displayname_filter: default_support_group_displayname_filter(),
+            support_patch_replace_empty_array: default_support_patch_replace_empty_array(),
+            support_patch_replace_empty_value: default_support_patch_replace_empty_value(),
         }
     }
 }

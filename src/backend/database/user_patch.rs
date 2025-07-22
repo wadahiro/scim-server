@@ -2,6 +2,7 @@ use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use serde_json::Value;
 
+use crate::config::CompatibilityConfig;
 use crate::error::{AppError, AppResult};
 use crate::models::{ScimPatchOp, User};
 use crate::parser::patch_parser::ScimPath;
@@ -51,6 +52,7 @@ impl UserPatchProcessor {
         tenant_id: u32,
         id: &str,
         patch_ops: &ScimPatchOp,
+        compatibility: &CompatibilityConfig,
     ) -> AppResult<Option<User>> {
         // First, find the existing user
         let mut user = match patcher.find_user_for_patch(tenant_id, id).await? {
@@ -65,11 +67,12 @@ impl UserPatchProcessor {
             // Convert user to JSON for patch operations
             let mut user_json = serde_json::to_value(&user).map_err(AppError::Serialization)?;
 
-            // Apply the operation
-            scim_path.apply_operation(
+            // Apply the operation with compatibility settings
+            scim_path.apply_operation_with_compatibility(
                 &mut user_json,
                 &operation.op,
                 &operation.value.as_ref().unwrap_or(&Value::Null).clone(),
+                compatibility,
             )?;
 
             // Convert back to User
@@ -189,12 +192,13 @@ impl<T: UserPatcher> UnifiedUserPatchOps<T> {
         tenant_id: u32,
         id: &str,
         patch_ops: &ScimPatchOp,
+        compatibility: &CompatibilityConfig,
     ) -> AppResult<Option<User>> {
         // Validate inputs
         UserPatchProcessor::validate_user_id(id)?;
 
         // Apply patch operations using shared business logic
-        UserPatchProcessor::apply_patch_operations(&self.patcher, tenant_id, id, patch_ops).await
+        UserPatchProcessor::apply_patch_operations(&self.patcher, tenant_id, id, patch_ops, compatibility).await
     }
 }
 
