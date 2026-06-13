@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.4.2](https://github.com/wadahiro/scim-server/compare/v0.4.1...v0.4.2) (2026-06-13)
+
+
+### Bug Fixes
+
+* **sqlite:** create the database file automatically (no ?mode=rwc needed) ([935f236](https://github.com/wadahiro/scim-server/commit/935f236c0201d3045504e55f31d1cc26204c0517))
+* **sqlite:** create the database file automatically (no ?mode=rwc needed) ([89d7672](https://github.com/wadahiro/scim-server/commit/89d76725329a6e1c10ad303d90e1111149d30779))
+
 ## [0.4.1](https://github.com/wadahiro/scim-server/compare/v0.4.0...v0.4.1) (2026-06-13)
 
 ### Bug Fixes
