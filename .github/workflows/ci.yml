@@ -179,15 +179,27 @@ jobs:
   build-check:
     name: Build Check
     strategy:
+      fail-fast: false
       matrix:
         include:
+          # Linux (cross-compiled in a container)
           - target: x86_64-unknown-linux-gnu
             os: ubuntu-latest
           - target: aarch64-unknown-linux-gnu
             os: ubuntu-latest
-    
+          # macOS / Windows (native runners, checked with the stock toolchain
+          # so platform-specific build breakage surfaces here, not at release)
+          - target: aarch64-apple-darwin
+            os: macos-latest
+          - target: x86_64-apple-darwin
+            os: macos-13
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
+          - target: aarch64-pc-windows-msvc
+            os: windows-11-arm
+
     runs-on: ${{ matrix.os }}
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -197,12 +209,19 @@ jobs:
         with:
           targets: ${{ matrix.target }}
 
+      # cross supports only Linux targets; macOS/Windows check natively.
       - name: Install cross
+        if: runner.os == 'Linux'
         run: cargo install cross
 
-      - name: Check build
-        run: |
-          cross check --target ${{ matrix.target }}
+      - name: Check build (Linux via cross)
+        if: runner.os == 'Linux'
+        run: cross check --target ${{ matrix.target }} --all-features
+
+      - name: Check build (native)
+        if: runner.os != 'Linux'
+        run: cargo check --target ${{ matrix.target }} --all-features
+        shell: bash
 
   docker-build:
     name: Docker Build Check

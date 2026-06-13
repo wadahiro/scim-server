@@ -143,20 +143,16 @@ jobs:
           path: target
           key: ${{ runner.os }}-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}
 
-      - name: Build binary
-        run: |
-          if [ "${{ matrix.target }}" = "aarch64-unknown-linux-gnu" ]; then
-            export CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc
-          fi
-          cargo build --release --target ${{ matrix.target }}
-        shell: bash
-
-      - name: Upload binary
+      - name: Build and upload binary
         uses: taiki-e/upload-rust-binary-action@v1
         with:
           bin: scim-server
           target: ${{ matrix.target }}
-          tar: all
+          # Ship both backends; sqlx-postgres is pure Rust (rustls) and
+          # rusqlite bundles SQLite, so no extra system libraries are needed.
+          features: sqlite,postgresql
+          tar: unix
+          zip: windows
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
