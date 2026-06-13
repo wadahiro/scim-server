@@ -1,9 +1,12 @@
-name: Release
+name: Release Assets
 
+# release-please creates the GitHub Release (and tag) when its Release PR is
+# merged. This workflow reacts to that published release and attaches the
+# build artifacts: cross-platform binaries, the license bundle, and the
+# multi-arch container image pushed to GHCR.
 on:
-  push:
-    tags:
-      - 'v*'
+  release:
+    types: [published]
 
 permissions:
   contents: write
@@ -12,51 +15,40 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  create-release:
-    name: Create Release
+  licenses:
+    name: License Bundle
     runs-on: ubuntu-latest
-    outputs:
-      version: ${{ steps.version.outputs.version }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Extract version
-        id: version
-        run: echo "version=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          ref: ${{ github.event.release.tag_name }}
 
       - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
 
       - name: Install cargo-license
         run: cargo install cargo-license
-
-      - name: Create Release
-        uses: taiki-e/create-gh-release-action@v1
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          draft: true
-          title: ${{ steps.version.outputs.version }}
 
       - name: Generate license information
         run: |
           # Generate detailed license information
           cargo license --json > licenses.json
-          
+
           # Create THIRD-PARTY-LICENSES file
           cat > THIRD-PARTY-LICENSES << 'EOF'
           # Third-Party Licenses
-          
+
           This file contains the licenses of third-party dependencies used in this project.
-          Generated at release time for version ${{ steps.version.outputs.version }}.
-          
+          Generated at release time for version ${{ github.event.release.tag_name }}.
+
           ## Summary of License Types
-          
+
           EOF
-          
+
           # Add license summary
           cargo license | grep -E "^[A-Z]" | sort | uniq -c | sort -rn >> THIRD-PARTY-LICENSES
-          
+
           echo "" >> THIRD-PARTY-LICENSES
           echo "## Detailed License Information" >> THIRD-PARTY-LICENSES
           echo "" >> THIRD-PARTY-LICENSES
@@ -75,21 +67,18 @@ jobs:
 
       - name: Package and upload license information
         run: |
-          # Create a licenses archive
           mkdir -p licenses
           mv THIRD-PARTY-LICENSES licenses/
           mv licenses.json licenses/
-          tar czf licenses-${{ steps.version.outputs.version }}.tar.gz licenses/
-          
-          # Upload to release
-          gh release upload ${{ steps.version.outputs.version }} licenses-${{ steps.version.outputs.version }}.tar.gz
+          tar czf licenses-${{ github.event.release.tag_name }}.tar.gz licenses/
+          gh release upload ${{ github.event.release.tag_name }} licenses-${{ github.event.release.tag_name }}.tar.gz
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   build-binaries:
     name: Build Binaries
-    needs: create-release
     strategy:
+      fail-fast: false
       matrix:
         include:
           # Linux
@@ -110,13 +99,15 @@ jobs:
             os: windows-11-arm
 
     runs-on: ${{ matrix.os }}
-    
+
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          ref: ${{ github.event.release.tag_name }}
 
       - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
         with:
           targets: ${{ matrix.target }}
 
@@ -127,25 +118,25 @@ jobs:
           sudo apt-get install -y gcc-aarch64-linux-gnu
 
       - name: Cache cargo registry
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: ~/.cargo/registry
           key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
 
       - name: Cache cargo index
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: ~/.cargo/git
           key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
 
       - name: Cache cargo build
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: target
           key: ${{ runner.os }}-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}
 
       - name: Build and upload binary
-        uses: taiki-e/upload-rust-binary-action@v1
+        uses: taiki-e/upload-rust-binary-action@f0d45ae91ee7b8ee928de7a9d04d893a08bcbec6 # v1
         with:
           bin: scim-server
           target: ${{ matrix.target }}
@@ -154,28 +145,30 @@ jobs:
           features: sqlite,postgresql
           tar: unix
           zip: windows
+          ref: refs/tags/${{ github.event.release.tag_name }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   docker:
     name: Build and Push Docker Image
-    needs: create-release
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          ref: ${{ github.event.release.tag_name }}
 
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
+        uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
 
       - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v3
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -183,16 +176,16 @@ jobs:
 
       - name: Extract image metadata
         id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5
         with:
           images: ghcr.io/${{ github.repository }}
           tags: |
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{version}},value=${{ github.event.release.tag_name }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ github.event.release.tag_name }}
             type=raw,value=latest
 
       - name: Build and push image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
         with:
           context: .
           platforms: linux/amd64,linux/arm64
@@ -203,18 +196,3 @@ jobs:
             FEATURES=sqlite,postgresql
           cache-from: type=gha
           cache-to: type=gha,mode=max
-
-  publish-release:
-    name: Publish Release
-    needs: [create-release, build-binaries, docker]
-    runs-on: ubuntu-latest
-    
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Publish release
-        run: |
-          gh release edit ${{ needs.create-release.outputs.version }} --draft=false
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

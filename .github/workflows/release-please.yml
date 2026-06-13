@@ -1,0 +1,27 @@
+name: release-please
+
+# On every push to main, maintain a "Release PR" that bumps the version in
+# Cargo.toml / Cargo.lock and updates CHANGELOG.md from the conventional
+# commits merged since the last release. Merging that PR creates the tag and
+# the GitHub Release, which in turn triggers release.yml to build and attach
+# the binaries and container image.
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  release-please:
+    name: Release PR / Release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Run release-please
+        uses: googleapis/release-please-action@5c625bfb5d1ff62eadeeb3772007f7f66fdcf071 # v4
+        with:
+          # A PAT (or GitHub App token) is required — releases created with the
+          # default GITHUB_TOKEN do not trigger other workflows, so release.yml
+          # would never fire. See README for the required token + scopes.
+          token: ${{ secrets.RELEASE_PLEASE_TOKEN }}
