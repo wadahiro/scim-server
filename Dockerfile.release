@@ -5,9 +5,11 @@
 # source of truth). Nothing is compiled here, so the multi-arch image is
 # assembled by COPY alone (no QEMU emulation needed).
 #
-# distroless/cc provides glibc + libgcc + ca-certificates and a non-root user.
-# debian13 (trixie) is the current latest distroless base.
-FROM gcr.io/distroless/cc-debian13:nonroot
+# distroless/base-nossl provides glibc + libgcc + ca-certificates and a non-root
+# user (debian13 / trixie, latest). We use rustls (no OpenSSL) and have no C++
+# deps, so the `cc` image's OpenSSL + libstdc++ are unnecessary — base-nossl is
+# ~11MB smaller and still satisfies every shared library the binary needs.
+FROM gcr.io/distroless/base-nossl-debian13:nonroot
 
 # buildx sets TARGETARCH to "amd64" / "arm64" for each target platform; the
 # matching prebuilt binary is staged under bin/ by the release workflow.

@@ -25,9 +25,11 @@ RUN rm -rf src
 COPY src ./src
 RUN cargo build --release --locked --features "${FEATURES}"
 
-# Runtime stage: distroless/cc provides glibc + libgcc + ca-certificates and a
-# non-root user (debian13 / trixie is the current latest). sqlx-postgres is pure
-# Rust and rusqlite bundles SQLite, so no extra system libraries are required.
+# Runtime stage. This self-contained image is built with plain cargo, whose
+# binary dynamically links libgcc_s.so.1, so it needs distroless/cc (which ships
+# libgcc). The published release image uses base-nossl instead — see
+# Dockerfile.release — because the cargo-zigbuild binaries link libgcc
+# statically and don't need it. distroless/cc is glibc-based (debian13, latest).
 FROM gcr.io/distroless/cc-debian13:nonroot
 
 COPY --from=builder /app/target/release/scim-server /usr/local/bin/scim-server
