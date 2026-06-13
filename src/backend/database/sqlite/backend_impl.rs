@@ -1,6 +1,7 @@
 use async_trait::async_trait;
-use sqlx::sqlite::SqlitePoolOptions;
+use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
 use sqlx::SqlitePool;
+use std::str::FromStr;
 use std::time::Duration;
 
 use super::super::config::DatabaseBackendConfig;
@@ -115,11 +116,23 @@ impl Backend for SqliteBackend {
             .validate()
             .map_err(|e| AppError::Internal(format!("Invalid backend config: {}", e)))?;
 
-        // Create connection pool
+        // Create connection pool. Parse the path into options so we can enable
+        // create_if_missing: without it sqlx refuses to open a non-existent
+        // database file ("unable to open database file"), forcing users to add
+        // `?mode=rwc` to the URL. (:memory: is unaffected.)
+        let options = SqliteConnectOptions::from_str(&config.connection_path)
+            .map_err(|e| {
+                AppError::Database(format!(
+                    "Invalid SQLite connection string '{}': {}",
+                    config.connection_path, e
+                ))
+            })?
+            .create_if_missing(true);
+
         let pool = SqlitePoolOptions::new()
             .max_connections(config.max_connections)
             .acquire_timeout(Duration::from_secs(config.connection_timeout))
-            .connect(&config.connection_path)
+            .connect_with(options)
             .await
             .map_err(|e| AppError::Database(format!("Failed to connect to SQLite: {}", e)))?;
 
