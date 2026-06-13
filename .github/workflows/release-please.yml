@@ -18,10 +18,20 @@ jobs:
     name: Release PR / Release
     runs-on: ubuntu-latest
     steps:
+      # Mint a short-lived GitHub App installation token. A non-GITHUB_TOKEN is
+      # required: releases/tags created with the default GITHUB_TOKEN do not
+      # trigger other workflows, so release.yml would never fire. The App needs
+      # Contents: read & write and Pull requests: read & write, and must be
+      # installed on this repo. APP_ID / APP_PRIVATE_KEY are the shared App's
+      # credentials (the same App used by other repos).
+      - name: Generate GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349 # v2
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+
       - name: Run release-please
         uses: googleapis/release-please-action@5c625bfb5d1ff62eadeeb3772007f7f66fdcf071 # v4
         with:
-          # A PAT (or GitHub App token) is required — releases created with the
-          # default GITHUB_TOKEN do not trigger other workflows, so release.yml
-          # would never fire. See README for the required token + scopes.
-          token: ${{ secrets.RELEASE_PLEASE_TOKEN }}
+          token: ${{ steps.app-token.outputs.token }}
