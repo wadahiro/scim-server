@@ -1,0 +1,27 @@
+# Runtime-only image used by the release pipeline.
+#
+# It packages the *exact* prebuilt binary that is published as a GitHub Release
+# asset — the container and the downloadable binary are byte-identical (single
+# source of truth). Nothing is compiled here, so the multi-arch image is
+# assembled by COPY alone (no QEMU emulation needed).
+#
+# distroless/cc provides glibc + libgcc + ca-certificates and a non-root user.
+# debian13 (trixie) is the current latest distroless base.
+FROM gcr.io/distroless/cc-debian13:nonroot
+
+# buildx sets TARGETARCH to "amd64" / "arm64" for each target platform; the
+# matching prebuilt binary is staged under bin/ by the release workflow.
+ARG TARGETARCH
+COPY bin/scim-server-${TARGETARCH} /usr/local/bin/scim-server
+
+EXPOSE 3000
+WORKDIR /data
+STOPSIGNAL SIGTERM
+
+ENTRYPOINT ["scim-server"]
+# Zero-config demo by default: in-memory SQLite, unauthenticated, bound to all
+# interfaces so a published port is reachable. For real use, mount a config and
+# override the command, e.g.:
+#   docker run -p 3000:3000 -v $PWD/config.yaml:/data/config.yaml \
+#     ghcr.io/wadahiro/scim-server:latest --config /data/config.yaml
+CMD ["--host", "0.0.0.0"]

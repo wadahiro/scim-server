@@ -1,0 +1,9 @@
+target/
+.git/
+.github/
+tests/
+*.md
+docker-compose.yml
+Dockerfile*
+.dockerignore
+.claude/

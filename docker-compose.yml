@@ -4,6 +4,8 @@ services:
       context: .
       args:
         FEATURES: "sqlite,postgresql"
+    # The image defaults to a zero-config demo; use the mounted config instead.
+    command: ["--config", "/data/config.yaml"]
     ports:
       - "3000:3000"
     volumes:
