@@ -37,8 +37,9 @@ Thumbs.db
 # Cargo configuration (environment-specific)
 .cargo/
 
-# Claude local memory
+# Claude local memory and per-developer local settings
 .claude_memory
+.claude/settings.local.json
 
 # Generated license files (created during release)
 THIRD-PARTY-LICENSES
