@@ -33,7 +33,7 @@ COPY src ./src
 RUN cargo build --release --locked --features "${FEATURES}"
 
 # Runtime stage
-FROM alpine:3.21
+FROM alpine:3.24
 
 # Install runtime dependencies
 RUN apk add --no-cache \
