@@ -98,7 +98,10 @@ backend:
   type: "database"
   database:
     type: "sqlite"  # or "postgresql"
-    url: "scim.db"
+    # SQLite: ":memory:" (ephemeral, used by the zero-config default) or a file
+    # path such as "sqlite:/data/scim.db". A missing file is created
+    # automatically. PostgreSQL: "postgresql://user:pass@host:5432/scim".
+    url: "sqlite:/data/scim.db"
 
 tenants:
   # Simple path-only tenant (matches any host) - OAuth 2.0 Bearer Token
