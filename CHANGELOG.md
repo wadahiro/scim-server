@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.4.1](https://github.com/wadahiro/scim-server/compare/v0.4.0...v0.4.1) (2026-06-13)
+
+### Bug Fixes
+
+* Make the container image usable out of the box — `docker run -p 3000:3000 IMAGE` now starts a zero-config demo bound to `0.0.0.0` instead of failing without a mounted config ([#61](https://github.com/wadahiro/scim-server/pull/61))
+
+### Build System
+
+* The published container image now contains the **exact** binary published as a release asset (byte-identical, single source of truth) ([#61](https://github.com/wadahiro/scim-server/pull/61))
+* Build the Linux binaries with cargo-zigbuild pinned to a glibc 2.28 floor, so one binary runs on every currently-supported distro (RHEL 8/9, Debian 10–13, Ubuntu 20.04+) and in the container ([#61](https://github.com/wadahiro/scim-server/pull/61))
+* Switch the runtime image to distroless/cc-debian13 (glibc) ([#61](https://github.com/wadahiro/scim-server/pull/61))
+
 ## [0.4.0](https://github.com/wadahiro/scim-server/compare/v0.3.0...v0.4.0) (2026-06-13)
 
 ### Features
