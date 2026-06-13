@@ -1,17 +1,14 @@
-# Build stage
-FROM rust:1.96-alpine AS builder
+# Self-contained image used for local development, docker-compose, and the CI
+# build check. It compiles from source on a glibc toolchain so it matches the
+# released image's runtime (distroless/cc). The published release image is built
+# separately from the prebuilt binaries via Dockerfile.release.
+
+# Build stage (glibc, matches the distroless/cc runtime below)
+FROM rust:1.96-bookworm AS builder
 
 # Cargo features to enable in the build (image supports both backends by default)
 ARG FEATURES="sqlite,postgresql"
 
-# Install build dependencies
-RUN apk add --no-cache \
-    musl-dev \
-    openssl-dev \
-    postgresql-dev \
-    sqlite-dev
-
-# Create app directory
 WORKDIR /app
 
 # Copy manifests first for better layer caching
@@ -20,49 +17,27 @@ COPY Cargo.toml Cargo.lock ./
 # Create a dummy source to cache dependencies
 RUN mkdir src && echo "fn main() {}" > src/main.rs
 
-# Build dependencies (this will be cached if Cargo.toml/Cargo.lock don't change)
+# Build dependencies (cached unless Cargo.toml/Cargo.lock change)
 RUN cargo build --release --locked --features "${FEATURES}"
 
-# Remove dummy source
+# Remove dummy source and build the real binary
 RUN rm -rf src
-
-# Copy real source code
 COPY src ./src
-
-# Build release binary with locked dependencies
 RUN cargo build --release --locked --features "${FEATURES}"
 
-# Runtime stage
-FROM alpine:3.24
+# Runtime stage: distroless/cc provides glibc + libgcc + ca-certificates and a
+# non-root user (debian13 / trixie is the current latest). sqlx-postgres is pure
+# Rust and rusqlite bundles SQLite, so no extra system libraries are required.
+FROM gcr.io/distroless/cc-debian13:nonroot
 
-# Install runtime dependencies
-RUN apk add --no-cache \
-    ca-certificates \
-    libgcc \
-    libpq \
-    sqlite-libs \
-    && adduser -D -u 1000 scim
-
-# Copy binary from builder
 COPY --from=builder /app/target/release/scim-server /usr/local/bin/scim-server
 
-# Create data directory
-RUN mkdir -p /data && chown scim:scim /data
-
-# Switch to non-root user
-USER scim
-
-# Set working directory
-WORKDIR /data
-
-# Expose port
 EXPOSE 3000
-
-# Configure signal handling for proper Docker shutdown
+WORKDIR /data
 STOPSIGNAL SIGTERM
 
-# Set entrypoint
 ENTRYPOINT ["scim-server"]
-
-# Default command (can be overridden)
-CMD ["--config", "/data/config.yaml"]
+# Zero-config demo by default (in-memory SQLite, unauthenticated), bound to all
+# interfaces so a published port is reachable. For real use, mount a config and
+# override the command with `--config /data/config.yaml`.
+CMD ["--host", "0.0.0.0"]

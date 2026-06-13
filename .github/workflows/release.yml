@@ -81,21 +81,43 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # Linux
-          - target: x86_64-unknown-linux-gnu
+          # Linux: build with cargo-zigbuild on the stable latest runner and pin
+          # the glibc floor to 2.28 (RHEL 8 / Debian 10), so one binary runs on
+          # every currently-supported distro and on the distroless runtime —
+          # independent of the runner's own glibc. `archive` keeps the asset
+          # name free of the glibc suffix.
+          - target: x86_64-unknown-linux-gnu.2.28
+            rust_target: x86_64-unknown-linux-gnu
+            archive: scim-server-x86_64-unknown-linux-gnu
+            build_tool: cargo-zigbuild
             os: ubuntu-latest
-          - target: aarch64-unknown-linux-gnu
+          - target: aarch64-unknown-linux-gnu.2.28
+            rust_target: aarch64-unknown-linux-gnu
+            archive: scim-server-aarch64-unknown-linux-gnu
+            build_tool: cargo-zigbuild
             os: ubuntu-latest
-          # macOS: build both on the Apple Silicon runner (x86_64 is cross-
-          # compiled) to avoid the scarce, soon-to-be-retired Intel runners.
+          # macOS: both built on the Apple Silicon runner (x86_64 cross-compiled)
+          # to avoid the scarce Intel runners.
           - target: aarch64-apple-darwin
+            rust_target: aarch64-apple-darwin
+            archive: scim-server-aarch64-apple-darwin
+            build_tool: cargo
             os: macos-latest
           - target: x86_64-apple-darwin
+            rust_target: x86_64-apple-darwin
+            archive: scim-server-x86_64-apple-darwin
+            build_tool: cargo
             os: macos-latest
           # Windows (native runners: windows-latest is x64, windows-11-arm is ARM64)
           - target: x86_64-pc-windows-msvc
+            rust_target: x86_64-pc-windows-msvc
+            archive: scim-server-x86_64-pc-windows-msvc
+            build_tool: cargo
             os: windows-latest
           - target: aarch64-pc-windows-msvc
+            rust_target: aarch64-pc-windows-msvc
+            archive: scim-server-aarch64-pc-windows-msvc
+            build_tool: cargo
             os: windows-11-arm
 
     runs-on: ${{ matrix.os }}
@@ -109,13 +131,7 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
         with:
-          targets: ${{ matrix.target }}
-
-      - name: Install cross-compilation tools
-        if: matrix.target == 'aarch64-unknown-linux-gnu'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y gcc-aarch64-linux-gnu
+          targets: ${{ matrix.rust_target }}
 
       - name: Cache cargo registry
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
@@ -133,13 +149,15 @@ jobs:
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: target
-          key: ${{ runner.os }}-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}
+          key: ${{ runner.os }}-${{ matrix.target }}-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}
 
       - name: Build and upload binary
         uses: taiki-e/upload-rust-binary-action@f0d45ae91ee7b8ee928de7a9d04d893a08bcbec6 # v1
         with:
           bin: scim-server
           target: ${{ matrix.target }}
+          build-tool: ${{ matrix.build_tool }}
+          archive: ${{ matrix.archive }}
           # Ship both backends; sqlx-postgres is pure Rust (rustls) and
           # rusqlite bundles SQLite, so no extra system libraries are needed.
           features: sqlite,postgresql
@@ -149,20 +167,14 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-  # Build each architecture natively (no QEMU emulation — emulating a Rust
-  # release compile is extremely slow) and push by digest. The merge job then
-  # assembles the multi-arch manifest from the per-arch digests.
-  docker-build:
-    name: Build Docker Image (${{ matrix.platform }})
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - platform: linux/amd64
-            runner: ubuntu-latest
-          - platform: linux/arm64
-            runner: ubuntu-24.04-arm
-    runs-on: ${{ matrix.runner }}
+  # Package the *exact* published linux binaries into the runtime image
+  # (Dockerfile.release just COPYs them, no compilation), so the container and
+  # the downloadable release binaries are byte-identical. With no RUN steps the
+  # multi-arch image is assembled by COPY alone — no QEMU, built in one job.
+  docker:
+    name: Build and Push Docker Image
+    needs: build-binaries
+    runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
@@ -172,63 +184,20 @@ jobs:
         with:
           ref: ${{ github.event.release.tag_name }}
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
-
-      - name: Log in to GitHub Container Registry
-        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Image labels
-        id: meta
-        uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5
-        with:
-          images: ghcr.io/${{ github.repository }}
-
-      - name: Build and push by digest
-        id: build
-        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
-        with:
-          context: .
-          platforms: ${{ matrix.platform }}
-          labels: ${{ steps.meta.outputs.labels }}
-          build-args: |
-            FEATURES=sqlite,postgresql
-          cache-from: type=gha,scope=${{ matrix.platform }}
-          cache-to: type=gha,mode=max,scope=${{ matrix.platform }}
-          outputs: type=image,name=ghcr.io/${{ github.repository }},push-by-digest=true,name-canonical=true,push=true
-
-      - name: Export digest
+      - name: Stage published linux binaries
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.event.release.tag_name }}
         run: |
-          mkdir -p "${{ runner.temp }}/digests"
-          digest="${{ steps.build.outputs.digest }}"
-          touch "${{ runner.temp }}/digests/${digest#sha256:}"
-
-      - name: Upload digest
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        with:
-          name: digest-${{ matrix.platform == 'linux/amd64' && 'amd64' || 'arm64' }}
-          path: ${{ runner.temp }}/digests/*
-          if-no-files-found: error
-          retention-days: 1
-
-  docker-merge:
-    name: Merge Docker Manifest
-    needs: docker-build
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
-    steps:
-      - name: Download digests
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
-        with:
-          path: ${{ runner.temp }}/digests
-          pattern: digest-*
-          merge-multiple: true
+          mkdir -p bin dl/amd64 dl/arm64
+          gh release download "$TAG" -D dl \
+            -p 'scim-server-x86_64-unknown-linux-gnu.tar.gz' \
+            -p 'scim-server-aarch64-unknown-linux-gnu.tar.gz'
+          tar xzf dl/scim-server-x86_64-unknown-linux-gnu.tar.gz -C dl/amd64
+          tar xzf dl/scim-server-aarch64-unknown-linux-gnu.tar.gz -C dl/arm64
+          cp "$(find dl/amd64 -type f -name scim-server | head -1)" bin/scim-server-amd64
+          cp "$(find dl/arm64 -type f -name scim-server | head -1)" bin/scim-server-arm64
+          chmod +x bin/scim-server-amd64 bin/scim-server-arm64
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
@@ -240,7 +209,7 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Image tags
+      - name: Extract image metadata
         id: meta
         uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5
         with:
@@ -250,12 +219,12 @@ jobs:
             type=semver,pattern={{major}}.{{minor}},value=${{ github.event.release.tag_name }}
             type=raw,value=latest
 
-      - name: Create and push manifest list
-        working-directory: ${{ runner.temp }}/digests
-        run: |
-          docker buildx imagetools create \
-            $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
-            $(printf 'ghcr.io/${{ github.repository }}@sha256:%s ' *)
-
-      - name: Inspect image
-        run: docker buildx imagetools inspect ghcr.io/${{ github.repository }}:${{ steps.meta.outputs.version }}
+      - name: Build and push image
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: .
+          file: Dockerfile.release
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
