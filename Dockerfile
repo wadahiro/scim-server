@@ -1,5 +1,8 @@
 # Build stage
-FROM rust:1.85-alpine AS builder
+FROM rust:1.96-alpine AS builder
+
+# Cargo features to enable in the build (image supports both backends by default)
+ARG FEATURES="sqlite,postgresql"
 
 # Install build dependencies
 RUN apk add --no-cache \
@@ -18,7 +21,7 @@ COPY Cargo.toml Cargo.lock ./
 RUN mkdir src && echo "fn main() {}" > src/main.rs
 
 # Build dependencies (this will be cached if Cargo.toml/Cargo.lock don't change)
-RUN cargo build --release --locked
+RUN cargo build --release --locked --features "${FEATURES}"
 
 # Remove dummy source
 RUN rm -rf src
@@ -27,10 +30,10 @@ RUN rm -rf src
 COPY src ./src
 
 # Build release binary with locked dependencies
-RUN cargo build --release --locked
+RUN cargo build --release --locked --features "${FEATURES}"
 
 # Runtime stage
-FROM alpine:3.19
+FROM alpine:3.21
 
 # Install runtime dependencies
 RUN apk add --no-cache \

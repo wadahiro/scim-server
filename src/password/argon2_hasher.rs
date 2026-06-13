@@ -37,7 +37,10 @@ impl Argon2idHasher {
 
     /// Generate a random salt string
     fn generate_salt(&self) -> SaltString {
-        SaltString::generate(&mut rand::thread_rng())
+        // Use the OsRng re-exported by the `password_hash` crate so the RNG
+        // implements the rand_core version that argon2 expects (decoupled from
+        // the top-level `rand` crate, whose rand_core is incompatible).
+        SaltString::generate(&mut argon2::password_hash::rand_core::OsRng)
     }
 }
 

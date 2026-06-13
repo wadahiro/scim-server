@@ -1,0 +1,4 @@
+[tools]
+# scim_proto 1.10+ requires rustc 1.93+. Pin this repo to the latest stable
+# (overrides the global mise rust pin only within this directory).
+rust = "1.96.0"
