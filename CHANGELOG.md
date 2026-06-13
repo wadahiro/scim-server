@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.1](https://github.com/wadahiro/scim-server/compare/v0.4.0...v0.4.1) (2026-06-13)
+
+
+### Miscellaneous
+
+* release 0.4.1 ([3902b8d](https://github.com/wadahiro/scim-server/commit/3902b8de354f7cfe19180e4ed2b14cb137e1bd27))
+
 ## [0.4.0](https://github.com/wadahiro/scim-server/compare/v0.3.0...v0.4.0) (2026-06-13)
 
 ### Features

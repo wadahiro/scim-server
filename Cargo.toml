@@ -1,6 +1,6 @@
 [package]
 name = "scim-server"
-version = "0.4.0"
+version = "0.4.1"
 edition = "2021"
 # Application binary, not a library — never publish to crates.io. This also
 # tells release-plz to manage version/changelog/tags without publishing.
