@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.4.2](https://github.com/wadahiro/scim-server/compare/v0.4.1...v0.4.2) (2026-06-13)
+
+
+### Bug Fixes
+
+* **sqlite:** create the database file automatically — a file URL like `sqlite:/data/scim.db` no longer needs `?mode=rwc` ([#65](https://github.com/wadahiro/scim-server/pull/65))
+
+### Build System
+
+* Build the published container image from the exact released binary (single source of truth) via one multi-target Dockerfile, and slim the runtime to distroless/base-nossl (~12 MB smaller) ([#64](https://github.com/wadahiro/scim-server/pull/64))
+
 ## [0.4.1](https://github.com/wadahiro/scim-server/compare/v0.4.0...v0.4.1) (2026-06-13)
 
 ### Bug Fixes
