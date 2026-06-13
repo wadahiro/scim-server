@@ -1,7 +1,6 @@
 use super::{PasswordAlgorithm, PasswordHasher};
 use crate::error::{AppError, AppResult};
 use base64::{engine::general_purpose, Engine as _};
-use rand::RngCore;
 use sha1::{Digest, Sha1};
 
 /// SSHA (Salted SHA-1) password hasher for LDAP compatibility
@@ -29,7 +28,7 @@ impl SshaHasher {
     /// Generate a random salt
     fn generate_salt(&self) -> Vec<u8> {
         let mut salt = vec![0u8; self.salt_length];
-        rand::thread_rng().fill_bytes(&mut salt);
+        getrandom::fill(&mut salt).expect("failed to generate random salt from OS entropy");
         salt
     }
 
