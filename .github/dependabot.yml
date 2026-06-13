@@ -14,8 +14,12 @@ updates:
       - "wadahiro"
     assignees:
       - "wadahiro"
+    # Use the `fix` type so dependency/security updates are recognized by
+    # release-please as patch releases. cargo can't split dev/prod prefixes
+    # (prefix-development is unsupported for cargo), so dev-dependency bumps
+    # also produce a patch release — an accepted trade-off for staying current.
     commit-message:
-      prefix: "deps"
+      prefix: "fix"
       include: "scope"
 
   # Enable version updates for GitHub Actions
