@@ -75,9 +75,32 @@ impl UserPatchProcessor {
                 compatibility,
             )?;
 
-            // Convert back to User
-            user = serde_json::from_value(user_json).map_err(AppError::Serialization)?;
+            // RFC 7644 §3.5.2.2: reject a "remove" (or any other operation)
+            // that drops a required attribute with 400 mutability, before
+            // attempting to deserialize back into the typed model (which
+            // would otherwise surface an opaque serde error for, e.g., a
+            // missing `userName`).
+            crate::schema::validate_required_attributes_present(
+                &user_json,
+                &crate::schema::USER_SCHEMA,
+            )?;
+
+            // Convert back to User. Any remaining failure here is a client
+            // data problem (e.g. a type mismatch), not a server error, and
+            // the underlying serde message is not shown to the client.
+            user = serde_json::from_value(user_json).map_err(|e| {
+                eprintln!("Failed to apply patch operation to user: {}", e);
+                AppError::BadRequest(
+                    "Invalid resource data after applying patch operations".to_string(),
+                )
+            })?;
         }
+
+        // RFC 7643 §2.4: de-duplicate (type, value) pairs in multi-valued
+        // complex attributes before they are stored or echoed back.
+        let mut deduped_json = serde_json::to_value(&user).map_err(AppError::Serialization)?;
+        crate::schema::dedupe_multivalued_attributes(&mut deduped_json);
+        user = serde_json::from_value(deduped_json).map_err(AppError::Serialization)?;
 
         // Prepare user data for database storage
         let prepared = Self::prepare_user_for_patch(id, &user)?;
@@ -153,13 +176,16 @@ impl UserPatchProcessor {
         Ok(())
     }
 
-    /// Set user metadata for patch operations
+    /// Clear any client-supplied `meta` before storage.
     ///
-    /// This updates the lastModified timestamp in the SCIM meta attribute.
-    fn set_user_metadata(user: &mut User, timestamp: &DateTime<Utc>) {
-        if let Some(meta) = user.meta_mut() {
-            meta.last_modified = Some(crate::utils::format_scim_datetime(*timestamp));
-        }
+    /// `meta` is entirely server-controlled per RFC 7643 §7 (mutability
+    /// "readOnly"). A PATCH `path` targeting `meta.*` would otherwise let a
+    /// client inject its own `resourceType`/`created`/etc. into storage; the
+    /// authoritative values are always reconstructed from the
+    /// `created_at`/`updated_at`/`version` database columns when the
+    /// resource is read back, so nothing needs to be set here.
+    fn set_user_metadata(user: &mut User, _timestamp: &DateTime<Utc>) {
+        user.base.meta = None;
     }
 
     /// Finalize user after database patch
