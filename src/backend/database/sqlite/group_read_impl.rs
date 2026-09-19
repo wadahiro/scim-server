@@ -7,6 +7,7 @@ use super::super::group_read::GroupReader;
 use super::super::group_update::UnifiedGroupUpdateOps;
 use super::SqliteGroupUpdater;
 use crate::backend::database::filter::FilterConverter;
+use crate::config::CompatibilityConfig;
 use crate::error::{AppError, AppResult};
 use crate::models::{Group, ScimPatchOp};
 use crate::parser::filter_operator::FilterOperator;
@@ -434,6 +435,7 @@ impl GroupReader for SqliteGroupReader {
         tenant_id: u32,
         id: &str,
         patch_ops: &ScimPatchOp,
+        compatibility: &CompatibilityConfig,
     ) -> AppResult<Option<Group>> {
         // Return None for empty IDs
         if id.is_empty() {
@@ -453,11 +455,13 @@ impl GroupReader for SqliteGroupReader {
             // Convert group to JSON for patch operations
             let mut group_json = serde_json::to_value(&group).map_err(AppError::Serialization)?;
 
-            // Apply the operation
-            scim_path.apply_operation(
+            // Apply the operation, honoring the tenant's compatibility
+            // settings the same way patch_user does.
+            scim_path.apply_operation_with_compatibility(
                 &mut group_json,
                 &operation.op,
                 &operation.value.as_ref().unwrap_or(&Value::Null).clone(),
+                compatibility,
             )?;
 
             // RFC 7644 §3.5.2.2: reject a "remove" (or any other operation)

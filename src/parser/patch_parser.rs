@@ -182,6 +182,13 @@ impl ScimPath {
     }
 
     /// Apply SCIM PATCH operation to JSON object
+    ///
+    /// Every in-tree caller now goes through
+    /// [`apply_operation_with_compatibility`](Self::apply_operation_with_compatibility)
+    /// so tenant compatibility settings are honored consistently (the User
+    /// and Group PATCH handlers both do). This compatibility-agnostic
+    /// wrapper is kept as public API and is exercised directly by tests.
+    #[allow(dead_code)]
     pub fn apply_operation(&self, user_json: &mut Value, op: &str, value: &Value) -> AppResult<()> {
         // Use default compatibility config for backward compatibility
         let default_config = CompatibilityConfig::default();

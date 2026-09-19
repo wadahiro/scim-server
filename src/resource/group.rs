@@ -964,6 +964,44 @@ pub async fn patch_group(
         }
     }
 
+    // Get compatibility settings for PATCH operation validation. Fetched
+    // once up front so the pre-check below, the prospective-resource
+    // validation, and the actual backend patch all see the same tenant
+    // settings -- the same way patch_user does.
+    let compatibility = app_config.get_effective_compatibility(tenant_id);
+
+    // Validate PATCH operations based on compatibility settings
+    // Only reject operations that are explicitly disabled
+    for operation in &patch_ops.operations {
+        if operation.op == "replace" {
+            if let Some(serde_json::Value::Array(arr)) = &operation.value {
+                // Check for empty array replacement (clearing multi-valued attributes)
+                if arr.is_empty() && !compatibility.support_patch_replace_empty_array {
+                    return Err(scim_error_response(
+                        StatusCode::BAD_REQUEST,
+                        Some("unsupported"),
+                        "PATCH replace with empty array is not supported for this tenant",
+                    ));
+                }
+                // Check for special empty value pattern [{"value":""}]
+                if arr.len() == 1 {
+                    if let serde_json::Value::Object(ref item) = arr[0] {
+                        if item.len() == 1
+                            && item.get("value") == Some(&serde_json::Value::String("".to_string()))
+                            && !compatibility.support_patch_replace_empty_value
+                        {
+                            return Err(scim_error_response(
+                                StatusCode::BAD_REQUEST,
+                                Some("unsupported"),
+                                "PATCH replace with empty value pattern is not supported for this tenant",
+                            ));
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     // Validate the post-patch resource with the same member-existence and
     // member-type checks `create_group`/`update_group` use, so PATCH cannot
     // introduce a member those paths would reject. This computes the
@@ -985,10 +1023,11 @@ pub async fn patch_group(
                 )
             })?;
             scim_path
-                .apply_operation(
+                .apply_operation_with_compatibility(
                     &mut group_json,
                     &operation.op,
                     operation.value.as_ref().unwrap_or(&serde_json::Value::Null),
+                    compatibility,
                 )
                 .map_err(|e| e.to_response())?;
             crate::schema::validate_required_attributes_present(
@@ -1007,7 +1046,10 @@ pub async fn patch_group(
         validate_group_members(&backend, tenant_id, &prospective.base.members).await?;
     }
 
-    match backend.patch_group(tenant_id, &id, &patch_ops).await {
+    match backend
+        .patch_group(tenant_id, &id, &patch_ops, compatibility)
+        .await
+    {
         Ok(Some(mut group)) => {
             // Set meta.location for SCIM compliance
             set_group_location(&tenant_info, &mut group);
@@ -1015,7 +1057,6 @@ pub async fn patch_group(
             fix_group_refs(&tenant_info, &mut group);
 
             // Apply compatibility transformations based on tenant settings
-            let compatibility = app_config.get_effective_compatibility(tenant_id);
             group = crate::utils::convert_group_datetime_for_response(
                 group,
                 &compatibility.meta_datetime_format,

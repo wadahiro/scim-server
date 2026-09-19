@@ -12,6 +12,7 @@ use crate::backend::database::{
     UnifiedUserReadOps, UnifiedUserUpdateOps,
 };
 use crate::backend::{Backend, GroupBackend, UserBackend};
+use crate::config::CompatibilityConfig;
 use crate::error::{AppError, AppResult};
 use crate::models::ScimPatchOp;
 use crate::models::{Group, User};
@@ -343,11 +344,12 @@ impl GroupBackend for PostgresBackend {
         tenant_id: u32,
         id: &str,
         patch_ops: &ScimPatchOp,
+        compatibility: &CompatibilityConfig,
     ) -> AppResult<Option<Group>> {
         // Perform the patch using the group read ops
         match self
             .group_read_ops
-            .patch_group(tenant_id, id, patch_ops)
+            .patch_group(tenant_id, id, patch_ops, compatibility)
             .await?
         {
             Some(_) => {
