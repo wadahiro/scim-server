@@ -56,6 +56,12 @@ impl UserInsertProcessor {
         let timestamp = Utc::now();
         Self::set_user_metadata(&mut user, &timestamp);
 
+        // RFC 7643 §2.4: de-duplicate (type, value) pairs in multi-valued
+        // complex attributes before they are ever stored or echoed back.
+        let mut deduped_json = serde_json::to_value(&user).map_err(AppError::Serialization)?;
+        crate::schema::dedupe_multivalued_attributes(&mut deduped_json);
+        user = serde_json::from_value(deduped_json).map_err(AppError::Serialization)?;
+
         // Serialize user data
         let data_orig = serde_json::to_value(&user).map_err(AppError::Serialization)?;
         let normalized_data = crate::schema::normalization::normalize_scim_data(
