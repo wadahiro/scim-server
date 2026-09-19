@@ -11,6 +11,16 @@ use serde_json::Value;
 
 mod common;
 
+/// Look up the `attributes[].name == name` entry of a `/Schemas` resource.
+fn find_attribute<'a>(schema: &'a Value, name: &str) -> &'a Value {
+    schema["attributes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|a| a["name"] == name)
+        .unwrap_or_else(|| panic!("attribute '{}' present", name))
+}
+
 #[tokio::test]
 async fn test_get_schema_by_id_returns_the_matching_schema() {
     let app_config = common::create_test_app_config();
@@ -206,4 +216,136 @@ async fn test_service_provider_config_never_advertises_empty_spec_uri() {
             );
         }
     }
+}
+
+// RFC 7643 §7 defines the "returned" attribute characteristic: "default"
+// means the attribute is returned by default, "never" means it is never
+// returned. When a tenant is configured with `include_user_groups: false`,
+// `GET /Users/{id}` structurally never includes `groups` (even for a user
+// that has groups), so advertising `"returned": "default"` for it in
+// `/Schemas` would be a mismatch between the advertised schema and actual
+// behavior. `/Schemas` must instead advertise `"returned": "never"` for
+// `User.groups` in that case.
+
+#[tokio::test]
+async fn test_schemas_advertises_user_groups_as_never_when_include_user_groups_disabled() {
+    let mut app_config = common::create_test_app_config();
+    app_config.compatibility.include_user_groups = false;
+    let app = common::setup_test_app(app_config).await.unwrap();
+    let server = TestServer::new(app).unwrap();
+
+    let response = server.get("/scim/v2/Schemas").await;
+    response.assert_status(StatusCode::OK);
+    let body: Value = response.json();
+
+    let user_schema = body["Resources"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|r| r["id"] == "urn:ietf:params:scim:schemas:core:2.0:User")
+        .expect("User schema present");
+
+    let groups_attr = find_attribute(user_schema, "groups");
+    assert_eq!(
+        groups_attr["returned"], "never",
+        "User.groups must be advertised as 'never' when include_user_groups is false"
+    );
+}
+
+#[tokio::test]
+async fn test_schema_by_id_advertises_user_groups_as_never_when_include_user_groups_disabled() {
+    let mut app_config = common::create_test_app_config();
+    app_config.compatibility.include_user_groups = false;
+    let app = common::setup_test_app(app_config).await.unwrap();
+    let server = TestServer::new(app).unwrap();
+
+    let response = server
+        .get("/scim/v2/Schemas/urn:ietf:params:scim:schemas:core:2.0:User")
+        .await;
+    response.assert_status(StatusCode::OK);
+    let body: Value = response.json();
+
+    let groups_attr = find_attribute(&body, "groups");
+    assert_eq!(
+        groups_attr["returned"], "never",
+        "User.groups must be advertised as 'never' when include_user_groups is false"
+    );
+}
+
+#[tokio::test]
+async fn test_schemas_advertises_user_groups_as_default_when_include_user_groups_enabled() {
+    // Default configuration (include_user_groups: true, the default) --
+    // User.groups is actually returned, so "default" remains correct.
+    let app_config = common::create_test_app_config();
+    let app = common::setup_test_app(app_config).await.unwrap();
+    let server = TestServer::new(app).unwrap();
+
+    let response = server.get("/scim/v2/Schemas").await;
+    response.assert_status(StatusCode::OK);
+    let body: Value = response.json();
+
+    let user_schema = body["Resources"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|r| r["id"] == "urn:ietf:params:scim:schemas:core:2.0:User")
+        .expect("User schema present");
+
+    let groups_attr = find_attribute(user_schema, "groups");
+    assert_eq!(groups_attr["returned"], "default");
+
+    let response = server
+        .get("/scim/v2/Schemas/urn:ietf:params:scim:schemas:core:2.0:User")
+        .await;
+    response.assert_status(StatusCode::OK);
+    let body: Value = response.json();
+    let groups_attr = find_attribute(&body, "groups");
+    assert_eq!(groups_attr["returned"], "default");
+}
+
+#[tokio::test]
+async fn test_group_members_stays_default_when_show_empty_groups_members_disabled() {
+    // Unchanged case: `show_empty_groups_members: false` only omits
+    // Group.members / User.groups when the value is an *empty* array.
+    // RFC 7643 §2.5: "Unassigned attributes, the null value, or an empty
+    // array (in the case of a multi-valued attribute) SHALL be considered
+    // to be equivalent in 'state'" and "When a resource is expressed in
+    // JSON format, unassigned attributes, although they are defined in
+    // schema, MAY be omitted for compactness." Omitting an empty
+    // multi-valued attribute is therefore explicitly permitted and stays
+    // consistent with "returned": "default" -- this must NOT be changed
+    // to "never".
+    let mut app_config = common::create_test_app_config();
+    app_config.compatibility.show_empty_groups_members = false;
+    let app = common::setup_test_app(app_config).await.unwrap();
+    let server = TestServer::new(app).unwrap();
+
+    let response = server.get("/scim/v2/Schemas").await;
+    response.assert_status(StatusCode::OK);
+    let body: Value = response.json();
+
+    let group_schema = body["Resources"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|r| r["id"] == "urn:ietf:params:scim:schemas:core:2.0:Group")
+        .expect("Group schema present");
+
+    let members_attr = find_attribute(group_schema, "members");
+    assert_eq!(
+        members_attr["returned"], "default",
+        "Group.members must remain 'default' under show_empty_groups_members: false (RFC 7643 §2.5)"
+    );
+
+    let user_schema = body["Resources"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|r| r["id"] == "urn:ietf:params:scim:schemas:core:2.0:User")
+        .expect("User schema present");
+    let groups_attr = find_attribute(user_schema, "groups");
+    assert_eq!(
+        groups_attr["returned"], "default",
+        "User.groups must remain 'default' under show_empty_groups_members: false (RFC 7643 §2.5)"
+    );
 }

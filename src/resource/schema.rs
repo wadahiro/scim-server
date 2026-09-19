@@ -8,10 +8,10 @@ use std::sync::Arc;
 
 use crate::auth::TenantInfo;
 use crate::backend::ScimBackend;
-use crate::config::AppConfig;
+use crate::config::{AppConfig, CompatibilityConfig};
 use crate::schema::{
     get_all_schemas, AttributeType, Mutability, Returned, Uniqueness,
-    SCIM_API_MESSAGES_LIST_RESPONSE,
+    SCIM_API_MESSAGES_LIST_RESPONSE, SCIM_SCHEMA_CORE_USER,
 };
 
 type AppState = (Arc<dyn ScimBackend>, Arc<AppConfig>);
@@ -111,7 +111,29 @@ fn build_attribute_json(attr: &crate::schema::AttributeDefinition) -> Value {
 /// RFC 7643 §3.1 defines `meta.location` as "The URI of the resource being
 /// returned", i.e. an absolute URL consistent with the tenant's resolved
 /// base URL -- not the bare schema URN, which is already carried in `id`.
-fn build_schema_resources(tenant_info: &crate::auth::TenantInfo) -> Vec<Value> {
+///
+/// `compatibility` is the tenant's effective compatibility configuration.
+/// RFC 7643 §7 defines "returned": "default" to mean the attribute is
+/// returned by default, and "never" to mean it is never returned. When
+/// `include_user_groups` is disabled, `User.groups` is structurally never
+/// present in a response for this tenant, so it must be advertised as
+/// "never" rather than "default" -- advertising "default" while never
+/// returning the attribute would be a schema/behavior mismatch.
+///
+/// This is distinct from `show_empty_groups_members`, which only omits
+/// `User.groups` / `Group.members` when the value is an *empty* array.
+/// RFC 7643 §2.5 states: "Unassigned attributes, the null value, or an
+/// empty array (in the case of a multi-valued attribute) SHALL be
+/// considered to be equivalent in 'state'" and "When a resource is
+/// expressed in JSON format, unassigned attributes, although they are
+/// defined in schema, MAY be omitted for compactness." Omitting an empty
+/// multi-valued attribute is therefore explicitly permitted by the
+/// specification and remains consistent with "returned": "default"; it
+/// must not be changed to "never".
+fn build_schema_resources(
+    tenant_info: &crate::auth::TenantInfo,
+    compatibility: &CompatibilityConfig,
+) -> Vec<Value> {
     // Get all schemas from the centralized schema module
     let all_schemas = get_all_schemas();
 
@@ -122,7 +144,16 @@ fn build_schema_resources(tenant_info: &crate::auth::TenantInfo) -> Vec<Value> {
         let attributes: Vec<Value> = schema_def
             .attributes
             .iter()
-            .map(build_attribute_json)
+            .map(|attr| {
+                let mut attr_json = build_attribute_json(attr);
+                if schema_def.id == SCIM_SCHEMA_CORE_USER
+                    && attr.name == "groups"
+                    && !compatibility.include_user_groups
+                {
+                    attr_json["returned"] = json!(returned_to_string(&Returned::Never));
+                }
+                attr_json
+            })
             .collect();
 
         resources.push(json!({
@@ -362,12 +393,13 @@ fn build_schema_resources(tenant_info: &crate::auth::TenantInfo) -> Vec<Value> {
 }
 
 pub async fn schemas(
-    State((_storage, _)): State<AppState>,
+    State((_storage, app_config)): State<AppState>,
     Extension(tenant_info): Extension<TenantInfo>,
 ) -> Result<(StatusCode, Json<Value>), (StatusCode, Json<Value>)> {
-    let _tenant_id = tenant_info.tenant_id;
+    let tenant_id = tenant_info.tenant_id;
+    let compatibility = app_config.get_effective_compatibility(tenant_id);
 
-    let resources = build_schema_resources(&tenant_info);
+    let resources = build_schema_resources(&tenant_info, compatibility);
 
     let schemas = json!({
         "schemas": [SCIM_API_MESSAGES_LIST_RESPONSE],
@@ -385,13 +417,14 @@ pub async fn schemas(
 /// must tolerate colons -- axum path segments only split on `/`, so this
 /// works without any special routing configuration.
 pub async fn schema_by_id(
-    State((_storage, _)): State<AppState>,
+    State((_storage, app_config)): State<AppState>,
     Extension(tenant_info): Extension<TenantInfo>,
     axum::extract::Path(id): axum::extract::Path<String>,
 ) -> Result<(StatusCode, Json<Value>), (StatusCode, Json<Value>)> {
-    let _tenant_id = tenant_info.tenant_id;
+    let tenant_id = tenant_info.tenant_id;
+    let compatibility = app_config.get_effective_compatibility(tenant_id);
 
-    let resources = build_schema_resources(&tenant_info);
+    let resources = build_schema_resources(&tenant_info, compatibility);
 
     match resources
         .into_iter()
