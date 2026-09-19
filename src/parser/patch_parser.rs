@@ -38,9 +38,47 @@ impl ScimPath {
 
     fn parse_attr_path(path: &str) -> AppResult<Self> {
         // Handle schema-qualified attributes like "urn:ietf:params:scim:schemas:extension:enterprise:2.0:User:department"
-        // or "urn:ietf:params:scim:schemas:extension:enterprise:2.0:User:manager.value"
+        // or "urn:ietf:params:scim:schemas:extension:enterprise:2.0:User:manager.value",
+        // as well as a bare extension schema URN used as the whole `path`
+        // (RFC 7644 §3.5.2, example 3), e.g.
+        // "urn:ietf:params:scim:schemas:extension:enterprise:2.0:User".
         if path.starts_with("urn:ietf:params:scim:schemas:") {
-            // Find the last colon to separate schema URN from attribute name
+            // Match against known schema URNs as a whole namespace first.
+            // Splitting at the last colon (the previous approach) mis-parses
+            // a bare extension URN -- which itself ends in ":User" -- into a
+            // fake schema "...:2.0" plus attribute "User".
+            for schema_urn in crate::schema::SCHEMA_REGISTRY.keys() {
+                if path == *schema_urn {
+                    // The whole extension object, e.g. used as
+                    // `"path": "urn:...:enterprise:2.0:User"` with an object
+                    // value that should be merged into that extension.
+                    return Ok(ScimPath::AttrPath(vec![(*schema_urn).to_string()]));
+                }
+
+                if let Some(attr_path) = path
+                    .strip_prefix(*schema_urn)
+                    .and_then(|rest| rest.strip_prefix(':'))
+                {
+                    if attr_path.is_empty() {
+                        continue;
+                    }
+
+                    let mut parts = vec![(*schema_urn).to_string()];
+                    parts.extend(attr_path.split('.').map(|s| s.to_string()));
+
+                    if parts.iter().any(|p| p.is_empty()) {
+                        return Err(AppError::BadRequest(format!(
+                            "Invalid schema-qualified attribute path: {}",
+                            path
+                        )));
+                    }
+
+                    return Ok(ScimPath::AttrPath(parts));
+                }
+            }
+
+            // Fall back to the previous heuristic for schema-like paths that
+            // don't match a registered schema (e.g. an unknown extension).
             if let Some(last_colon) = path.rfind(':') {
                 let schema_urn = &path[..last_colon];
                 let attr_path = &path[last_colon + 1..];
@@ -200,17 +238,23 @@ impl ScimPath {
             return Err(AppError::BadRequest("Empty attribute path".to_string()));
         }
 
-        // Check for schema updates first
-        let final_key = &path[path.len() - 1];
-        let needs_schema_update = final_key.starts_with("urn:ietf:params:scim:schemas:");
+        // When the path is schema-qualified (an extension attribute, or a
+        // bare extension URN), `path[0]` is the schema URN (see
+        // `parse_attr_path`) -- not necessarily the last segment, which is
+        // the attribute name for a per-attribute path like
+        // "urn:...:enterprise:2.0:User:department".
+        let schema_urn = path[0]
+            .starts_with("urn:ietf:params:scim:schemas:")
+            .then(|| path[0].clone());
 
-        // Navigate to the parent and apply operation
-        let final_key_name = final_key.clone();
         self.navigate_and_apply_with_compatibility(user_json, path, op, value, compatibility)?;
 
-        // Handle schema updates for fully qualified names after modifying the tree
-        if needs_schema_update && op != "remove" {
-            self.update_schemas_attribute(user_json, &final_key_name)?;
+        // RFC 7643 §3.1 / RFC 7644 §3.5.2: introducing extension data must be
+        // reflected in the resource's `schemas` list.
+        if let Some(schema_urn) = schema_urn {
+            if op != "remove" {
+                self.update_schemas_attribute(user_json, &schema_urn)?;
+            }
         }
 
         Ok(())
@@ -497,7 +541,14 @@ impl ScimPath {
             match current {
                 Value::Object(obj) => {
                     current = obj.get_mut(segment).ok_or_else(|| {
-                        AppError::BadRequest(format!("Attribute '{}' not found", segment))
+                        // RFC 7644 §3.5.2.3: "replace" has nothing to
+                        // replace when the target attribute itself is
+                        // absent, which is a "noTarget" condition.
+                        if op == "replace" {
+                            AppError::NoTarget(format!("Attribute '{}' not found", segment))
+                        } else {
+                            AppError::BadRequest(format!("Attribute '{}' not found", segment))
+                        }
                     })?;
                 }
                 _ => {
@@ -566,8 +617,11 @@ impl ScimPath {
                 }
 
                 if matching_indices.is_empty() {
+                    // RFC 7644 §3.5.2.3: a "replace" whose value-path filter
+                    // matches no element is a "noTarget" condition, not an
+                    // "invalidValue" one.
                     let (attr, _, val) = filter.get_condition();
-                    return Err(AppError::BadRequest(format!(
+                    return Err(AppError::NoTarget(format!(
                         "No matching elements found for filter: {} eq {}",
                         attr, val
                     )));
@@ -614,36 +668,18 @@ impl ScimPath {
         Ok(())
     }
 
-    fn update_schemas_attribute(
-        &self,
-        user_json: &mut Value,
-        fully_qualified_attr: &str,
-    ) -> AppResult<()> {
-        // Extract schema URN from fully qualified attribute name
-        // Example: "urn:ietf:params:scim:schemas:extension:enterprise:2.0:User:employeeNumber"
-        // -> "urn:ietf:params:scim:schemas:extension:enterprise:2.0:User"
-
-        let parts: Vec<&str> = fully_qualified_attr.split(':').collect();
-        if parts.len() >= 7
-            && parts[0] == "urn"
-            && parts[1] == "ietf"
-            && parts[2] == "params"
-            && parts[3] == "scim"
-            && parts[4] == "schemas"
-        {
-            // Reconstruct schema URN (everything except the last part which is the attribute name)
-            let schema_urn = parts[..parts.len() - 1].join(":");
-
-            // Add to schemas array if not already present
-            if let Value::Object(user_obj) = user_json {
-                let schemas = user_obj
-                    .entry("schemas".to_string())
-                    .or_insert(Value::Array(vec![]));
-                if let Value::Array(schemas_array) = schemas {
-                    let schema_value = Value::String(schema_urn);
-                    if !schemas_array.contains(&schema_value) {
-                        schemas_array.push(schema_value);
-                    }
+    fn update_schemas_attribute(&self, user_json: &mut Value, schema_urn: &str) -> AppResult<()> {
+        // Add the schema URN to the resource's `schemas` list if not already
+        // present (RFC 7643 §3.1: a resource's `schemas` attribute must list
+        // every schema, including extensions, that describes its content).
+        if let Value::Object(user_obj) = user_json {
+            let schemas = user_obj
+                .entry("schemas".to_string())
+                .or_insert(Value::Array(vec![]));
+            if let Value::Array(schemas_array) = schemas {
+                let schema_value = Value::String(schema_urn.to_string());
+                if !schemas_array.contains(&schema_value) {
+                    schemas_array.push(schema_value);
                 }
             }
         }
