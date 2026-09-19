@@ -20,6 +20,28 @@ async fn test_service_provider_config() {
     assert!(json_scim.get("filter").is_some());
     assert!(json_scim.get("authenticationSchemes").is_some());
 
+    // RFC 7644 §5: every SCIM resource, including ServiceProviderConfig,
+    // must carry a `schemas` member. The upstream `ServiceProviderConfig`
+    // struct has no such field, so the handler injects it manually.
+    let schemas = json_scim["schemas"]
+        .as_array()
+        .expect("ServiceProviderConfig response must include a `schemas` array");
+    assert!(
+        schemas
+            .iter()
+            .any(|s| s == "urn:ietf:params:scim:schemas:core:2.0:ServiceProviderConfig"),
+        "schemas should contain the ServiceProviderConfig URN, got: {:?}",
+        schemas
+    );
+
+    // ETag / If-Match / If-None-Match (RFC 7232) are fully implemented, so
+    // ServiceProviderConfig must advertise etag support as true.
+    assert_eq!(
+        json_scim["etag"]["supported"],
+        serde_json::json!(true),
+        "ServiceProviderConfig must advertise etag support since RFC 7232 conditional requests are implemented"
+    );
+
     // Verify tenant-specific URLs
     let meta = json_scim.get("meta").unwrap();
     let location = meta.get("location").unwrap().as_str().unwrap();

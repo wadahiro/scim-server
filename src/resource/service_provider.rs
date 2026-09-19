@@ -76,7 +76,7 @@ type AppState = (Arc<dyn ScimBackend>, Arc<AppConfig>);
 pub async fn service_provider_config(
     State((_storage, _)): State<AppState>,
     Extension(tenant_info): Extension<TenantInfo>,
-) -> Result<(StatusCode, Json<ServiceProviderConfig>), (StatusCode, Json<Value>)> {
+) -> Result<(StatusCode, Json<Value>), (StatusCode, Json<Value>)> {
     let _tenant_id = tenant_info.tenant_id;
 
     // Get the correct path from tenant configuration
@@ -98,7 +98,7 @@ pub async fn service_provider_config(
         },
         change_password: Supported { supported: true },
         documentation_uri: Some("https://github.com/wadahiro/scim-server".to_string()),
-        etag: Supported { supported: false },
+        etag: Supported { supported: true },
         filter: Filter {
             supported: true,
             max_results: 1000,
@@ -117,5 +117,22 @@ pub async fn service_provider_config(
         sort: Supported { supported: true },
     };
 
-    Ok((StatusCode::OK, Json(config)))
+    // The upstream `ServiceProviderConfig` struct has no `schemas` field, but
+    // RFC 7644 §5 requires every SCIM resource to carry one. Serialize to a
+    // JSON value and inject it here rather than vendoring/forking the struct.
+    let mut config_json = serde_json::to_value(&config).map_err(|e| {
+        crate::error::scim_error_response(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            None,
+            &format!("Failed to serialize ServiceProviderConfig: {}", e),
+        )
+    })?;
+    if let Value::Object(ref mut map) = config_json {
+        map.insert(
+            "schemas".to_string(),
+            serde_json::json!(["urn:ietf:params:scim:schemas:core:2.0:ServiceProviderConfig"]),
+        );
+    }
+
+    Ok((StatusCode::OK, Json(config_json)))
 }
