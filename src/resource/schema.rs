@@ -8,10 +8,10 @@ use std::sync::Arc;
 
 use crate::auth::TenantInfo;
 use crate::backend::ScimBackend;
-use crate::config::AppConfig;
+use crate::config::{AppConfig, CompatibilityConfig};
 use crate::schema::{
     get_all_schemas, AttributeType, Mutability, Returned, Uniqueness,
-    SCIM_API_MESSAGES_LIST_RESPONSE,
+    SCIM_API_MESSAGES_LIST_RESPONSE, SCIM_SCHEMA_CORE_USER,
 };
 
 type AppState = (Arc<dyn ScimBackend>, Arc<AppConfig>);
@@ -26,6 +26,7 @@ fn attribute_type_to_string(attr_type: &AttributeType) -> &'static str {
         AttributeType::DateTime => "dateTime",
         AttributeType::Reference => "reference",
         AttributeType::Complex => "complex",
+        AttributeType::Binary => "binary",
     }
 }
 
@@ -82,19 +83,9 @@ fn build_attribute_json(attr: &crate::schema::AttributeDefinition) -> Value {
         attr_json["subAttributes"] = json!(sub_attrs);
     }
 
-    // Add canonical values for specific attributes
-    match (attr.name, &attr.attr_type) {
-        ("type", AttributeType::String) if attr.description.contains("email") => {
-            attr_json["canonicalValues"] = json!(["work", "home", "other"]);
-        }
-        ("type", AttributeType::String) if attr.description.contains("phone") => {
-            attr_json["canonicalValues"] =
-                json!(["work", "home", "mobile", "fax", "pager", "other"]);
-        }
-        ("type", AttributeType::String) if attr.description.contains("member") => {
-            attr_json["canonicalValues"] = json!(["User", "Group"]);
-        }
-        _ => {}
+    // Add canonical values, if any are defined for this attribute (RFC 7643 §7).
+    if !attr.canonical_values.is_empty() {
+        attr_json["canonicalValues"] = json!(attr.canonical_values);
     }
 
     // Add referenceTypes for reference attributes
@@ -113,12 +104,36 @@ fn build_attribute_json(attr: &crate::schema::AttributeDefinition) -> Value {
     attr_json
 }
 
-pub async fn schemas(
-    State((_storage, _)): State<AppState>,
-    Extension(tenant_info): Extension<TenantInfo>,
-) -> Result<(StatusCode, Json<Value>), (StatusCode, Json<Value>)> {
-    let _tenant_id = tenant_info.tenant_id;
-
+/// Build the full list of `/Schemas` resources (the core, extension, and
+/// ServiceProviderConfig schema definitions). Shared by the collection
+/// endpoint and the single-resource-by-id endpoint (RFC 7644 §4).
+///
+/// RFC 7643 §3.1 defines `meta.location` as "The URI of the resource being
+/// returned", i.e. an absolute URL consistent with the tenant's resolved
+/// base URL -- not the bare schema URN, which is already carried in `id`.
+///
+/// `compatibility` is the tenant's effective compatibility configuration.
+/// RFC 7643 §7 defines "returned": "default" to mean the attribute is
+/// returned by default, and "never" to mean it is never returned. When
+/// `include_user_groups` is disabled, `User.groups` is structurally never
+/// present in a response for this tenant, so it must be advertised as
+/// "never" rather than "default" -- advertising "default" while never
+/// returning the attribute would be a schema/behavior mismatch.
+///
+/// This is distinct from `show_empty_groups_members`, which only omits
+/// `User.groups` / `Group.members` when the value is an *empty* array.
+/// RFC 7643 §2.5 states: "Unassigned attributes, the null value, or an
+/// empty array (in the case of a multi-valued attribute) SHALL be
+/// considered to be equivalent in 'state'" and "When a resource is
+/// expressed in JSON format, unassigned attributes, although they are
+/// defined in schema, MAY be omitted for compactness." Omitting an empty
+/// multi-valued attribute is therefore explicitly permitted by the
+/// specification and remains consistent with "returned": "default"; it
+/// must not be changed to "never".
+fn build_schema_resources(
+    tenant_info: &crate::auth::TenantInfo,
+    compatibility: &CompatibilityConfig,
+) -> Vec<Value> {
     // Get all schemas from the centralized schema module
     let all_schemas = get_all_schemas();
 
@@ -129,7 +144,16 @@ pub async fn schemas(
         let attributes: Vec<Value> = schema_def
             .attributes
             .iter()
-            .map(build_attribute_json)
+            .map(|attr| {
+                let mut attr_json = build_attribute_json(attr);
+                if schema_def.id == SCIM_SCHEMA_CORE_USER
+                    && attr.name == "groups"
+                    && !compatibility.include_user_groups
+                {
+                    attr_json["returned"] = json!(returned_to_string(&Returned::Never));
+                }
+                attr_json
+            })
             .collect();
 
         resources.push(json!({
@@ -139,7 +163,10 @@ pub async fn schemas(
             "attributes": attributes,
             "meta": {
                 "resourceType": "Schema",
-                "location": schema_def.id
+                "location": crate::utils::build_resource_location(
+                    tenant_info,
+                    &format!("Schemas/{}", schema_def.id)
+                )
             }
         }));
     }
@@ -355,9 +382,24 @@ pub async fn schemas(
         ],
         "meta": {
             "resourceType": "Schema",
-            "location": "urn:ietf:params:scim:schemas:core:2.0:ServiceProviderConfig"
+            "location": crate::utils::build_resource_location(
+                tenant_info,
+                "Schemas/urn:ietf:params:scim:schemas:core:2.0:ServiceProviderConfig"
+            )
         }
     }));
+
+    resources
+}
+
+pub async fn schemas(
+    State((_storage, app_config)): State<AppState>,
+    Extension(tenant_info): Extension<TenantInfo>,
+) -> Result<(StatusCode, Json<Value>), (StatusCode, Json<Value>)> {
+    let tenant_id = tenant_info.tenant_id;
+    let compatibility = app_config.get_effective_compatibility(tenant_id);
+
+    let resources = build_schema_resources(&tenant_info, compatibility);
 
     let schemas = json!({
         "schemas": [SCIM_API_MESSAGES_LIST_RESPONSE],
@@ -368,4 +410,31 @@ pub async fn schemas(
     });
 
     Ok((StatusCode::OK, Json(schemas)))
+}
+
+/// `GET /Schemas/{id}` (RFC 7644 §4). A schema id is a URN (e.g.
+/// `urn:ietf:params:scim:schemas:core:2.0:User`), so the route parameter
+/// must tolerate colons -- axum path segments only split on `/`, so this
+/// works without any special routing configuration.
+pub async fn schema_by_id(
+    State((_storage, app_config)): State<AppState>,
+    Extension(tenant_info): Extension<TenantInfo>,
+    axum::extract::Path(id): axum::extract::Path<String>,
+) -> Result<(StatusCode, Json<Value>), (StatusCode, Json<Value>)> {
+    let tenant_id = tenant_info.tenant_id;
+    let compatibility = app_config.get_effective_compatibility(tenant_id);
+
+    let resources = build_schema_resources(&tenant_info, compatibility);
+
+    match resources
+        .into_iter()
+        .find(|r| r["id"] == Value::String(id.clone()))
+    {
+        Some(resource) => Ok((StatusCode::OK, Json(resource))),
+        None => Err(crate::error::scim_error_response(
+            StatusCode::NOT_FOUND,
+            None,
+            &format!("Schema '{}' not found", id),
+        )),
+    }
 }

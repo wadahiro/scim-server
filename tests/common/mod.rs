@@ -1,8 +1,4 @@
-use axum::{
-    middleware,
-    routing::{delete, get, patch, post, put},
-    Router,
-};
+use axum::{middleware, Router};
 use scim_server::backend::database::DatabaseBackendConfig;
 use scim_server::backend::{BackendFactory, DatabaseType, ScimBackend};
 use scim_server::config::{
@@ -15,7 +11,6 @@ use std::sync::Arc;
 use testcontainers::ContainerAsync;
 #[cfg(test)]
 use testcontainers_modules::postgres::Postgres;
-use url::Url;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 #[allow(dead_code)]
@@ -91,110 +86,17 @@ pub async fn setup_postgres_test_database(
 }
 
 /// Create a test app with in-memory database and given tenant configuration
+///
+/// Route construction is shared with the production binary via
+/// `scim_server::app::build_router`, so the two can never drift apart (see
+/// that module for the route table, the custom-endpoint router, and the
+/// RFC 7644 §3.12 fallback for unmatched paths).
 pub async fn setup_test_app(app_config: AppConfig) -> Result<Router, Box<dyn std::error::Error>> {
     let backend = setup_test_database().await?;
 
     let app_config_arc = Arc::new(app_config.clone());
 
-    // Build our application with multi-tenant routes based on tenant configuration
-    let mut app = Router::new();
-
-    // Add custom endpoints first (before SCIM routes)
-    for tenant in &app_config.tenants {
-        for endpoint in &tenant.custom_endpoints {
-            app = app.route(
-                &endpoint.path,
-                get(scim_server::resource::custom::handle_custom_endpoint),
-            );
-        }
-    }
-
-    // Add routes for each tenant based on their configured URL path
-    for tenant in &app_config.tenants {
-        // Extract path from tenant path (remove protocol and host if present)
-        let base_path = if tenant.path.starts_with("http://") || tenant.path.starts_with("https://")
-        {
-            // Extract path from full URL
-            if let Ok(url) = Url::parse(&tenant.path) {
-                url.path().trim_end_matches('/').to_string()
-            } else {
-                "/scim".to_string() // fallback
-            }
-        } else {
-            // Already a path
-            tenant.path.trim_end_matches('/').to_string()
-        };
-
-        // ServiceProviderConfig routes
-        app = app.route(
-            &format!("{}/ServiceProviderConfig", base_path),
-            get(scim_server::resource::service_provider::service_provider_config),
-        );
-
-        // Schema and ResourceType routes
-        app = app.route(
-            &format!("{}/Schemas", base_path),
-            get(scim_server::resource::schema::schemas),
-        );
-        app = app.route(
-            &format!("{}/ResourceTypes", base_path),
-            get(scim_server::resource::resource_type::resource_types),
-        );
-
-        // User routes
-        app = app.route(
-            &format!("{}/Users", base_path),
-            post(scim_server::resource::user::create_user),
-        );
-        app = app.route(
-            &format!("{}/Users", base_path),
-            get(scim_server::resource::user::search_users),
-        );
-        app = app.route(
-            &format!("{}/Users/{{id}}", base_path),
-            get(scim_server::resource::user::get_user),
-        );
-        app = app.route(
-            &format!("{}/Users/{{id}}", base_path),
-            put(scim_server::resource::user::update_user),
-        );
-        app = app.route(
-            &format!("{}/Users/{{id}}", base_path),
-            patch(scim_server::resource::user::patch_user),
-        );
-        app = app.route(
-            &format!("{}/Users/{{id}}", base_path),
-            delete(scim_server::resource::user::delete_user),
-        );
-
-        // Group routes
-        app = app.route(
-            &format!("{}/Groups", base_path),
-            post(scim_server::resource::group::create_group),
-        );
-        app = app.route(
-            &format!("{}/Groups", base_path),
-            get(scim_server::resource::group::search_groups),
-        );
-        app = app.route(
-            &format!("{}/Groups/{{id}}", base_path),
-            get(scim_server::resource::group::get_group),
-        );
-        app = app.route(
-            &format!("{}/Groups/{{id}}", base_path),
-            put(scim_server::resource::group::update_group),
-        );
-        app = app.route(
-            &format!("{}/Groups/{{id}}", base_path),
-            patch(scim_server::resource::group::patch_group),
-        );
-        app = app.route(
-            &format!("{}/Groups/{{id}}", base_path),
-            delete(scim_server::resource::group::delete_group),
-        );
-    }
-
-    let app = app
+    let app = scim_server::app::build_router(&app_config)
         .layer(middleware::from_fn_with_state(
             app_config_arc.clone(),
             scim_server::auth::auth_middleware,
@@ -214,105 +116,7 @@ pub async fn setup_postgres_test_app(
 
     let app_config_arc = Arc::new(app_config.clone());
 
-    // Build our application with multi-tenant routes based on tenant configuration
-    let mut app = Router::new();
-
-    // Add custom endpoints first (before SCIM routes)
-    for tenant in &app_config.tenants {
-        for endpoint in &tenant.custom_endpoints {
-            app = app.route(
-                &endpoint.path,
-                get(scim_server::resource::custom::handle_custom_endpoint),
-            );
-        }
-    }
-
-    // Add routes for each tenant based on their configured URL path
-    for tenant in &app_config.tenants {
-        // Extract path from tenant path (remove protocol and host if present)
-        let base_path = if tenant.path.starts_with("http://") || tenant.path.starts_with("https://")
-        {
-            // Extract path from full URL
-            if let Ok(url) = Url::parse(&tenant.path) {
-                url.path().trim_end_matches('/').to_string()
-            } else {
-                "/scim".to_string() // fallback
-            }
-        } else {
-            // Already a path
-            tenant.path.trim_end_matches('/').to_string()
-        };
-
-        // ServiceProviderConfig routes
-        app = app.route(
-            &format!("{}/ServiceProviderConfig", base_path),
-            get(scim_server::resource::service_provider::service_provider_config),
-        );
-
-        // Schema and ResourceType routes
-        app = app.route(
-            &format!("{}/Schemas", base_path),
-            get(scim_server::resource::schema::schemas),
-        );
-        app = app.route(
-            &format!("{}/ResourceTypes", base_path),
-            get(scim_server::resource::resource_type::resource_types),
-        );
-
-        // User routes
-        app = app.route(
-            &format!("{}/Users", base_path),
-            post(scim_server::resource::user::create_user),
-        );
-        app = app.route(
-            &format!("{}/Users", base_path),
-            get(scim_server::resource::user::search_users),
-        );
-        app = app.route(
-            &format!("{}/Users/{{id}}", base_path),
-            get(scim_server::resource::user::get_user),
-        );
-        app = app.route(
-            &format!("{}/Users/{{id}}", base_path),
-            put(scim_server::resource::user::update_user),
-        );
-        app = app.route(
-            &format!("{}/Users/{{id}}", base_path),
-            patch(scim_server::resource::user::patch_user),
-        );
-        app = app.route(
-            &format!("{}/Users/{{id}}", base_path),
-            delete(scim_server::resource::user::delete_user),
-        );
-
-        // Group routes
-        app = app.route(
-            &format!("{}/Groups", base_path),
-            post(scim_server::resource::group::create_group),
-        );
-        app = app.route(
-            &format!("{}/Groups", base_path),
-            get(scim_server::resource::group::search_groups),
-        );
-        app = app.route(
-            &format!("{}/Groups/{{id}}", base_path),
-            get(scim_server::resource::group::get_group),
-        );
-        app = app.route(
-            &format!("{}/Groups/{{id}}", base_path),
-            put(scim_server::resource::group::update_group),
-        );
-        app = app.route(
-            &format!("{}/Groups/{{id}}", base_path),
-            patch(scim_server::resource::group::patch_group),
-        );
-        app = app.route(
-            &format!("{}/Groups/{{id}}", base_path),
-            delete(scim_server::resource::group::delete_group),
-        );
-    }
-
-    let app = app
+    let app = scim_server::app::build_router(&app_config)
         .layer(middleware::from_fn_with_state(
             app_config_arc.clone(),
             scim_server::auth::auth_middleware,

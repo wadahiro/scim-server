@@ -2,6 +2,7 @@
 // This shows the enhanced capabilities for logical operators and filter evaluation
 
 use scim_server::parser::patch_parser::ScimPath;
+use scim_server::parser::ResourceType;
 use serde_json::json;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -53,7 +54,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Demonstrate simple filter
     println!("1. Simple Filter: emails[type eq \"work\"].value");
-    let simple_path = ScimPath::parse("emails[type eq \"work\"].value")?;
+    let simple_path = ScimPath::parse("emails[type eq \"work\"].value", ResourceType::User)?;
     let mut user_copy = user.clone();
     simple_path.apply_operation(&mut user_copy, "replace", &json!("new-work@company.com"))?;
 
@@ -67,7 +68,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Demonstrate AND operator
     println!("2. AND Filter: emails[type eq \"work\" and primary eq true].value");
-    let and_path = ScimPath::parse("emails[type eq \"work\" and primary eq true].value")?;
+    let and_path = ScimPath::parse(
+        "emails[type eq \"work\" and primary eq true].value",
+        ResourceType::User,
+    )?;
     let mut user_copy = user.clone();
     and_path.apply_operation(
         &mut user_copy,
@@ -91,7 +95,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Demonstrate OR operator
     println!("3. OR Filter: phoneNumbers[type eq \"work\" or type eq \"mobile\"]");
-    let or_path = ScimPath::parse("phoneNumbers[type eq \"work\" or type eq \"mobile\"]")?;
+    let or_path = ScimPath::parse(
+        "phoneNumbers[type eq \"work\" or type eq \"mobile\"]",
+        ResourceType::User,
+    )?;
     let mut user_copy = user.clone();
     let original_count = user_copy["phoneNumbers"].as_array().unwrap().len();
     or_path.apply_operation(&mut user_copy, "remove", &json!(null))?;
@@ -110,8 +117,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Demonstrate operator precedence
     println!("4. Precedence: emails[type eq \"work\" and primary eq true or type eq \"home\"]");
     println!("   (Parsed as: (type eq \"work\" and primary eq true) or (type eq \"home\"))");
-    let precedence_path =
-        ScimPath::parse("emails[type eq \"work\" and primary eq true or type eq \"home\"]")?;
+    let precedence_path = ScimPath::parse(
+        "emails[type eq \"work\" and primary eq true or type eq \"home\"]",
+        ResourceType::User,
+    )?;
     let mut user_copy = user.clone();
     let original_count = user_copy["emails"].as_array().unwrap().len();
     precedence_path.apply_operation(&mut user_copy, "remove", &json!(null))?;
@@ -129,7 +138,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Demonstrate advanced operators
     println!("5. Advanced Operators: emails[value co \"@company\"]");
-    let advanced_path = ScimPath::parse("emails[value co \"@company\"]")?;
+    let advanced_path = ScimPath::parse("emails[value co \"@company\"]", ResourceType::User)?;
     let mut user_copy = user.clone();
     advanced_path.apply_operation(
         &mut user_copy,

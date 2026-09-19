@@ -30,6 +30,18 @@ pub struct User {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(rename = "externalId")]
     pub external_id: Option<String>,
+    /// Physical mailing addresses.
+    ///
+    /// RFC 7643 §4.1.2 defines a `primary` sub-attribute for `addresses`
+    /// (as it does for `emails` and `phoneNumbers`), but the upstream
+    /// `scim_v2::models::user::Address` type has no field for it. Declaring
+    /// `addresses` here as raw JSON takes priority over the flattened
+    /// `base.addresses` field of the same name during both serialization and
+    /// deserialization, so `primary` (and any other sub-attribute) round-trips
+    /// through requests, storage, and responses unchanged instead of being
+    /// silently dropped.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub addresses: Option<Vec<serde_json::Value>>,
     // Support for arbitrary additional fields (for custom attributes and testing)
     #[serde(flatten)]
     pub additional_fields: std::collections::HashMap<String, serde_json::Value>,
@@ -42,6 +54,7 @@ impl User {
         Self {
             base,
             external_id: None,
+            addresses: None,
             additional_fields: std::collections::HashMap::new(),
         }
     }
@@ -52,6 +65,7 @@ impl User {
         Self {
             base,
             external_id,
+            addresses: None,
             additional_fields: std::collections::HashMap::new(),
         }
     }
@@ -91,6 +105,7 @@ impl Clone for User {
         Self {
             base: cloned_base,
             external_id: self.external_id.clone(),
+            addresses: self.addresses.clone(),
             additional_fields: self.additional_fields.clone(),
         }
     }
@@ -169,4 +184,77 @@ pub struct ScimListResponse {
     pub items_per_page: Option<i64>,
     #[serde(rename = "Resources")]
     pub resources: Vec<serde_json::Value>,
+}
+
+/// The identifier for the SCIM search request message (RFC 7644 §3.4.3).
+pub const SCIM_SEARCH_REQUEST_SCHEMA: &str = "urn:ietf:params:scim:api:messages:2.0:SearchRequest";
+
+/// Body of `POST /{Resource}/.search` (RFC 7644 §3.4.3). Carries the same
+/// query parameters as the `GET` collection endpoint, for queries too large
+/// to fit comfortably in a URL.
+#[derive(Debug, Deserialize)]
+pub struct SearchRequest {
+    pub schemas: Vec<String>,
+    #[serde(default)]
+    pub filter: Option<String>,
+    #[serde(default)]
+    pub attributes: Option<Vec<String>>,
+    #[serde(default, rename = "excludedAttributes")]
+    pub excluded_attributes: Option<Vec<String>>,
+    #[serde(default, rename = "sortBy")]
+    pub sort_by: Option<String>,
+    #[serde(default, rename = "sortOrder")]
+    pub sort_order: Option<String>,
+    #[serde(default, rename = "startIndex")]
+    pub start_index: Option<i64>,
+    #[serde(default)]
+    pub count: Option<i64>,
+}
+
+impl SearchRequest {
+    /// Validates `schemas` and converts this request into the same
+    /// `HashMap<String, String>` query-parameter representation the `GET`
+    /// search handlers use, so both entry points share one code path.
+    pub fn into_query_params(
+        self,
+    ) -> Result<
+        std::collections::HashMap<String, String>,
+        (axum::http::StatusCode, axum::Json<serde_json::Value>),
+    > {
+        if !self.schemas.iter().any(|s| s == SCIM_SEARCH_REQUEST_SCHEMA) {
+            return Err(crate::error::scim_error_response(
+                axum::http::StatusCode::BAD_REQUEST,
+                Some("invalidValue"),
+                &format!(
+                    "SearchRequest 'schemas' must contain '{}'",
+                    SCIM_SEARCH_REQUEST_SCHEMA
+                ),
+            ));
+        }
+
+        let mut params = std::collections::HashMap::new();
+        if let Some(filter) = self.filter {
+            params.insert("filter".to_string(), filter);
+        }
+        if let Some(attributes) = self.attributes {
+            params.insert("attributes".to_string(), attributes.join(","));
+        }
+        if let Some(excluded) = self.excluded_attributes {
+            params.insert("excludedAttributes".to_string(), excluded.join(","));
+        }
+        if let Some(sort_by) = self.sort_by {
+            params.insert("sortBy".to_string(), sort_by);
+        }
+        if let Some(sort_order) = self.sort_order {
+            params.insert("sortOrder".to_string(), sort_order);
+        }
+        if let Some(start_index) = self.start_index {
+            params.insert("startIndex".to_string(), start_index.to_string());
+        }
+        if let Some(count) = self.count {
+            params.insert("count".to_string(), count.to_string());
+        }
+
+        Ok(params)
+    }
 }

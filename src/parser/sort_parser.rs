@@ -34,6 +34,34 @@ impl SortSpec {
             SortSpec::new(attr.to_string(), order)
         })
     }
+
+    /// Like [`from_params`](Self::from_params), but first resolves `sort_by`
+    /// to the resource schema's own attribute-name casing.
+    ///
+    /// RFC 7644 §3.10 defines the notation these parameters use: "All
+    /// operations share a common scheme for referencing simple and complex
+    /// attributes", ending "All facets (URN, attribute, and sub-attribute
+    /// name) of the fully encoded attribute name are case insensitive."
+    /// §3.4.3 binds `sortBy` to it: "The "sortBy" attribute MUST be in
+    /// standard attribute notation (Section 3.10) form."
+    /// Without this, `sortBy=USERNAME`
+    /// would fail to match the `userName` column/JSON-path special-casing
+    /// the database layer looks for and silently fall back to an
+    /// unsorted (or meaninglessly sorted) result.
+    pub fn from_params_for_resource(
+        sort_by: Option<&str>,
+        sort_order: Option<&str>,
+        resource_type: crate::parser::ResourceType,
+    ) -> Option<SortSpec> {
+        let resolved_sort_by = sort_by.map(|attr| {
+            let schema = match resource_type {
+                crate::parser::ResourceType::User => &*crate::schema::USER_SCHEMA,
+                crate::parser::ResourceType::Group => &*crate::schema::GROUP_SCHEMA,
+            };
+            crate::schema::resolve_attribute_path_case(schema, attr)
+        });
+        Self::from_params(resolved_sort_by.as_deref(), sort_order)
+    }
 }
 
 #[cfg(test)]
@@ -66,5 +94,27 @@ mod tests {
 
         let spec = SortSpec::from_params(None, Some("descending"));
         assert!(spec.is_none());
+    }
+
+    #[test]
+    fn test_sort_spec_from_params_for_resource_case_insensitive() {
+        // RFC 7644 §3.4.3 requires `sortBy` to be in standard attribute
+        // notation (§3.10), and §3.10 states that all facets of an attribute
+        // name are case insensitive.
+        let spec = SortSpec::from_params_for_resource(
+            Some("USERNAME"),
+            None,
+            crate::parser::ResourceType::User,
+        )
+        .unwrap();
+        assert_eq!(spec.attribute, "userName");
+
+        let spec = SortSpec::from_params_for_resource(
+            Some("DISPLAYNAME"),
+            None,
+            crate::parser::ResourceType::Group,
+        )
+        .unwrap();
+        assert_eq!(spec.attribute, "displayName");
     }
 }

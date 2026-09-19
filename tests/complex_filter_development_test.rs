@@ -1,4 +1,5 @@
 use scim_server::parser::patch_parser::ScimPath;
+use scim_server::parser::ResourceType;
 use serde_json::json;
 
 /// Test file for developing and validating complex filter expression support
@@ -8,7 +9,7 @@ use serde_json::json;
 fn test_simple_filter_current_implementation() {
     // Current implementation: Simple filters work perfectly
     let path = "emails[type eq \"work\"].value";
-    let parsed = ScimPath::parse(path).expect("Should parse simple filter");
+    let parsed = ScimPath::parse(path, ResourceType::User).expect("Should parse simple filter");
 
     let mut user = json!({
         "schemas": ["urn:ietf:params:scim:schemas:core:2.0:User"],
@@ -54,8 +55,8 @@ fn test_special_case_filters_work() {
     ];
 
     for (path, expected_display) in test_cases {
-        let parsed =
-            ScimPath::parse(path).unwrap_or_else(|_| panic!("Should parse path: {}", path));
+        let parsed = ScimPath::parse(path, ResourceType::User)
+            .unwrap_or_else(|_| panic!("Should parse path: {}", path));
 
         // Verify the filter was parsed correctly
         match parsed {
@@ -74,7 +75,7 @@ fn test_special_case_filters_work() {
 fn test_filter_matching_logic() {
     // Test the new filter matching logic directly
     let path = "phoneNumbers[type eq \"mobile\"]";
-    let parsed = ScimPath::parse(path).expect("Should parse path");
+    let parsed = ScimPath::parse(path, ResourceType::User).expect("Should parse path");
 
     let mut user = json!({
         "schemas": ["urn:ietf:params:scim:schemas:core:2.0:User"],
@@ -121,7 +122,8 @@ fn test_complex_filter_foundation() {
 
     // Test that the ScimFilter enum has the right structure
     let simple_path = "emails[type eq \"work\"]";
-    let parsed = ScimPath::parse(simple_path).expect("Should parse simple filter");
+    let parsed =
+        ScimPath::parse(simple_path, ResourceType::User).expect("Should parse simple filter");
 
     match parsed {
         ScimPath::ValuePath { filter, .. } => {
@@ -161,7 +163,7 @@ fn test_error_handling_improvements() {
     ];
 
     for invalid_filter in unsupported_filters {
-        let result = ScimPath::parse(invalid_filter);
+        let result = ScimPath::parse(invalid_filter, ResourceType::User);
         // These should either fail with clear error or parse but handle gracefully
         if let Ok(parsed) = result {
             // If it parses, the operation should handle unsupported operators gracefully
@@ -179,7 +181,8 @@ fn test_error_handling_improvements() {
 fn test_complex_filter_and_operator() {
     // Test AND operator: type eq "work" and primary eq true
     let path = "emails[type eq \"work\" and primary eq true].value";
-    let parsed = ScimPath::parse(path).expect("Should parse complex AND filter");
+    let parsed =
+        ScimPath::parse(path, ResourceType::User).expect("Should parse complex AND filter");
 
     let mut user = json!({
         "schemas": ["urn:ietf:params:scim:schemas:core:2.0:User"],
@@ -228,7 +231,7 @@ fn test_complex_filter_and_operator() {
 fn test_complex_filter_or_operator() {
     // Test OR operator: type eq "work" or type eq "mobile"
     let path = "phoneNumbers[type eq \"work\" or type eq \"mobile\"]";
-    let parsed = ScimPath::parse(path).expect("Should parse complex OR filter");
+    let parsed = ScimPath::parse(path, ResourceType::User).expect("Should parse complex OR filter");
 
     let mut user = json!({
         "schemas": ["urn:ietf:params:scim:schemas:core:2.0:User"],
@@ -277,7 +280,7 @@ fn test_complex_filter_mixed_operators() {
     // Test mixed operators with precedence: type eq "work" and primary eq true or type eq "home"
     // This should be parsed as: (type eq "work" and primary eq true) or (type eq "home")
     let path = "emails[type eq \"work\" and primary eq true or type eq \"home\"].value";
-    let parsed = ScimPath::parse(path).expect("Should parse mixed operators");
+    let parsed = ScimPath::parse(path, ResourceType::User).expect("Should parse mixed operators");
 
     let mut user = json!({
         "schemas": ["urn:ietf:params:scim:schemas:core:2.0:User"],
@@ -351,7 +354,7 @@ fn test_advanced_filter_operators() {
     ];
 
     for (path, description) in test_cases {
-        let parsed_result = ScimPath::parse(path);
+        let parsed_result = ScimPath::parse(path, ResourceType::User);
         assert!(parsed_result.is_ok(), "{}: {}", description, path);
 
         let parsed = parsed_result.unwrap();
@@ -391,7 +394,8 @@ fn test_filter_operator_precedence() {
     // Expression: "type eq \"work\" or type eq \"home\" and primary eq true"
     // Should be parsed as: "type eq \"work\" or (type eq \"home\" and primary eq true)"
     let path = "emails[type eq \"work\" or type eq \"home\" and primary eq true]";
-    let parsed = ScimPath::parse(path).expect("Should parse with correct precedence");
+    let parsed =
+        ScimPath::parse(path, ResourceType::User).expect("Should parse with correct precedence");
 
     let test_data = vec![
         (json!({"type": "work", "primary": false}), true), // work (regardless of primary)

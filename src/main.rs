@@ -1,13 +1,10 @@
-use axum::{
-    middleware,
-    routing::{delete, get, patch, post, put},
-    Router,
-};
+use axum::middleware;
 use clap::Parser;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::net::TcpListener;
 
+mod app;
 mod auth;
 mod backend;
 mod config;
@@ -145,51 +142,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Use AppConfig directly
     let app_config_arc = Arc::new(app_config.clone());
 
-    // Build our application with multi-tenant routes.
-    //
-    // Custom endpoints live in their own router: they serve operator-configured
-    // content types (text/plain, text/html, ...) and must NOT be rewritten to
-    // application/scim+json, so the SCIM content-type layer below is applied to
-    // the SCIM router only and the two are merged afterwards.
-    let mut custom_app = Router::new();
-
-    // Add custom endpoints first (before SCIM routes)
-    // Custom endpoints are routed as absolute paths, not under tenant URLs
+    // Build our application with multi-tenant routes. Route construction
+    // (including the custom-endpoint router, the SCIM content-type layer,
+    // and the RFC 7644 §3.12 fallback) lives in `app::build_router` so the
+    // production binary and the integration tests can never drift apart.
     for tenant in &app_config.tenants {
-        for endpoint in &tenant.custom_endpoints {
-            println!(
-                "🔗 Setting up custom endpoint for tenant {} at {}",
-                tenant.id, endpoint.path
-            );
-            custom_app = custom_app.route(
-                &endpoint.path,
-                get(resource::custom::handle_custom_endpoint),
-            );
-        }
-    }
-
-    let mut app = Router::new();
-
-    // Always use the existing handlers, but enhance them to support host resolution
-    // For now, let's use a unified approach that supports both static and dynamic routing
-
-    for tenant in &app_config.tenants {
-        // For tenants with route, we'll handle them dynamically in the handlers
-        // For simple URL tenants, we'll use static routing as before
-
-        let base_path = if tenant.path.starts_with("http://") || tenant.path.starts_with("https://")
-        {
-            // Extract path from full URL
-            if let Ok(url) = url::Url::parse(&tenant.path) {
-                url.path().trim_end_matches('/').to_string()
-            } else {
-                "/scim".to_string() // fallback
-            }
-        } else {
-            // Already a path
-            tenant.path.trim_end_matches('/').to_string()
-        };
-
         if tenant.host.is_some() {
             println!(
                 "🔧 Setting up host-based routing for tenant {} (host: {})",
@@ -199,88 +156,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         } else {
             println!(
                 "🔗 Setting up path-only routes for tenant {} at {}",
-                tenant.id, base_path
+                tenant.id, tenant.path
             );
         }
-
-        // ServiceProviderConfig routes
-        app = app.route(
-            &format!("{}/ServiceProviderConfig", base_path),
-            get(resource::service_provider::service_provider_config),
-        );
-
-        // Schema and ResourceType routes
-        app = app.route(
-            &format!("{}/Schemas", base_path),
-            get(resource::schema::schemas),
-        );
-        app = app.route(
-            &format!("{}/ResourceTypes", base_path),
-            get(resource::resource_type::resource_types),
-        );
-
-        // User routes
-        app = app.route(
-            &format!("{}/Users", base_path),
-            post(resource::user::create_user),
-        );
-        app = app.route(
-            &format!("{}/Users", base_path),
-            get(resource::user::search_users),
-        );
-        app = app.route(
-            &format!("{}/Users/{{id}}", base_path),
-            get(resource::user::get_user),
-        );
-        app = app.route(
-            &format!("{}/Users/{{id}}", base_path),
-            put(resource::user::update_user),
-        );
-        app = app.route(
-            &format!("{}/Users/{{id}}", base_path),
-            patch(resource::user::patch_user),
-        );
-        app = app.route(
-            &format!("{}/Users/{{id}}", base_path),
-            delete(resource::user::delete_user),
-        );
-
-        // Group routes
-        app = app.route(
-            &format!("{}/Groups", base_path),
-            post(resource::group::create_group),
-        );
-        app = app.route(
-            &format!("{}/Groups", base_path),
-            get(resource::group::search_groups),
-        );
-        app = app.route(
-            &format!("{}/Groups/{{id}}", base_path),
-            get(resource::group::get_group),
-        );
-        app = app.route(
-            &format!("{}/Groups/{{id}}", base_path),
-            put(resource::group::update_group),
-        );
-        app = app.route(
-            &format!("{}/Groups/{{id}}", base_path),
-            patch(resource::group::patch_group),
-        );
-        app = app.route(
-            &format!("{}/Groups/{{id}}", base_path),
-            delete(resource::group::delete_group),
-        );
+        for endpoint in &tenant.custom_endpoints {
+            println!(
+                "🔗 Setting up custom endpoint for tenant {} at {}",
+                tenant.id, endpoint.path
+            );
+        }
     }
 
-    // RFC 7644 §3.1: SCIM responses use application/scim+json. Applied here so
-    // it covers every SCIM route without touching each handler, and so the
-    // custom-endpoint router keeps its configured content types.
-    let app = app.layer(middleware::from_fn(
-        extractors::scim_content_type_middleware,
-    ));
-
-    let app = custom_app
-        .merge(app)
+    let app = app::build_router(&app_config)
         .layer(middleware::from_fn(logging::logging_middleware))
         .layer(middleware::from_fn_with_state(
             app_config_arc.clone(),

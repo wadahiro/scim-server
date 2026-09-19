@@ -8,6 +8,7 @@ use super::super::group_read::GroupReader;
 use super::super::group_update::UnifiedGroupUpdateOps;
 use super::PostgresGroupUpdater;
 use crate::backend::database::filter::FilterConverter;
+use crate::config::CompatibilityConfig;
 use crate::error::{AppError, AppResult};
 use crate::models::{Group, ScimPatchOp};
 use crate::parser::filter_operator::FilterOperator;
@@ -108,26 +109,27 @@ impl PostgresGroupReader {
                 let mut group: Group = serde_json::from_value(row.get("data_orig"))
                     .map_err(AppError::Serialization)?;
 
-                // Set version in meta (ensure meta exists)
+                // `resourceType`, `created`, `lastModified`, and `version` are
+                // server-owned per RFC 7643 §7 (mutability: readOnly) and are
+                // always rebuilt here from the authoritative `created_at`,
+                // `updated_at`, and `version` database columns -- never from
+                // whatever happens to be stored in `data_orig`'s `meta`
+                // (which could otherwise carry a client-supplied value that
+                // should have been ignored on write). `location` is set
+                // later by the resource handler, so any existing value is
+                // preserved as-is.
                 let version: i64 = row.get("version");
-                if group.meta().is_none() {
-                    // Create meta if it doesn't exist
-                    let created_at: chrono::DateTime<chrono::Utc> = row.get("created_at");
-                    let updated_at: chrono::DateTime<chrono::Utc> = row.get("updated_at");
-                    let meta = scim_v2::models::scim_schema::Meta {
-                        resource_type: Some("Group".to_string()),
-                        created: Some(crate::utils::format_scim_datetime(created_at)),
-                        last_modified: Some(crate::utils::format_scim_datetime(updated_at)),
-                        location: None,
-                        version: Some(format!("W/\"{}\"", version)),
-                    };
-                    *group.meta_mut() = Some(meta);
-                } else {
-                    // Update existing meta with version
-                    if let Some(ref mut meta) = group.meta_mut() {
-                        meta.version = Some(format!("W/\"{}\"", version));
-                    }
-                }
+                let created_at: chrono::DateTime<chrono::Utc> = row.get("created_at");
+                let updated_at: chrono::DateTime<chrono::Utc> = row.get("updated_at");
+                let existing_location = group.meta().as_ref().and_then(|m| m.location.clone());
+                let meta = scim_v2::models::scim_schema::Meta {
+                    resource_type: Some("Group".to_string()),
+                    created: Some(crate::utils::format_scim_datetime(created_at)),
+                    last_modified: Some(crate::utils::format_scim_datetime(updated_at)),
+                    location: existing_location,
+                    version: Some(format!("W/\"{}\"", version)),
+                };
+                *group.meta_mut() = Some(meta);
 
                 // Fetch members
                 let members = self.fetch_group_members(tenant_id, id).await?;
@@ -441,6 +443,7 @@ impl GroupReader for PostgresGroupReader {
         tenant_id: u32,
         id: &str,
         patch_ops: &ScimPatchOp,
+        compatibility: &CompatibilityConfig,
     ) -> AppResult<Option<Group>> {
         // Return None for empty IDs
         if id.is_empty() {
@@ -460,20 +463,41 @@ impl GroupReader for PostgresGroupReader {
 
         // Apply patch operations
         for operation in &patch_ops.operations {
-            let scim_path = ScimPath::parse(&operation.path.clone().unwrap_or_default())?;
+            let scim_path = ScimPath::parse(
+                &operation.path.clone().unwrap_or_default(),
+                crate::parser::ResourceType::Group,
+            )?;
 
             // Convert group to JSON for patch operations
             let mut group_json = serde_json::to_value(&group).map_err(AppError::Serialization)?;
 
-            // Apply the operation
-            scim_path.apply_operation(
+            // Apply the operation, honoring the tenant's compatibility
+            // settings the same way patch_user does.
+            scim_path.apply_operation_with_compatibility(
                 &mut group_json,
                 &operation.op,
                 &operation.value.as_ref().unwrap_or(&Value::Null).clone(),
+                compatibility,
             )?;
 
-            // Convert back to Group
-            group = serde_json::from_value(group_json).map_err(AppError::Serialization)?;
+            // RFC 7644 §3.5.2.2: reject a "remove" (or any other operation)
+            // that drops a required attribute (e.g. `displayName`) with 400
+            // mutability, before attempting to deserialize back into the
+            // typed model.
+            crate::schema::validate_required_attributes_present(
+                &group_json,
+                &crate::schema::GROUP_SCHEMA,
+            )?;
+
+            // Convert back to Group. Any remaining failure here is a client
+            // data problem, not a server error, and the underlying serde
+            // message is not shown to the client.
+            group = serde_json::from_value(group_json).map_err(|e| {
+                eprintln!("Failed to apply patch operation to group: {}", e);
+                AppError::BadRequest(
+                    "Invalid resource data after applying patch operations".to_string(),
+                )
+            })?;
         }
 
         // Use the new update system to save the patched group

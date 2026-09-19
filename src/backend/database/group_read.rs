@@ -3,6 +3,7 @@
 //! This module provides common interfaces for group read operations
 //! that work across different database backends.
 
+use crate::config::CompatibilityConfig;
 use crate::error::AppResult;
 use crate::models::{Group, ScimPatchOp};
 use crate::parser::filter_operator::FilterOperator;
@@ -58,6 +59,7 @@ pub trait GroupReader: Send + Sync {
         tenant_id: u32,
         id: &str,
         patch_ops: &ScimPatchOp,
+        compatibility: &CompatibilityConfig,
     ) -> AppResult<Option<Group>>;
 }
 
@@ -144,7 +146,10 @@ impl<T: GroupReader> UnifiedGroupReadOps<T> {
         tenant_id: u32,
         id: &str,
         patch_ops: &ScimPatchOp,
+        compatibility: &CompatibilityConfig,
     ) -> AppResult<Option<Group>> {
-        self.reader.patch_group(tenant_id, id, patch_ops).await
+        self.reader
+            .patch_group(tenant_id, id, patch_ops, compatibility)
+            .await
     }
 }

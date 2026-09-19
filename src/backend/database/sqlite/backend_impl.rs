@@ -355,11 +355,12 @@ impl GroupBackend for SqliteBackend {
         tenant_id: u32,
         id: &str,
         patch_ops: &crate::models::ScimPatchOp,
+        compatibility: &crate::config::CompatibilityConfig,
     ) -> AppResult<Option<Group>> {
         // Perform the patch using the group read ops
         match self
             .group_read_ops
-            .patch_group(tenant_id, id, patch_ops)
+            .patch_group(tenant_id, id, patch_ops, compatibility)
             .await?
         {
             Some(_) => {

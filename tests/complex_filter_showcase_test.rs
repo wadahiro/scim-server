@@ -1,5 +1,6 @@
 // Integration test demonstrating complex SCIM filter expressions
 use scim_server::parser::patch_parser::ScimPath;
+use scim_server::parser::ResourceType;
 use serde_json::json;
 
 #[test]
@@ -48,8 +49,8 @@ fn showcase_complex_filters() {
     });
 
     println!("\n1. Testing Simple Filter: emails[type eq \"work\"]");
-    let simple_path =
-        ScimPath::parse("emails[type eq \"work\"]").expect("Should parse simple filter");
+    let simple_path = ScimPath::parse("emails[type eq \"work\"]", ResourceType::User)
+        .expect("Should parse simple filter");
     let mut user_copy = user.clone();
     simple_path
         .apply_operation(&mut user_copy, "remove", &json!(null))
@@ -63,8 +64,11 @@ fn showcase_complex_filters() {
     assert_eq!(remaining_emails.len(), 1); // Only home email should remain
 
     println!("\n2. Testing AND Operator: emails[type eq \"work\" and primary eq true]");
-    let and_path = ScimPath::parse("emails[type eq \"work\" and primary eq true]")
-        .expect("Should parse AND filter");
+    let and_path = ScimPath::parse(
+        "emails[type eq \"work\" and primary eq true]",
+        ResourceType::User,
+    )
+    .expect("Should parse AND filter");
     let mut user_copy = user.clone();
     and_path
         .apply_operation(
@@ -90,8 +94,11 @@ fn showcase_complex_filters() {
     assert_eq!(primary_work["value"], "new-primary@company.com");
 
     println!("\n3. Testing OR Operator: phoneNumbers[type eq \"work\" or type eq \"mobile\"]");
-    let or_path = ScimPath::parse("phoneNumbers[type eq \"work\" or type eq \"mobile\"]")
-        .expect("Should parse OR filter");
+    let or_path = ScimPath::parse(
+        "phoneNumbers[type eq \"work\" or type eq \"mobile\"]",
+        ResourceType::User,
+    )
+    .expect("Should parse OR filter");
     let mut user_copy = user.clone();
     let original_count = user_copy["phoneNumbers"].as_array().unwrap().len();
     or_path
@@ -108,9 +115,11 @@ fn showcase_complex_filters() {
     println!(
         "\n4. Testing Precedence: emails[type eq \"work\" and primary eq true or type eq \"home\"]"
     );
-    let precedence_path =
-        ScimPath::parse("emails[type eq \"work\" and primary eq true or type eq \"home\"]")
-            .expect("Should parse precedence filter");
+    let precedence_path = ScimPath::parse(
+        "emails[type eq \"work\" and primary eq true or type eq \"home\"]",
+        ResourceType::User,
+    )
+    .expect("Should parse precedence filter");
     let mut user_copy = user.clone();
     precedence_path
         .apply_operation(&mut user_copy, "remove", &json!(null))
@@ -123,17 +132,21 @@ fn showcase_complex_filters() {
     assert_eq!(remaining_emails[0]["value"], "backup@company.com");
 
     println!("\n5. Testing Advanced Operators: emails[value co \"@company\"]");
-    let contains_path =
-        ScimPath::parse("emails[value co \"@company\"]").expect("Should parse contains filter");
+    let contains_path = ScimPath::parse("emails[value co \"@company\"]", ResourceType::User)
+        .expect("Should parse contains filter");
     let mut user_copy = user.clone();
+    // This filter matches both "@company" emails, so the replacement value
+    // is applied to two elements at once. It must not itself set
+    // `primary: true` -- doing so would set two elements' primary to true
+    // in a single operation, which RFC 7643 §2.4 forbids and the server
+    // now rejects with 400 (see `multivalue_conformance_test.rs`).
     contains_path
         .apply_operation(
             &mut user_copy,
             "replace",
             &json!({
                 "value": "updated@company.com",
-                "type": "business",
-                "primary": true
+                "type": "business"
             }),
         )
         .expect("Should replace company emails");

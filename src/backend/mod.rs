@@ -183,6 +183,7 @@ pub trait GroupBackend: Backend {
         tenant_id: u32,
         id: &str,
         patch_ops: &ScimPatchOp,
+        compatibility: &CompatibilityConfig,
     ) -> AppResult<Option<Group>>;
 
     /// Delete a group from the tenant

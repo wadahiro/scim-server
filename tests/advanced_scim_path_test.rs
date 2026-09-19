@@ -1,10 +1,11 @@
 use scim_server::parser::patch_parser::ScimPath;
+use scim_server::parser::ResourceType;
 use serde_json::json;
 
 #[test]
 fn test_simple_attribute_path() {
     let path = "displayName";
-    let parsed = ScimPath::parse(path).expect("Should parse simple path");
+    let parsed = ScimPath::parse(path, ResourceType::User).expect("Should parse simple path");
 
     let mut user = json!({
         "userName": "test.user",
@@ -21,7 +22,7 @@ fn test_simple_attribute_path() {
 #[test]
 fn test_nested_attribute_path() {
     let path = "name.givenName";
-    let parsed = ScimPath::parse(path).expect("Should parse nested path");
+    let parsed = ScimPath::parse(path, ResourceType::User).expect("Should parse nested path");
 
     let mut user = json!({
         "userName": "john.doe",
@@ -40,26 +41,23 @@ fn test_nested_attribute_path() {
 }
 
 #[test]
-fn test_deep_nested_path() {
+fn test_deep_nested_path_rejects_unknown_sub_attribute() {
+    // "name.formatted" is a leaf String attribute (RFC 7643 §4.1.1) with no
+    // sub-attributes of its own, so "first" names nothing the schema knows
+    // about. `User.name` (scim_v2::models::user::Name) has no catch-all for
+    // unrecognized fields, so silently accepting this path would let the
+    // value be dropped on the JSON round trip while still reporting 200 --
+    // rejected instead per RFC 7644 §3.12 `invalidPath` ("The 'path'
+    // attribute was invalid or malformed").
     let path = "name.formatted.first";
-    let parsed = ScimPath::parse(path).expect("Should parse deep nested path");
-
-    let mut user = json!({
-        "userName": "test.user",
-        "name": {}
-    });
-
-    // Test add operation - should create nested structure
-    parsed
-        .apply_operation(&mut user, "add", &json!("Test"))
-        .expect("Should apply operation");
-    assert_eq!(user["name"]["formatted"]["first"], "Test");
+    let result = ScimPath::parse(path, ResourceType::User);
+    assert!(result.is_err(), "Should reject an unknown sub-attribute");
 }
 
 #[test]
 fn test_value_path_with_filter() {
     let path = "emails[type eq \"work\"]";
-    let parsed = ScimPath::parse(path).expect("Should parse value path");
+    let parsed = ScimPath::parse(path, ResourceType::User).expect("Should parse value path");
 
     let mut user = json!({
         "userName": "jane.doe",
@@ -100,7 +98,8 @@ fn test_value_path_with_filter() {
 #[test]
 fn test_value_path_with_sub_attribute() {
     let path = "addresses[type eq \"work\"].street";
-    let parsed = ScimPath::parse(path).expect("Should parse value path with sub-attribute");
+    let parsed = ScimPath::parse(path, ResourceType::User)
+        .expect("Should parse value path with sub-attribute");
 
     let mut user = json!({
         "userName": "bob.smith",
@@ -137,7 +136,7 @@ fn test_value_path_with_sub_attribute() {
 #[test]
 fn test_value_path_add_operation() {
     let path = "phoneNumbers[type eq \"mobile\"]";
-    let parsed = ScimPath::parse(path).expect("Should parse value path");
+    let parsed = ScimPath::parse(path, ResourceType::User).expect("Should parse value path");
 
     let mut user = json!({
         "userName": "alice.wonder",
@@ -172,7 +171,7 @@ fn test_value_path_add_operation() {
 #[test]
 fn test_value_path_remove_operation() {
     let path = "emails[type eq \"work\"]";
-    let parsed = ScimPath::parse(path).expect("Should parse value path");
+    let parsed = ScimPath::parse(path, ResourceType::User).expect("Should parse value path");
 
     let mut user = json!({
         "userName": "charlie.brown",
@@ -202,7 +201,8 @@ fn test_value_path_remove_operation() {
 #[test]
 fn test_value_path_remove_sub_attribute() {
     let path = "addresses[type eq \"work\"].country";
-    let parsed = ScimPath::parse(path).expect("Should parse value path with sub-attribute");
+    let parsed = ScimPath::parse(path, ResourceType::User)
+        .expect("Should parse value path with sub-attribute");
 
     let mut user = json!({
         "userName": "david.jones",
@@ -241,7 +241,8 @@ fn test_value_path_remove_sub_attribute() {
 #[test]
 fn test_schema_qualified_attribute() {
     let path = "urn:ietf:params:scim:schemas:extension:enterprise:2.0:User:department";
-    let parsed = ScimPath::parse(path).expect("Should parse schema-qualified path");
+    let parsed =
+        ScimPath::parse(path, ResourceType::User).expect("Should parse schema-qualified path");
 
     let mut user = json!({
         "userName": "enterprise.user",
@@ -268,7 +269,7 @@ fn test_schema_qualified_attribute() {
 #[test]
 fn test_error_handling_invalid_filter() {
     let path = "emails[type xyz \"work\"]"; // 'xyz' operator not supported
-    let result = ScimPath::parse(path);
+    let result = ScimPath::parse(path, ResourceType::User);
     assert!(result.is_err());
 
     let error = result.unwrap_err();
@@ -278,7 +279,7 @@ fn test_error_handling_invalid_filter() {
 #[test]
 fn test_error_handling_malformed_path() {
     let path = "emails[type eq \"work\""; // Missing closing bracket
-    let result = ScimPath::parse(path);
+    let result = ScimPath::parse(path, ResourceType::User);
     assert!(result.is_err());
 
     let error = result.unwrap_err();
@@ -288,7 +289,7 @@ fn test_error_handling_malformed_path() {
 #[test]
 fn test_error_handling_non_array_value_path() {
     let path = "name[type eq \"work\"]"; // name is not an array
-    let parsed = ScimPath::parse(path).expect("Should parse path");
+    let parsed = ScimPath::parse(path, ResourceType::User).expect("Should parse path");
 
     let mut user = json!({
         "userName": "test.user",

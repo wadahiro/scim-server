@@ -318,3 +318,97 @@ async fn test_patch_remove_operations_not_affected() {
     // Emails should be removed
     assert!(patched_user.get("emails").is_none());
 }
+
+#[tokio::test]
+async fn test_group_patch_replace_empty_members_allowed_by_default() {
+    let tenant_config = common::create_test_app_config();
+    let app = common::setup_test_app(tenant_config).await.unwrap();
+    let server = TestServer::new(app).unwrap();
+
+    let user_body = json!({
+        "schemas": ["urn:ietf:params:scim:schemas:core:2.0:User"],
+        "userName": "group.compat.member"
+    });
+    let user_response = server.post("/scim/v2/Users").json(&user_body).await;
+    user_response.assert_status(StatusCode::CREATED);
+    let user: Value = user_response.json();
+    let user_id = user["id"].as_str().unwrap();
+
+    let group_body = json!({
+        "schemas": ["urn:ietf:params:scim:schemas:core:2.0:Group"],
+        "displayName": "Compat Default Group",
+        "members": [{"value": user_id, "type": "User"}]
+    });
+    let group_response = server.post("/scim/v2/Groups").json(&group_body).await;
+    group_response.assert_status(StatusCode::CREATED);
+    let group: Value = group_response.json();
+    let group_id = group["id"].as_str().unwrap();
+
+    let patch_body = json!({
+        "schemas": ["urn:ietf:params:scim:api:messages:2.0:PatchOp"],
+        "Operations": [{"op": "replace", "path": "members", "value": []}]
+    });
+    let patch_response = server
+        .patch(&format!("/scim/v2/Groups/{}", group_id))
+        .json(&patch_body)
+        .await;
+
+    patch_response.assert_status(StatusCode::OK);
+}
+
+#[tokio::test]
+async fn test_group_patch_replace_empty_members_disabled() {
+    // RFC 7644 §3.5.2 PATCH replace behavior for multi-valued attributes is
+    // a tenant compatibility setting (`support_patch_replace_empty_array`),
+    // honored today by the User PATCH handler. The Group PATCH handler must
+    // honor the same tenant setting -- not silently apply the built-in
+    // default regardless of what the tenant configured.
+    let mut tenant_config = common::create_test_app_config();
+    tenant_config.tenants[2].compatibility = Some(CompatibilityConfig {
+        support_patch_replace_empty_array: false,
+        ..Default::default()
+    });
+
+    let app = common::setup_test_app(tenant_config).await.unwrap();
+    let server = TestServer::new(app).unwrap();
+
+    let user_body = json!({
+        "schemas": ["urn:ietf:params:scim:schemas:core:2.0:User"],
+        "userName": "group.compat.member.disabled"
+    });
+    let user_response = server.post("/scim/v2/Users").json(&user_body).await;
+    user_response.assert_status(StatusCode::CREATED);
+    let user: Value = user_response.json();
+    let user_id = user["id"].as_str().unwrap();
+
+    let group_body = json!({
+        "schemas": ["urn:ietf:params:scim:schemas:core:2.0:Group"],
+        "displayName": "Compat Disabled Group",
+        "members": [{"value": user_id, "type": "User"}]
+    });
+    let group_response = server.post("/scim/v2/Groups").json(&group_body).await;
+    group_response.assert_status(StatusCode::CREATED);
+    let group: Value = group_response.json();
+    let group_id = group["id"].as_str().unwrap();
+
+    let patch_body = json!({
+        "schemas": ["urn:ietf:params:scim:api:messages:2.0:PatchOp"],
+        "Operations": [{"op": "replace", "path": "members", "value": []}]
+    });
+    let patch_response = server
+        .patch(&format!("/scim/v2/Groups/{}", group_id))
+        .json(&patch_body)
+        .await;
+
+    patch_response.assert_status(StatusCode::BAD_REQUEST);
+    let error_response: Value = patch_response.json();
+    assert_eq!(
+        error_response["schemas"][0],
+        "urn:ietf:params:scim:api:messages:2.0:Error"
+    );
+    assert_eq!(error_response["scimType"], "unsupported");
+    assert!(error_response["detail"]
+        .as_str()
+        .unwrap()
+        .contains("empty array is not supported"));
+}

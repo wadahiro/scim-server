@@ -15,6 +15,21 @@ pub enum AppError {
     Configuration(String),
     #[allow(dead_code)]
     PreconditionFailed,
+    /// A PATCH (or other) operation attempted to remove or otherwise violate
+    /// the mutability of an attribute the schema marks `required` or
+    /// `readOnly`. Maps to HTTP 400 with `scimType: "mutability"`
+    /// (RFC 7644 §3.5.2).
+    Mutability(String),
+    /// A PATCH `path` selected a value via a filter that matched nothing.
+    /// Maps to HTTP 400 with `scimType: "noTarget"` (RFC 7644 §3.5.2).
+    NoTarget(String),
+    /// A PATCH `path` named no attribute this server can actually persist
+    /// (e.g. a sub-attribute of a known complex attribute, or an attribute
+    /// inside a schema-extension container, that the schema doesn't
+    /// define) -- so applying the operation would silently have no effect.
+    /// Maps to HTTP 400 with `scimType: "invalidPath"` (RFC 7644 §3.12:
+    /// "The 'path' attribute was invalid or malformed").
+    InvalidPath(String),
 }
 
 impl fmt::Display for AppError {
@@ -31,6 +46,9 @@ impl fmt::Display for AppError {
             AppError::PreconditionFailed => {
                 write!(f, "Precondition failed: Resource version mismatch")
             }
+            AppError::Mutability(e) => write!(f, "Mutability violation: {}", e),
+            AppError::NoTarget(e) => write!(f, "No target: {}", e),
+            AppError::InvalidPath(e) => write!(f, "Invalid path: {}", e),
         }
     }
 }
@@ -92,18 +110,37 @@ pub fn scim_error_response(
 // HTTPレスポンスへの変換
 impl AppError {
     pub fn to_response(&self) -> (StatusCode, Json<serde_json::Value>) {
+        // RFC 7644 §3.12 error responses are meant for API clients, not for
+        // server-internal diagnostics. For 5xx-class errors we log the real
+        // cause (which may include driver/serialization internals such as
+        // SQL error text or serde messages) but always return a generic,
+        // sanitized `detail` to the client instead of that raw message.
+        const INTERNAL_ERROR_DETAIL: &str = "An internal error occurred";
+
         match self {
             AppError::Database(e) => {
                 eprintln!("Database error: {}", e);
-                scim_error_response(StatusCode::INTERNAL_SERVER_ERROR, None, e)
+                scim_error_response(
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    None,
+                    INTERNAL_ERROR_DETAIL,
+                )
             }
             AppError::Rusqlite(e) => {
                 eprintln!("SQLite error: {}", e);
-                scim_error_response(StatusCode::INTERNAL_SERVER_ERROR, None, &e.to_string())
+                scim_error_response(
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    None,
+                    INTERNAL_ERROR_DETAIL,
+                )
             }
             AppError::Serialization(e) => {
                 eprintln!("Serialization error: {}", e);
-                scim_error_response(StatusCode::INTERNAL_SERVER_ERROR, None, &e.to_string())
+                scim_error_response(
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    None,
+                    INTERNAL_ERROR_DETAIL,
+                )
             }
             AppError::BadRequest(e) => {
                 scim_error_response(StatusCode::BAD_REQUEST, Some("invalidValue"), e)
@@ -113,20 +150,37 @@ impl AppError {
             }
             AppError::Internal(e) => {
                 eprintln!("Internal error: {}", e);
-                scim_error_response(StatusCode::INTERNAL_SERVER_ERROR, None, e)
+                scim_error_response(
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    None,
+                    INTERNAL_ERROR_DETAIL,
+                )
             }
             AppError::FilterParse(e) => {
                 scim_error_response(StatusCode::BAD_REQUEST, Some("invalidFilter"), e)
             }
             AppError::Configuration(e) => {
                 eprintln!("Configuration error: {}", e);
-                scim_error_response(StatusCode::INTERNAL_SERVER_ERROR, None, e)
+                scim_error_response(
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    None,
+                    INTERNAL_ERROR_DETAIL,
+                )
             }
             AppError::PreconditionFailed => scim_error_response(
                 StatusCode::PRECONDITION_FAILED,
                 Some("preconditionFailed"),
                 "Resource version mismatch",
             ),
+            AppError::Mutability(e) => {
+                scim_error_response(StatusCode::BAD_REQUEST, Some("mutability"), e)
+            }
+            AppError::NoTarget(e) => {
+                scim_error_response(StatusCode::BAD_REQUEST, Some("noTarget"), e)
+            }
+            AppError::InvalidPath(e) => {
+                scim_error_response(StatusCode::BAD_REQUEST, Some("invalidPath"), e)
+            }
         }
     }
 }

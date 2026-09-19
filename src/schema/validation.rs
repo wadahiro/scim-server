@@ -96,7 +96,189 @@ pub fn validate_user_primary_constraints(user_json: &Value) -> AppResult<()> {
     Ok(())
 }
 
-/// Ensures at most one primary value when adding/replacing multi-valued attributes
+/// Validates the `primary` constraint (RFC 7643 §2.4) for the `addresses`
+/// sub-attribute carried on the `crate::models::User` request wrapper.
+///
+/// `addresses` is modeled there as raw JSON (rather than on the inner
+/// `scim_v2::models::user::User`) so that `primary` round-trips through
+/// requests, storage, and responses. Because that wrapper field owns the
+/// `addresses` JSON key during deserialization, the inner user's own
+/// `addresses` is always `None` and [`validate_user_primary_constraints`]
+/// (which only ever sees the inner user) can never observe it. This
+/// function is the addresses-specific counterpart callers must run
+/// alongside [`validate_user`] to restore that coverage.
+pub fn validate_addresses_primary_constraint(addresses: Option<&Vec<Value>>) -> AppResult<()> {
+    if let Some(addresses) = addresses {
+        validate_primary_constraint(addresses)?;
+    }
+
+    Ok(())
+}
+
+/// Multi-valued complex attributes whose entries are identified by a
+/// `(type, value)` pair, per RFC 7643 §2.4 ("A service provider SHOULD NOT
+/// return the same value more than once within a multi-valued attribute").
+const DEDUPLICATED_MULTIVALUED_ATTRIBUTES: &[&str] = &[
+    "emails",
+    "phoneNumbers",
+    "ims",
+    "photos",
+    "entitlements",
+    "roles",
+    "x509Certificates",
+];
+
+/// De-duplicates `(type, value)` pairs within the multi-valued complex
+/// attributes listed in [`DEDUPLICATED_MULTIVALUED_ATTRIBUTES`], preserving
+/// first-occurrence order (RFC 7643 §2.4).
+pub fn dedupe_multivalued_attributes(resource_json: &mut Value) {
+    let Value::Object(obj) = resource_json else {
+        return;
+    };
+
+    for key in DEDUPLICATED_MULTIVALUED_ATTRIBUTES {
+        if let Some(Value::Array(arr)) = obj.get_mut(*key) {
+            let mut seen = std::collections::HashSet::new();
+            arr.retain(|item| {
+                let Value::Object(item_obj) = item else {
+                    return true;
+                };
+                let type_val = item_obj.get("type").cloned().unwrap_or(Value::Null);
+                let value_val = item_obj.get("value").cloned().unwrap_or(Value::Null);
+                seen.insert((type_val.to_string(), value_val.to_string()))
+            });
+        }
+    }
+}
+
+/// Ensures a PATCH (or other partial update) operation did not remove a
+/// top-level attribute the schema marks `required`.
+///
+/// RFC 7644 §3.5.2.2 requires the service provider to reject a "remove" of a
+/// required attribute with HTTP 400 and `scimType: "mutability"`. The
+/// resource models here use non-`Option` Rust fields for some required
+/// attributes (e.g. `userName`), so removing the JSON key and only then
+/// deserializing back into the typed model would otherwise surface as an
+/// opaque serde "missing field" error. Calling this first, on the JSON
+/// representation, lets us report the correct SCIM error instead.
+pub fn validate_required_attributes_present(
+    resource_json: &Value,
+    schema: &crate::schema::SchemaDefinition,
+) -> AppResult<()> {
+    let Value::Object(obj) = resource_json else {
+        return Ok(());
+    };
+
+    for attr in &schema.attributes {
+        if !attr.required {
+            continue;
+        }
+        match obj.get(attr.name) {
+            None => {
+                return Err(AppError::Mutability(format!(
+                    "'{}' is a required attribute and cannot be removed",
+                    attr.name
+                )));
+            }
+            Some(Value::Null) => {
+                return Err(AppError::Mutability(format!(
+                    "'{}' is a required attribute and cannot be removed",
+                    attr.name
+                )));
+            }
+            Some(Value::String(s)) if s.is_empty() => {
+                return Err(AppError::Mutability(format!(
+                    "'{}' is a required attribute and cannot be removed",
+                    attr.name
+                )));
+            }
+            _ => {}
+        }
+    }
+
+    Ok(())
+}
+
+/// Reports whether a schema (User, Group, or an extension) defines a
+/// `primary` sub-attribute on the named top-level multi-valued attribute.
+///
+/// RFC 7643 §4.1.2 defines `primary` on `emails`, `phoneNumbers`, `ims`,
+/// `photos`, `addresses`, `entitlements`, `roles`, and `x509Certificates`.
+/// This walks the schema definitions instead of hardcoding that list, so a
+/// future schema change (or a resource type that never carries `primary`,
+/// like Group's `members`) is picked up automatically.
+pub fn attribute_has_primary_subattribute(attr_name: &str) -> bool {
+    crate::schema::get_all_schemas().iter().any(|schema| {
+        schema.attributes.iter().any(|attr| {
+            attr.name == attr_name
+                && attr.multi_valued
+                && attr.sub_attributes.iter().any(|sub| sub.name == "primary")
+        })
+    })
+}
+
+/// Rejects a single PATCH operation whose own `value` sets `primary: true`
+/// on more than one element of a multi-valued attribute.
+///
+/// RFC 7643 §2.4 requires that `primary` be `true` for no more than one
+/// value in the array. RFC 7644 §3.5.2 says that setting one value's
+/// `primary` to `true` SHALL cause the server to clear `primary` on every
+/// *other* value already in the array -- i.e. the operation being applied
+/// wins over what came before it. Neither RFC says what a server should do
+/// when a single operation's own `value` supplies more than one
+/// `primary: true` in the first place; that request is internally
+/// contradictory and unspecified by either RFC. This crate deliberately
+/// rejects it with `invalidValue` (RFC 7644 §3.12: a value "not compatible
+/// with the operation or attribute type") rather than guessing a winner,
+/// since any choice would be implementation-defined and not portable across
+/// servers. This check only looks at the elements supplied by this one
+/// operation -- two separate operations that each set a different value's
+/// `primary` to `true` are sequentially coherent (the later one wins, per
+/// §3.5.2) and must not be rejected here.
+pub fn reject_conflicting_primaries_in_operation_value(
+    attr_name: &str,
+    elements: &[Value],
+) -> AppResult<()> {
+    if !attribute_has_primary_subattribute(attr_name) {
+        return Ok(());
+    }
+
+    let primary_count = elements
+        .iter()
+        .filter(|item| {
+            matches!(item, Value::Object(obj) if obj.get("primary") == Some(&Value::Bool(true)))
+        })
+        .count();
+
+    if primary_count > 1 {
+        return Err(AppError::BadRequest(format!(
+            "PATCH operation's value for '{}' sets primary=true on {} elements; \
+             a single operation may set at most one (RFC 7643 §2.4)",
+            attr_name, primary_count
+        )));
+    }
+
+    Ok(())
+}
+
+/// Clears `primary` from every element of `multi_value_attr` after the
+/// first one that has it set to `true`.
+///
+/// Every in-tree call site now runs
+/// [`reject_conflicting_primaries_in_operation_value`] on this same slice
+/// immediately beforehand, which returns an error (rather than silently
+/// picking a winner) as soon as more than one element has `primary: true`.
+/// That makes the `primary_indices.len() > 1` branch below unreachable in
+/// practice: by the time this function is ever called at those sites, at
+/// most one element can already have `primary: true`, so this is a no-op
+/// there. It is kept, rather than removed, as a defensive backstop for any
+/// future caller that applies a PATCH `value` to a multi-valued attribute
+/// without first calling `reject_conflicting_primaries_in_operation_value`
+/// -- and its "keep the first" behavior below is deliberately never
+/// exercised in that no-op path, so it cannot regress the "last write wins"
+/// semantics RFC 7644 §3.5.2 requires (see the `#[cfg(test)]` module below,
+/// which documents this directly instead of implying it still fires from a
+/// live PATCH request).
 pub fn enforce_single_primary(multi_value_attr: &mut [Value]) -> AppResult<()> {
     let mut primary_indices = Vec::new();
 
@@ -111,7 +293,8 @@ pub fn enforce_single_primary(multi_value_attr: &mut [Value]) -> AppResult<()> {
         }
     }
 
-    // If multiple primaries found, keep only the first one
+    // Defensive backstop only (see doc comment above): if this is ever
+    // reached with multiple primaries, keep the first and clear the rest.
     if primary_indices.len() > 1 {
         for &index in &primary_indices[1..] {
             if let Value::Object(obj) = &mut multi_value_attr[index] {
@@ -161,6 +344,13 @@ mod tests {
 
     #[test]
     fn test_enforce_single_primary() {
+        // Exercises `enforce_single_primary` directly, in isolation, with
+        // an input no live PATCH request can produce anymore: every
+        // in-tree caller runs `reject_conflicting_primaries_in_operation_value`
+        // on the same slice first, which would already have returned an
+        // error for these two `primary: true` elements. This test documents
+        // the function's own "keep the first" fallback behavior as a unit
+        // of code, not a behavior a client can still observe.
         let mut emails = vec![
             json!({"value": "primary1@example.com", "primary": true}),
             json!({"value": "primary2@example.com", "primary": true}),
@@ -192,6 +382,61 @@ mod tests {
         });
 
         assert!(validate_user_primary_constraints(&user).is_err());
+    }
+
+    #[test]
+    fn test_attribute_has_primary_subattribute() {
+        for attr in [
+            "emails",
+            "phoneNumbers",
+            "ims",
+            "photos",
+            "addresses",
+            "entitlements",
+            "roles",
+            "x509Certificates",
+        ] {
+            assert!(
+                attribute_has_primary_subattribute(attr),
+                "'{}' should have a primary sub-attribute per RFC 7643 §4.1.2",
+                attr
+            );
+        }
+
+        // Group's `members` has no `primary` sub-attribute at all.
+        assert!(!attribute_has_primary_subattribute("members"));
+        // `schemas` is not even a complex multi-valued attribute.
+        assert!(!attribute_has_primary_subattribute("schemas"));
+        assert!(!attribute_has_primary_subattribute("not-a-real-attribute"));
+    }
+
+    #[test]
+    fn test_reject_conflicting_primaries_in_operation_value_rejects_two() {
+        let emails = vec![
+            json!({"value": "a@example.com", "primary": true}),
+            json!({"value": "b@example.com", "primary": true}),
+        ];
+        assert!(reject_conflicting_primaries_in_operation_value("emails", &emails).is_err());
+    }
+
+    #[test]
+    fn test_reject_conflicting_primaries_in_operation_value_allows_one() {
+        let emails = vec![
+            json!({"value": "a@example.com", "primary": true}),
+            json!({"value": "b@example.com"}),
+        ];
+        assert!(reject_conflicting_primaries_in_operation_value("emails", &emails).is_ok());
+    }
+
+    #[test]
+    fn test_reject_conflicting_primaries_in_operation_value_ignores_attributes_without_primary() {
+        // "members" has no `primary` sub-attribute, so even a fabricated
+        // `primary: true` on more than one element must not be rejected.
+        let members = vec![
+            json!({"value": "u1", "primary": true}),
+            json!({"value": "u2", "primary": true}),
+        ];
+        assert!(reject_conflicting_primaries_in_operation_value("members", &members).is_ok());
     }
 }
 

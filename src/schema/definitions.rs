@@ -25,11 +25,17 @@ pub const SCIM_API_MESSAGES_LIST_RESPONSE: &str =
 pub enum AttributeType {
     String,
     Boolean,
-    Integer,
     Decimal,
+    Integer,
     DateTime,
     Reference,
     Complex,
+    /// Base64-encoded binary data (RFC 7643 §2.3.6). No attribute in the
+    /// schemas below currently uses this, but RFC 7644 §3.4.2.2 calls out
+    /// Binary attributes by name alongside Boolean ones as invalid targets
+    /// for relational filter operators, so the type needs to be
+    /// representable.
+    Binary,
 }
 
 /// Mutability of attributes
@@ -74,6 +80,11 @@ pub struct AttributeDefinition {
     pub returned: Returned,
     pub uniqueness: Uniqueness,
     pub sub_attributes: Vec<AttributeDefinition>,
+    /// The set of canonical values this attribute is restricted to, per
+    /// RFC 7643 §7. Empty when the attribute has no canonical value
+    /// restriction (the SCIM `canonicalValues` schema member is only
+    /// emitted when this is non-empty).
+    pub canonical_values: Vec<&'static str>,
 }
 
 /// Schema definition
@@ -103,6 +114,7 @@ lazy_static! {
                 returned: Returned::Always,
                 uniqueness: Uniqueness::Server,
                 sub_attributes: vec![],
+                canonical_values: vec![],
             },
             AttributeDefinition {
                 name: "externalId",
@@ -115,6 +127,7 @@ lazy_static! {
                 returned: Returned::Default,
                 uniqueness: Uniqueness::None,
                 sub_attributes: vec![],
+                canonical_values: vec![],
             },
             AttributeDefinition {
                 name: "userName",
@@ -127,6 +140,7 @@ lazy_static! {
                 returned: Returned::Default,
                 uniqueness: Uniqueness::Server,
                 sub_attributes: vec![],
+                canonical_values: vec![],
             },
             AttributeDefinition {
                 name: "name",
@@ -150,6 +164,7 @@ lazy_static! {
                         returned: Returned::Default,
                         uniqueness: Uniqueness::None,
                         sub_attributes: vec![],
+                        canonical_values: vec![],
                     },
                     AttributeDefinition {
                         name: "familyName",
@@ -162,6 +177,7 @@ lazy_static! {
                         returned: Returned::Default,
                         uniqueness: Uniqueness::None,
                         sub_attributes: vec![],
+                        canonical_values: vec![],
                     },
                     AttributeDefinition {
                         name: "givenName",
@@ -174,6 +190,7 @@ lazy_static! {
                         returned: Returned::Default,
                         uniqueness: Uniqueness::None,
                         sub_attributes: vec![],
+                        canonical_values: vec![],
                     },
                     AttributeDefinition {
                         name: "middleName",
@@ -186,6 +203,7 @@ lazy_static! {
                         returned: Returned::Default,
                         uniqueness: Uniqueness::None,
                         sub_attributes: vec![],
+                        canonical_values: vec![],
                     },
                     AttributeDefinition {
                         name: "honorificPrefix",
@@ -198,6 +216,7 @@ lazy_static! {
                         returned: Returned::Default,
                         uniqueness: Uniqueness::None,
                         sub_attributes: vec![],
+                        canonical_values: vec![],
                     },
                     AttributeDefinition {
                         name: "honorificSuffix",
@@ -210,8 +229,10 @@ lazy_static! {
                         returned: Returned::Default,
                         uniqueness: Uniqueness::None,
                         sub_attributes: vec![],
+                        canonical_values: vec![],
                     },
                 ],
+                canonical_values: vec![],
             },
             AttributeDefinition {
                 name: "displayName",
@@ -224,6 +245,7 @@ lazy_static! {
                 returned: Returned::Default,
                 uniqueness: Uniqueness::None,
                 sub_attributes: vec![],
+                canonical_values: vec![],
             },
             AttributeDefinition {
                 name: "nickName",
@@ -236,6 +258,7 @@ lazy_static! {
                 returned: Returned::Default,
                 uniqueness: Uniqueness::None,
                 sub_attributes: vec![],
+                canonical_values: vec![],
             },
             AttributeDefinition {
                 name: "profileUrl",
@@ -248,6 +271,7 @@ lazy_static! {
                 returned: Returned::Default,
                 uniqueness: Uniqueness::None,
                 sub_attributes: vec![],
+                canonical_values: vec![],
             },
             AttributeDefinition {
                 name: "title",
@@ -260,6 +284,7 @@ lazy_static! {
                 returned: Returned::Default,
                 uniqueness: Uniqueness::None,
                 sub_attributes: vec![],
+                canonical_values: vec![],
             },
             AttributeDefinition {
                 name: "userType",
@@ -272,6 +297,7 @@ lazy_static! {
                 returned: Returned::Default,
                 uniqueness: Uniqueness::None,
                 sub_attributes: vec![],
+                canonical_values: vec![],
             },
             AttributeDefinition {
                 name: "preferredLanguage",
@@ -284,6 +310,7 @@ lazy_static! {
                 returned: Returned::Default,
                 uniqueness: Uniqueness::None,
                 sub_attributes: vec![],
+                canonical_values: vec![],
             },
             AttributeDefinition {
                 name: "locale",
@@ -296,6 +323,7 @@ lazy_static! {
                 returned: Returned::Default,
                 uniqueness: Uniqueness::None,
                 sub_attributes: vec![],
+                canonical_values: vec![],
             },
             AttributeDefinition {
                 name: "timezone",
@@ -308,6 +336,7 @@ lazy_static! {
                 returned: Returned::Default,
                 uniqueness: Uniqueness::None,
                 sub_attributes: vec![],
+                canonical_values: vec![],
             },
             AttributeDefinition {
                 name: "emails",
@@ -331,6 +360,7 @@ lazy_static! {
                         returned: Returned::Default,
                         uniqueness: Uniqueness::None,
                         sub_attributes: vec![],
+                        canonical_values: vec![],
                     },
                     AttributeDefinition {
                         name: "type",
@@ -343,6 +373,7 @@ lazy_static! {
                         returned: Returned::Default,
                         uniqueness: Uniqueness::None,
                         sub_attributes: vec![],
+                        canonical_values: vec!["work", "home", "other"],
                     },
                     AttributeDefinition {
                         name: "primary",
@@ -355,8 +386,10 @@ lazy_static! {
                         returned: Returned::Default,
                         uniqueness: Uniqueness::None,
                         sub_attributes: vec![],
+                        canonical_values: vec![],
                     },
                 ],
+                canonical_values: vec![],
             },
             AttributeDefinition {
                 name: "phoneNumbers",
@@ -380,6 +413,7 @@ lazy_static! {
                         returned: Returned::Default,
                         uniqueness: Uniqueness::None,
                         sub_attributes: vec![],
+                        canonical_values: vec![],
                     },
                     AttributeDefinition {
                         name: "type",
@@ -392,6 +426,7 @@ lazy_static! {
                         returned: Returned::Default,
                         uniqueness: Uniqueness::None,
                         sub_attributes: vec![],
+                        canonical_values: vec!["work", "home", "mobile", "fax", "pager", "other"],
                     },
                     AttributeDefinition {
                         name: "primary",
@@ -404,8 +439,10 @@ lazy_static! {
                         returned: Returned::Default,
                         uniqueness: Uniqueness::None,
                         sub_attributes: vec![],
+                        canonical_values: vec![],
                     },
                 ],
+                canonical_values: vec![],
             },
             AttributeDefinition {
                 name: "ims",
@@ -429,6 +466,7 @@ lazy_static! {
                         returned: Returned::Default,
                         uniqueness: Uniqueness::None,
                         sub_attributes: vec![],
+                        canonical_values: vec![],
                     },
                     AttributeDefinition {
                         name: "type",
@@ -441,8 +479,23 @@ lazy_static! {
                         returned: Returned::Default,
                         uniqueness: Uniqueness::None,
                         sub_attributes: vec![],
+                        canonical_values: vec![],
+                    },
+                    AttributeDefinition {
+                        name: "primary",
+                        attr_type: AttributeType::Boolean,
+                        multi_valued: false,
+                        description: "A Boolean value indicating the 'primary' or preferred attribute value",
+                        required: false,
+                        case_exact: false,
+                        mutability: Mutability::ReadWrite,
+                        returned: Returned::Default,
+                        uniqueness: Uniqueness::None,
+                        sub_attributes: vec![],
+                        canonical_values: vec![],
                     },
                 ],
+                canonical_values: vec![],
             },
             AttributeDefinition {
                 name: "photos",
@@ -466,6 +519,7 @@ lazy_static! {
                         returned: Returned::Default,
                         uniqueness: Uniqueness::None,
                         sub_attributes: vec![],
+                        canonical_values: vec![],
                     },
                     AttributeDefinition {
                         name: "type",
@@ -478,8 +532,23 @@ lazy_static! {
                         returned: Returned::Default,
                         uniqueness: Uniqueness::None,
                         sub_attributes: vec![],
+                        canonical_values: vec![],
+                    },
+                    AttributeDefinition {
+                        name: "primary",
+                        attr_type: AttributeType::Boolean,
+                        multi_valued: false,
+                        description: "A Boolean value indicating the 'primary' or preferred attribute value",
+                        required: false,
+                        case_exact: false,
+                        mutability: Mutability::ReadWrite,
+                        returned: Returned::Default,
+                        uniqueness: Uniqueness::None,
+                        sub_attributes: vec![],
+                        canonical_values: vec![],
                     },
                 ],
+                canonical_values: vec![],
             },
             AttributeDefinition {
                 name: "addresses",
@@ -503,6 +572,7 @@ lazy_static! {
                         returned: Returned::Default,
                         uniqueness: Uniqueness::None,
                         sub_attributes: vec![],
+                        canonical_values: vec![],
                     },
                     AttributeDefinition {
                         name: "streetAddress",
@@ -515,6 +585,7 @@ lazy_static! {
                         returned: Returned::Default,
                         uniqueness: Uniqueness::None,
                         sub_attributes: vec![],
+                        canonical_values: vec![],
                     },
                     AttributeDefinition {
                         name: "locality",
@@ -527,6 +598,7 @@ lazy_static! {
                         returned: Returned::Default,
                         uniqueness: Uniqueness::None,
                         sub_attributes: vec![],
+                        canonical_values: vec![],
                     },
                     AttributeDefinition {
                         name: "region",
@@ -539,6 +611,7 @@ lazy_static! {
                         returned: Returned::Default,
                         uniqueness: Uniqueness::None,
                         sub_attributes: vec![],
+                        canonical_values: vec![],
                     },
                     AttributeDefinition {
                         name: "postalCode",
@@ -551,6 +624,7 @@ lazy_static! {
                         returned: Returned::Default,
                         uniqueness: Uniqueness::None,
                         sub_attributes: vec![],
+                        canonical_values: vec![],
                     },
                     AttributeDefinition {
                         name: "country",
@@ -563,6 +637,7 @@ lazy_static! {
                         returned: Returned::Default,
                         uniqueness: Uniqueness::None,
                         sub_attributes: vec![],
+                        canonical_values: vec![],
                     },
                     AttributeDefinition {
                         name: "type",
@@ -575,6 +650,7 @@ lazy_static! {
                         returned: Returned::Default,
                         uniqueness: Uniqueness::None,
                         sub_attributes: vec![],
+                        canonical_values: vec![],
                     },
                     AttributeDefinition {
                         name: "primary",
@@ -587,8 +663,10 @@ lazy_static! {
                         returned: Returned::Default,
                         uniqueness: Uniqueness::None,
                         sub_attributes: vec![],
+                        canonical_values: vec![],
                     },
                 ],
+                canonical_values: vec![],
             },
             AttributeDefinition {
                 name: "active",
@@ -601,6 +679,7 @@ lazy_static! {
                 returned: Returned::Default,
                 uniqueness: Uniqueness::None,
                 sub_attributes: vec![],
+                canonical_values: vec![],
             },
             AttributeDefinition {
                 name: "password",
@@ -613,6 +692,7 @@ lazy_static! {
                 returned: Returned::Never,
                 uniqueness: Uniqueness::None,
                 sub_attributes: vec![],
+                canonical_values: vec![],
             },
             AttributeDefinition {
                 name: "entitlements",
@@ -636,6 +716,7 @@ lazy_static! {
                         returned: Returned::Default,
                         uniqueness: Uniqueness::None,
                         sub_attributes: vec![],
+                        canonical_values: vec![],
                     },
                     AttributeDefinition {
                         name: "display",
@@ -648,6 +729,7 @@ lazy_static! {
                         returned: Returned::Default,
                         uniqueness: Uniqueness::None,
                         sub_attributes: vec![],
+                        canonical_values: vec![],
                     },
                     AttributeDefinition {
                         name: "type",
@@ -660,6 +742,7 @@ lazy_static! {
                         returned: Returned::Default,
                         uniqueness: Uniqueness::None,
                         sub_attributes: vec![],
+                        canonical_values: vec![],
                     },
                     AttributeDefinition {
                         name: "primary",
@@ -672,8 +755,10 @@ lazy_static! {
                         returned: Returned::Default,
                         uniqueness: Uniqueness::None,
                         sub_attributes: vec![],
+                        canonical_values: vec![],
                     },
                 ],
+                canonical_values: vec![],
             },
             AttributeDefinition {
                 name: "roles",
@@ -697,6 +782,7 @@ lazy_static! {
                         returned: Returned::Default,
                         uniqueness: Uniqueness::None,
                         sub_attributes: vec![],
+                        canonical_values: vec![],
                     },
                     AttributeDefinition {
                         name: "display",
@@ -709,6 +795,7 @@ lazy_static! {
                         returned: Returned::Default,
                         uniqueness: Uniqueness::None,
                         sub_attributes: vec![],
+                        canonical_values: vec![],
                     },
                     AttributeDefinition {
                         name: "type",
@@ -721,6 +808,7 @@ lazy_static! {
                         returned: Returned::Default,
                         uniqueness: Uniqueness::None,
                         sub_attributes: vec![],
+                        canonical_values: vec![],
                     },
                     AttributeDefinition {
                         name: "primary",
@@ -733,8 +821,10 @@ lazy_static! {
                         returned: Returned::Default,
                         uniqueness: Uniqueness::None,
                         sub_attributes: vec![],
+                        canonical_values: vec![],
                     },
                 ],
+                canonical_values: vec![],
             },
             AttributeDefinition {
                 name: "x509Certificates",
@@ -758,6 +848,7 @@ lazy_static! {
                         returned: Returned::Default,
                         uniqueness: Uniqueness::None,
                         sub_attributes: vec![],
+                        canonical_values: vec![],
                     },
                     AttributeDefinition {
                         name: "display",
@@ -770,6 +861,7 @@ lazy_static! {
                         returned: Returned::Default,
                         uniqueness: Uniqueness::None,
                         sub_attributes: vec![],
+                        canonical_values: vec![],
                     },
                     AttributeDefinition {
                         name: "type",
@@ -782,6 +874,7 @@ lazy_static! {
                         returned: Returned::Default,
                         uniqueness: Uniqueness::None,
                         sub_attributes: vec![],
+                        canonical_values: vec![],
                     },
                     AttributeDefinition {
                         name: "primary",
@@ -794,8 +887,10 @@ lazy_static! {
                         returned: Returned::Default,
                         uniqueness: Uniqueness::None,
                         sub_attributes: vec![],
+                        canonical_values: vec![],
                     },
                 ],
+                canonical_values: vec![],
             },
             AttributeDefinition {
                 name: "groups",
@@ -819,6 +914,7 @@ lazy_static! {
                         returned: Returned::Default,
                         uniqueness: Uniqueness::None,
                         sub_attributes: vec![],
+                        canonical_values: vec![],
                     },
                     AttributeDefinition {
                         name: "$ref",
@@ -831,6 +927,7 @@ lazy_static! {
                         returned: Returned::Default,
                         uniqueness: Uniqueness::None,
                         sub_attributes: vec![],
+                        canonical_values: vec![],
                     },
                     AttributeDefinition {
                         name: "display",
@@ -843,8 +940,10 @@ lazy_static! {
                         returned: Returned::Default,
                         uniqueness: Uniqueness::None,
                         sub_attributes: vec![],
+                        canonical_values: vec![],
                     },
                 ],
+                canonical_values: vec![],
             },
             AttributeDefinition {
                 name: "meta",
@@ -868,6 +967,7 @@ lazy_static! {
                         returned: Returned::Default,
                         uniqueness: Uniqueness::None,
                         sub_attributes: vec![],
+                        canonical_values: vec![],
                     },
                     AttributeDefinition {
                         name: "created",
@@ -880,6 +980,7 @@ lazy_static! {
                         returned: Returned::Default,
                         uniqueness: Uniqueness::None,
                         sub_attributes: vec![],
+                        canonical_values: vec![],
                     },
                     AttributeDefinition {
                         name: "lastModified",
@@ -892,6 +993,7 @@ lazy_static! {
                         returned: Returned::Default,
                         uniqueness: Uniqueness::None,
                         sub_attributes: vec![],
+                        canonical_values: vec![],
                     },
                     AttributeDefinition {
                         name: "location",
@@ -904,8 +1006,23 @@ lazy_static! {
                         returned: Returned::Default,
                         uniqueness: Uniqueness::None,
                         sub_attributes: vec![],
+                        canonical_values: vec![],
+                    },
+                    AttributeDefinition {
+                        name: "version",
+                        attr_type: AttributeType::String,
+                        multi_valued: false,
+                        description: "The version of the resource being returned",
+                        required: false,
+                        case_exact: true,
+                        mutability: Mutability::ReadOnly,
+                        returned: Returned::Default,
+                        uniqueness: Uniqueness::None,
+                        sub_attributes: vec![],
+                        canonical_values: vec![],
                     },
                 ],
+                canonical_values: vec![],
             },
         ],
     };
@@ -927,6 +1044,7 @@ lazy_static! {
                 returned: Returned::Always,
                 uniqueness: Uniqueness::Server,
                 sub_attributes: vec![],
+                canonical_values: vec![],
             },
             AttributeDefinition {
                 name: "externalId",
@@ -939,6 +1057,7 @@ lazy_static! {
                 returned: Returned::Default,
                 uniqueness: Uniqueness::None,
                 sub_attributes: vec![],
+                canonical_values: vec![],
             },
             AttributeDefinition {
                 name: "displayName",
@@ -951,6 +1070,7 @@ lazy_static! {
                 returned: Returned::Default,
                 uniqueness: Uniqueness::Server,
                 sub_attributes: vec![],
+                canonical_values: vec![],
             },
             AttributeDefinition {
                 name: "members",
@@ -974,6 +1094,7 @@ lazy_static! {
                         returned: Returned::Default,
                         uniqueness: Uniqueness::None,
                         sub_attributes: vec![],
+                        canonical_values: vec![],
                     },
                     AttributeDefinition {
                         name: "$ref",
@@ -986,6 +1107,7 @@ lazy_static! {
                         returned: Returned::Default,
                         uniqueness: Uniqueness::None,
                         sub_attributes: vec![],
+                        canonical_values: vec![],
                     },
                     AttributeDefinition {
                         name: "type",
@@ -998,6 +1120,7 @@ lazy_static! {
                         returned: Returned::Default,
                         uniqueness: Uniqueness::None,
                         sub_attributes: vec![],
+                        canonical_values: vec!["User", "Group"],
                     },
                     AttributeDefinition {
                         name: "display",
@@ -1010,8 +1133,10 @@ lazy_static! {
                         returned: Returned::Default,
                         uniqueness: Uniqueness::None,
                         sub_attributes: vec![],
+                        canonical_values: vec![],
                     },
                 ],
+                canonical_values: vec![],
             },
             AttributeDefinition {
                 name: "meta",
@@ -1035,6 +1160,7 @@ lazy_static! {
                         returned: Returned::Default,
                         uniqueness: Uniqueness::None,
                         sub_attributes: vec![],
+                        canonical_values: vec![],
                     },
                     AttributeDefinition {
                         name: "created",
@@ -1047,6 +1173,7 @@ lazy_static! {
                         returned: Returned::Default,
                         uniqueness: Uniqueness::None,
                         sub_attributes: vec![],
+                        canonical_values: vec![],
                     },
                     AttributeDefinition {
                         name: "lastModified",
@@ -1059,6 +1186,7 @@ lazy_static! {
                         returned: Returned::Default,
                         uniqueness: Uniqueness::None,
                         sub_attributes: vec![],
+                        canonical_values: vec![],
                     },
                     AttributeDefinition {
                         name: "location",
@@ -1071,8 +1199,23 @@ lazy_static! {
                         returned: Returned::Default,
                         uniqueness: Uniqueness::None,
                         sub_attributes: vec![],
+                        canonical_values: vec![],
+                    },
+                    AttributeDefinition {
+                        name: "version",
+                        attr_type: AttributeType::String,
+                        multi_valued: false,
+                        description: "The version of the resource being returned",
+                        required: false,
+                        case_exact: true,
+                        mutability: Mutability::ReadOnly,
+                        returned: Returned::Default,
+                        uniqueness: Uniqueness::None,
+                        sub_attributes: vec![],
+                        canonical_values: vec![],
                     },
                 ],
+                canonical_values: vec![],
             },
         ],
     };
@@ -1094,6 +1237,7 @@ lazy_static! {
                 returned: Returned::Default,
                 uniqueness: Uniqueness::None,
                 sub_attributes: vec![],
+                canonical_values: vec![],
             },
             AttributeDefinition {
                 name: "costCenter",
@@ -1106,6 +1250,7 @@ lazy_static! {
                 returned: Returned::Default,
                 uniqueness: Uniqueness::None,
                 sub_attributes: vec![],
+                canonical_values: vec![],
             },
             AttributeDefinition {
                 name: "organization",
@@ -1118,6 +1263,7 @@ lazy_static! {
                 returned: Returned::Default,
                 uniqueness: Uniqueness::None,
                 sub_attributes: vec![],
+                canonical_values: vec![],
             },
             AttributeDefinition {
                 name: "division",
@@ -1130,6 +1276,7 @@ lazy_static! {
                 returned: Returned::Default,
                 uniqueness: Uniqueness::None,
                 sub_attributes: vec![],
+                canonical_values: vec![],
             },
             AttributeDefinition {
                 name: "department",
@@ -1142,6 +1289,7 @@ lazy_static! {
                 returned: Returned::Default,
                 uniqueness: Uniqueness::None,
                 sub_attributes: vec![],
+                canonical_values: vec![],
             },
             AttributeDefinition {
                 name: "manager",
@@ -1165,6 +1313,7 @@ lazy_static! {
                         returned: Returned::Default,
                         uniqueness: Uniqueness::None,
                         sub_attributes: vec![],
+                        canonical_values: vec![],
                     },
                     AttributeDefinition {
                         name: "$ref",
@@ -1177,6 +1326,7 @@ lazy_static! {
                         returned: Returned::Default,
                         uniqueness: Uniqueness::None,
                         sub_attributes: vec![],
+                        canonical_values: vec![],
                     },
                     AttributeDefinition {
                         name: "displayName",
@@ -1189,8 +1339,10 @@ lazy_static! {
                         returned: Returned::Default,
                         uniqueness: Uniqueness::None,
                         sub_attributes: vec![],
+                        canonical_values: vec![],
                     },
                 ],
+                canonical_values: vec![],
             },
         ],
     };
@@ -1209,6 +1361,49 @@ lazy_static! {
 /// Get all registered schemas
 pub fn get_all_schemas() -> Vec<&'static SchemaDefinition> {
     SCHEMA_REGISTRY.values().copied().collect()
+}
+
+/// Resolve a dot-separated attribute path to the schema's own casing,
+/// segment by segment.
+///
+/// RFC 7644 §3.10 ("Attribute Notation") states "All operations share a
+/// common scheme for referencing simple and complex attributes" and ends
+/// "All facets (URN, attribute, and sub-attribute name) of the fully encoded
+/// attribute name are case insensitive." It is not scoped to filters.
+///
+/// The contexts resolved here are bound to it explicitly: `attributes` and
+/// `excludedAttributes` -- "Attribute names MUST be in standard attribute
+/// notation (Section 3.10) form" (§3.4.2.5, and §3.4.3 for POST /.search);
+/// `sortBy` -- same MUST in §3.4.3; the PATCH `path` -- "The attribute
+/// notation rules described in Section 3.10 apply for describing attribute
+/// paths" (§3.5.2). Filters already resolve case through a separate
+/// mechanism and are left untouched.
+///
+/// A segment that doesn't match any known (sub-)attribute -- and every
+/// segment after it, since there is no further schema to traverse -- is
+/// left exactly as given, so an unresolved or custom attribute keeps
+/// whatever casing the client used.
+pub fn resolve_attribute_path_case(schema: &SchemaDefinition, attr_path: &str) -> String {
+    let mut current_attrs: &[AttributeDefinition] = &schema.attributes;
+    let mut resolved: Vec<String> = Vec::new();
+    let mut still_matching = true;
+
+    for part in attr_path.split('.') {
+        if still_matching {
+            if let Some(attr) = current_attrs
+                .iter()
+                .find(|a| a.name.eq_ignore_ascii_case(part))
+            {
+                resolved.push(attr.name.to_string());
+                current_attrs = &attr.sub_attributes;
+                continue;
+            }
+            still_matching = false;
+        }
+        resolved.push(part.to_string());
+    }
+
+    resolved.join(".")
 }
 
 /// Find attribute definition in schema
@@ -1338,6 +1533,39 @@ mod tests {
 
         // Non-existent
         assert!(find_attribute(schema, "nonExistent").is_none());
+    }
+
+    #[test]
+    fn test_resolve_attribute_path_case() {
+        // RFC 7644 §3.10: all facets of an attribute name are case
+        // insensitive, and §3.4.2.5 / §3.5.2 bind these contexts to that
+        // notation. A top-level attribute in any case resolves to the
+        // schema's own casing.
+        let schema = &*USER_SCHEMA;
+        assert_eq!(resolve_attribute_path_case(schema, "USERNAME"), "userName");
+        assert_eq!(resolve_attribute_path_case(schema, "username"), "userName");
+        assert_eq!(resolve_attribute_path_case(schema, "UserName"), "userName");
+
+        // Sub-attributes resolve segment by segment.
+        assert_eq!(
+            resolve_attribute_path_case(schema, "NAME.GIVENNAME"),
+            "name.givenName"
+        );
+        assert_eq!(
+            resolve_attribute_path_case(schema, "emails.VALUE"),
+            "emails.value"
+        );
+
+        // An unresolved segment (and anything after it) is left exactly as
+        // given, so unknown/custom attributes keep the client's casing.
+        assert_eq!(
+            resolve_attribute_path_case(schema, "totallyBogusAttr"),
+            "totallyBogusAttr"
+        );
+        assert_eq!(
+            resolve_attribute_path_case(schema, "name.BOGUS"),
+            "name.BOGUS"
+        );
     }
 
     #[test]

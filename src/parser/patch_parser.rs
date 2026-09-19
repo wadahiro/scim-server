@@ -2,6 +2,7 @@ use crate::config::CompatibilityConfig;
 use crate::error::{AppError, AppResult};
 use crate::parser::filter_operator::FilterOperator;
 use crate::parser::filter_parser::parse_filter;
+use crate::parser::ResourceType;
 use serde_json::Value;
 
 /// SCIM PATH parser and processor according to RFC 7644
@@ -25,22 +26,232 @@ pub struct ScimFilter {
 }
 
 impl ScimPath {
-    /// Parse a SCIM path according to RFC 7644 PATH ABNF
-    pub fn parse(path: &str) -> AppResult<Self> {
-        if path.contains('[') {
+    /// Parse a SCIM path according to RFC 7644 PATH ABNF, resolving
+    /// attribute names against `resource_type`'s schema (see
+    /// `resolve_case_and_validate`).
+    pub fn parse(path: &str, resource_type: ResourceType) -> AppResult<Self> {
+        let parsed = if path.contains('[') {
             // This is a valuePath with filter
-            Self::parse_value_path(path)
+            Self::parse_value_path(path)?
         } else {
             // This is a simple attrPath
-            Self::parse_attr_path(path)
+            Self::parse_attr_path(path)?
+        };
+        parsed.resolve_case_and_validate(resource_type)
+    }
+
+    /// Resolve every attribute-name segment of this path to the schema's
+    /// own casing, and reject a path that names no attribute this server
+    /// can actually persist.
+    ///
+    /// RFC 7644 §3.5.2 incorporates the attribute-notation rules directly:
+    /// "The attribute notation rules described in Section 3.10 apply for
+    /// describing attribute paths." §3.10 in turn states "All operations
+    /// share a common scheme for referencing simple and complex attributes"
+    /// and "All facets (URN, attribute, and sub-attribute name) of the fully
+    /// encoded attribute name are case insensitive." So resolving `path`
+    /// segments case-insensitively is required, not an interpretation.
+    ///
+    /// Separately, RFC 7644 §3.12 defines `invalidPath` for "The 'path'
+    /// attribute was invalid or malformed". This server's `User` model has
+    /// an open `additional_fields` map (see `models::User`) that lets a
+    /// PATCH create genuinely new, arbitrary top-level attributes -- a
+    /// deliberate custom-attribute feature -- so an unrecognized *top-level*
+    /// attribute name on a bare (non-schema-qualified) User path is left
+    /// alone. Everywhere else -- a sub-attribute of a known complex
+    /// attribute, any path on Group (whose model has no such catch-all), or
+    /// an attribute inside a registered schema-extension container (e.g.
+    /// the enterprise-user extension, whose Rust type likewise has no
+    /// catch-all) -- an unresolved path has nowhere to land: it is silently
+    /// dropped when the patched JSON round-trips through the typed model,
+    /// which would report success (200) for an operation that had no
+    /// effect. Those are rejected here instead.
+    fn resolve_case_and_validate(self, resource_type: ResourceType) -> AppResult<Self> {
+        match self {
+            ScimPath::AttrPath(parts) => {
+                let resolved = Self::resolve_attr_path(&parts, resource_type)?;
+                Ok(ScimPath::AttrPath(resolved))
+            }
+            ScimPath::ValuePath {
+                attr_path,
+                filter,
+                sub_attr,
+            } => {
+                let (attr_path, sub_attr) =
+                    Self::resolve_value_path(&attr_path, sub_attr.as_deref(), resource_type);
+                Ok(ScimPath::ValuePath {
+                    attr_path,
+                    filter,
+                    sub_attr,
+                })
+            }
         }
+    }
+
+    /// Resolve (and validate) the segments of an `AttrPath`. See
+    /// `resolve_case_and_validate` for the rules applied.
+    fn resolve_attr_path(parts: &[String], resource_type: ResourceType) -> AppResult<Vec<String>> {
+        if parts.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let first = &parts[0];
+        if first.starts_with("urn:ietf:params:scim:schemas:") {
+            // The whole path is a bare extension schema URN (RFC 7644
+            // §3.5.2, example 3) -- nothing further to resolve or validate.
+            if parts.len() == 1 {
+                return Ok(parts.to_vec());
+            }
+
+            // A schema-URN-qualified attribute. Only a *registered*
+            // extension schema (currently just the enterprise-user
+            // extension for User) has a known attribute list to resolve
+            // and validate against; an unregistered/unknown schema URN is
+            // stored as an opaque nested value with no per-attribute
+            // validation, so it is left untouched.
+            if let Some(schema) = crate::schema::SCHEMA_REGISTRY.get(first.as_str()) {
+                let rest = parts[1..].join(".");
+                let resolved_rest = crate::schema::resolve_attribute_path_case(schema, &rest);
+                if crate::schema::find_attribute(schema, &resolved_rest).is_none() {
+                    return Err(AppError::InvalidPath(format!(
+                        "No such attribute '{}' in schema '{}'",
+                        rest, first
+                    )));
+                }
+                let mut resolved = vec![first.clone()];
+                resolved.extend(resolved_rest.split('.').map(|s| s.to_string()));
+                return Ok(resolved);
+            }
+
+            return Ok(parts.to_vec());
+        }
+
+        // A plain path against the resource's own core schema.
+        let schema = match resource_type {
+            ResourceType::User => &*crate::schema::USER_SCHEMA,
+            ResourceType::Group => &*crate::schema::GROUP_SCHEMA,
+        };
+        let joined = parts.join(".");
+        let resolved = crate::schema::resolve_attribute_path_case(schema, &joined);
+
+        if crate::schema::find_attribute(schema, &resolved).is_none() {
+            let is_supported_custom_top_level =
+                parts.len() == 1 && matches!(resource_type, ResourceType::User);
+            if !is_supported_custom_top_level {
+                return Err(AppError::InvalidPath(format!(
+                    "No such attribute '{}'",
+                    joined
+                )));
+            }
+            // Unknown top-level custom attribute on User: keep the
+            // client's own casing -- it becomes the literal stored key.
+            return Ok(parts.to_vec());
+        }
+
+        Ok(resolved.split('.').map(|s| s.to_string()).collect())
+    }
+
+    /// Resolve the segments of a `ValuePath`'s base attribute and optional
+    /// trailing sub-attribute to the schema's own casing.
+    ///
+    /// An unresolved base attribute is *not* rejected here: unlike
+    /// `AttrPath`, `apply_value_path_operation_with_compatibility` already
+    /// requires the target key to be present in the resource and returns
+    /// `noTarget`/`invalidValue` otherwise (RFC 7644 §3.5.2.3), so there is
+    /// no silent-success case to guard against for the base attribute; an
+    /// unresolved sub-attribute is likewise left as given, matching that
+    /// same downstream behavior.
+    fn resolve_value_path(
+        attr_path: &[String],
+        sub_attr: Option<&str>,
+        resource_type: ResourceType,
+    ) -> (Vec<String>, Option<String>) {
+        if attr_path.is_empty() {
+            return (attr_path.to_vec(), sub_attr.map(|s| s.to_string()));
+        }
+
+        let schema = match resource_type {
+            ResourceType::User => &*crate::schema::USER_SCHEMA,
+            ResourceType::Group => &*crate::schema::GROUP_SCHEMA,
+        };
+
+        let joined = attr_path.join(".");
+        let resolved_attr = crate::schema::resolve_attribute_path_case(schema, &joined);
+        let attr_def = crate::schema::find_attribute(schema, &resolved_attr);
+
+        let resolved_attr_path: Vec<String> =
+            resolved_attr.split('.').map(|s| s.to_string()).collect();
+
+        let resolved_sub_attr = sub_attr.map(|s| {
+            attr_def
+                .and_then(|attr_def| {
+                    attr_def
+                        .sub_attributes
+                        .iter()
+                        .find(|a| a.name.eq_ignore_ascii_case(s))
+                        .map(|a| a.name.to_string())
+                })
+                .unwrap_or_else(|| s.to_string())
+        });
+
+        (resolved_attr_path, resolved_sub_attr)
     }
 
     fn parse_attr_path(path: &str) -> AppResult<Self> {
         // Handle schema-qualified attributes like "urn:ietf:params:scim:schemas:extension:enterprise:2.0:User:department"
-        // or "urn:ietf:params:scim:schemas:extension:enterprise:2.0:User:manager.value"
+        // or "urn:ietf:params:scim:schemas:extension:enterprise:2.0:User:manager.value",
+        // as well as a bare extension schema URN used as the whole `path`
+        // (RFC 7644 §3.5.2, example 3), e.g.
+        // "urn:ietf:params:scim:schemas:extension:enterprise:2.0:User".
         if path.starts_with("urn:ietf:params:scim:schemas:") {
-            // Find the last colon to separate schema URN from attribute name
+            // Match against known schema URNs as a whole namespace first.
+            // Splitting at the last colon (the previous approach) mis-parses
+            // a bare extension URN -- which itself ends in ":User" -- into a
+            // fake schema "...:2.0" plus attribute "User".
+            for schema_urn in crate::schema::SCHEMA_REGISTRY.keys() {
+                if path == *schema_urn {
+                    // The whole extension object, e.g. used as
+                    // `"path": "urn:...:enterprise:2.0:User"` with an object
+                    // value that should be merged into that extension.
+                    return Ok(ScimPath::AttrPath(vec![(*schema_urn).to_string()]));
+                }
+
+                if let Some(attr_path) = path
+                    .strip_prefix(*schema_urn)
+                    .and_then(|rest| rest.strip_prefix(':'))
+                {
+                    if attr_path.is_empty() {
+                        continue;
+                    }
+
+                    // RFC 7643 §3 places core-schema attributes at the top
+                    // level of the resource -- unlike extension attributes,
+                    // they are never namespaced under a container keyed by
+                    // the schema URN. So a core-schema-qualified path (e.g.
+                    // "urn:ietf:params:scim:schemas:core:2.0:User:userName")
+                    // must resolve to the plain attribute path ("userName"),
+                    // not to a container entry that would create a bogus
+                    // top-level "urn:...:core:2.0:User" key.
+                    let mut parts = if is_core_schema_urn(schema_urn) {
+                        Vec::new()
+                    } else {
+                        vec![(*schema_urn).to_string()]
+                    };
+                    parts.extend(attr_path.split('.').map(|s| s.to_string()));
+
+                    if parts.iter().any(|p| p.is_empty()) {
+                        return Err(AppError::BadRequest(format!(
+                            "Invalid schema-qualified attribute path: {}",
+                            path
+                        )));
+                    }
+
+                    return Ok(ScimPath::AttrPath(parts));
+                }
+            }
+
+            // Fall back to the previous heuristic for schema-like paths that
+            // don't match a registered schema (e.g. an unknown extension).
             if let Some(last_colon) = path.rfind(':') {
                 let schema_urn = &path[..last_colon];
                 let attr_path = &path[last_colon + 1..];
@@ -132,6 +343,13 @@ impl ScimPath {
     }
 
     /// Apply SCIM PATCH operation to JSON object
+    ///
+    /// Every in-tree caller now goes through
+    /// [`apply_operation_with_compatibility`](Self::apply_operation_with_compatibility)
+    /// so tenant compatibility settings are honored consistently (the User
+    /// and Group PATCH handlers both do). This compatibility-agnostic
+    /// wrapper is kept as public API and is exercised directly by tests.
+    #[allow(dead_code)]
     pub fn apply_operation(&self, user_json: &mut Value, op: &str, value: &Value) -> AppResult<()> {
         // Use default compatibility config for backward compatibility
         let default_config = CompatibilityConfig::default();
@@ -200,17 +418,23 @@ impl ScimPath {
             return Err(AppError::BadRequest("Empty attribute path".to_string()));
         }
 
-        // Check for schema updates first
-        let final_key = &path[path.len() - 1];
-        let needs_schema_update = final_key.starts_with("urn:ietf:params:scim:schemas:");
+        // When the path is schema-qualified (an extension attribute, or a
+        // bare extension URN), `path[0]` is the schema URN (see
+        // `parse_attr_path`) -- not necessarily the last segment, which is
+        // the attribute name for a per-attribute path like
+        // "urn:...:enterprise:2.0:User:department".
+        let schema_urn = path[0]
+            .starts_with("urn:ietf:params:scim:schemas:")
+            .then(|| path[0].clone());
 
-        // Navigate to the parent and apply operation
-        let final_key_name = final_key.clone();
         self.navigate_and_apply_with_compatibility(user_json, path, op, value, compatibility)?;
 
-        // Handle schema updates for fully qualified names after modifying the tree
-        if needs_schema_update && op != "remove" {
-            self.update_schemas_attribute(user_json, &final_key_name)?;
+        // RFC 7643 §3.1 / RFC 7644 §3.5.2: introducing extension data must be
+        // reflected in the resource's `schemas` list.
+        if let Some(schema_urn) = schema_urn {
+            if op != "remove" {
+                self.update_schemas_attribute(user_json, &schema_urn)?;
+            }
         }
 
         Ok(())
@@ -271,6 +495,17 @@ impl ScimPath {
 
                             // Validate and enforce primary constraints for multi-valued attributes
                             if is_multi_valued_attribute(final_key) {
+                                // RFC 7643 §2.4 / RFC 7644 §3.5.2: this
+                                // operation's own value must not itself
+                                // contradict "at most one primary" -- that
+                                // case is unspecified by either RFC, and
+                                // rejecting it is a deliberate choice (see
+                                // `reject_conflicting_primaries_in_operation_value`).
+                                crate::schema::reject_conflicting_primaries_in_operation_value(
+                                    final_key,
+                                    &new_elements,
+                                )?;
+
                                 // Enforce single primary in the new elements first
                                 crate::schema::enforce_single_primary(&mut new_elements)?;
 
@@ -306,6 +541,9 @@ impl ScimPath {
                         // Validate primary constraints for new multi-valued attributes
                         if is_multi_valued_attribute(final_key) {
                             if let Value::Array(arr) = &mut new_value {
+                                crate::schema::reject_conflicting_primaries_in_operation_value(
+                                    final_key, arr,
+                                )?;
                                 crate::schema::enforce_single_primary(arr)?;
                             }
                         }
@@ -349,6 +587,9 @@ impl ScimPath {
 
                             // Validate primary constraints for normal arrays
                             if let Value::Array(ref mut arr_mut) = new_value {
+                                crate::schema::reject_conflicting_primaries_in_operation_value(
+                                    final_key, arr_mut,
+                                )?;
                                 crate::schema::enforce_single_primary(arr_mut)?;
                             }
                         }
@@ -497,7 +738,14 @@ impl ScimPath {
             match current {
                 Value::Object(obj) => {
                     current = obj.get_mut(segment).ok_or_else(|| {
-                        AppError::BadRequest(format!("Attribute '{}' not found", segment))
+                        // RFC 7644 §3.5.2.3: "replace" has nothing to
+                        // replace when the target attribute itself is
+                        // absent, which is a "noTarget" condition.
+                        if op == "replace" {
+                            AppError::NoTarget(format!("Attribute '{}' not found", segment))
+                        } else {
+                            AppError::BadRequest(format!("Attribute '{}' not found", segment))
+                        }
                     })?;
                 }
                 _ => {
@@ -525,6 +773,37 @@ impl ScimPath {
             if let Value::Object(item_obj) = item {
                 if filter.matches(item_obj) {
                     matching_indices.push(index);
+                }
+            }
+        }
+
+        // RFC 7643 §2.4 / RFC 7644 §3.5.2: a single "replace" operation
+        // whose value-path filter matches more than one element, and which
+        // sets `primary: true` on every match, is the value-path spelling
+        // of the same "operation's own value contradicts itself" case as
+        // an attrPath operation whose `value` array holds two elements
+        // with `primary: true`. Reject it for the same reason (see
+        // `reject_conflicting_primaries_in_operation_value`): RFC 7644
+        // §3.5.2 only says a later "primary: true" clears earlier ones, it
+        // never says a *single* operation may set more than one, and RFC
+        // 7643 §2.4 forbids more than one `primary: true` outright.
+        if op == "replace" && matching_indices.len() > 1 {
+            let attr_name = attr_path.last().map(String::as_str).unwrap_or_default();
+            if crate::schema::attribute_has_primary_subattribute(attr_name) {
+                let sets_primary_true = match sub_attr {
+                    Some("primary") => matches!(value, Value::Bool(true)),
+                    None => {
+                        matches!(value, Value::Object(obj) if obj.get("primary") == Some(&Value::Bool(true)))
+                    }
+                    _ => false,
+                };
+                if sets_primary_true {
+                    return Err(AppError::BadRequest(format!(
+                        "PATCH operation's value for '{}' would set primary=true on {} elements; \
+                         a single operation may set at most one (RFC 7643 §2.4)",
+                        attr_name,
+                        matching_indices.len()
+                    )));
                 }
             }
         }
@@ -566,8 +845,11 @@ impl ScimPath {
                 }
 
                 if matching_indices.is_empty() {
+                    // RFC 7644 §3.5.2.3: a "replace" whose value-path filter
+                    // matches no element is a "noTarget" condition, not an
+                    // "invalidValue" one.
                     let (attr, _, val) = filter.get_condition();
-                    return Err(AppError::BadRequest(format!(
+                    return Err(AppError::NoTarget(format!(
                         "No matching elements found for filter: {} eq {}",
                         attr, val
                     )));
@@ -614,42 +896,33 @@ impl ScimPath {
         Ok(())
     }
 
-    fn update_schemas_attribute(
-        &self,
-        user_json: &mut Value,
-        fully_qualified_attr: &str,
-    ) -> AppResult<()> {
-        // Extract schema URN from fully qualified attribute name
-        // Example: "urn:ietf:params:scim:schemas:extension:enterprise:2.0:User:employeeNumber"
-        // -> "urn:ietf:params:scim:schemas:extension:enterprise:2.0:User"
-
-        let parts: Vec<&str> = fully_qualified_attr.split(':').collect();
-        if parts.len() >= 7
-            && parts[0] == "urn"
-            && parts[1] == "ietf"
-            && parts[2] == "params"
-            && parts[3] == "scim"
-            && parts[4] == "schemas"
-        {
-            // Reconstruct schema URN (everything except the last part which is the attribute name)
-            let schema_urn = parts[..parts.len() - 1].join(":");
-
-            // Add to schemas array if not already present
-            if let Value::Object(user_obj) = user_json {
-                let schemas = user_obj
-                    .entry("schemas".to_string())
-                    .or_insert(Value::Array(vec![]));
-                if let Value::Array(schemas_array) = schemas {
-                    let schema_value = Value::String(schema_urn);
-                    if !schemas_array.contains(&schema_value) {
-                        schemas_array.push(schema_value);
-                    }
+    fn update_schemas_attribute(&self, user_json: &mut Value, schema_urn: &str) -> AppResult<()> {
+        // Add the schema URN to the resource's `schemas` list if not already
+        // present (RFC 7643 §3.1: a resource's `schemas` attribute must list
+        // every schema, including extensions, that describes its content).
+        if let Value::Object(user_obj) = user_json {
+            let schemas = user_obj
+                .entry("schemas".to_string())
+                .or_insert(Value::Array(vec![]));
+            if let Value::Array(schemas_array) = schemas {
+                let schema_value = Value::String(schema_urn.to_string());
+                if !schemas_array.contains(&schema_value) {
+                    schemas_array.push(schema_value);
                 }
             }
         }
 
         Ok(())
     }
+}
+
+/// Check whether a schema URN identifies a core resource schema (RFC 7643
+/// §3), whose attributes live at the top level of the resource, as opposed
+/// to an extension schema, whose attributes are namespaced under a
+/// container keyed by the schema URN.
+fn is_core_schema_urn(schema_urn: &str) -> bool {
+    schema_urn == crate::schema::SCIM_SCHEMA_CORE_USER
+        || schema_urn == crate::schema::SCIM_SCHEMA_CORE_GROUP
 }
 
 /// Check if an attribute is a multi-valued attribute that supports primary
@@ -823,7 +1096,7 @@ mod tests {
 
     #[test]
     fn test_parse_simple_attr_path() {
-        let path = ScimPath::parse("name.givenName").unwrap();
+        let path = ScimPath::parse("name.givenName", ResourceType::User).unwrap();
         match path {
             ScimPath::AttrPath(parts) => {
                 assert_eq!(parts, vec!["name", "givenName"]);
@@ -834,7 +1107,7 @@ mod tests {
 
     #[test]
     fn test_parse_value_path_with_filter() {
-        let path = ScimPath::parse("addresses[type eq \"work\"]").unwrap();
+        let path = ScimPath::parse("addresses[type eq \"work\"]", ResourceType::User).unwrap();
         match path {
             ScimPath::ValuePath {
                 attr_path,
@@ -854,7 +1127,8 @@ mod tests {
 
     #[test]
     fn test_parse_value_path_with_sub_attr() {
-        let path = ScimPath::parse("addresses[type eq \"work\"].street").unwrap();
+        let path =
+            ScimPath::parse("addresses[type eq \"work\"].street", ResourceType::User).unwrap();
         match path {
             ScimPath::ValuePath {
                 attr_path,

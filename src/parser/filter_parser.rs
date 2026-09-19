@@ -351,6 +351,79 @@ fn find_logical_operator(filter_str: &str) -> AppResult<Option<FilterOperator>> 
     Ok(None)
 }
 
+/// Look up the schema type of a (possibly dotted) attribute path for a
+/// resource type, e.g. `"active"` or `"emails.value"`.
+fn attribute_type_for(
+    resource_type: crate::parser::ResourceType,
+    attr_path: &str,
+) -> Option<crate::schema::AttributeType> {
+    let schema = match resource_type {
+        crate::parser::ResourceType::User => &*crate::schema::USER_SCHEMA,
+        crate::parser::ResourceType::Group => &*crate::schema::GROUP_SCHEMA,
+    };
+
+    crate::schema::find_attribute(schema, attr_path).map(|attr| attr.attr_type.clone())
+}
+
+/// Validates that relational operators (`gt`, `ge`, `lt`, `le`) are not used
+/// against Boolean or Binary attributes.
+///
+/// RFC 7644 §3.4.2.2 states verbatim: "Boolean and Binary attributes SHALL
+/// cause a failed response (HTTP status code 400) with 'scimType' of
+/// 'invalidFilter'."
+pub fn validate_filter_attribute_types(
+    filter_op: &FilterOperator,
+    resource_type: crate::parser::ResourceType,
+) -> AppResult<()> {
+    validate_filter_attribute_types_with_prefix(filter_op, resource_type, "")
+}
+
+fn validate_filter_attribute_types_with_prefix(
+    filter_op: &FilterOperator,
+    resource_type: crate::parser::ResourceType,
+    prefix: &str,
+) -> AppResult<()> {
+    let full_path = |attr: &str| -> String {
+        if prefix.is_empty() {
+            attr.to_string()
+        } else {
+            format!("{}.{}", prefix, attr)
+        }
+    };
+
+    match filter_op {
+        FilterOperator::GreaterThan(attr, _)
+        | FilterOperator::GreaterThanOrEqual(attr, _)
+        | FilterOperator::LessThan(attr, _)
+        | FilterOperator::LessThanOrEqual(attr, _) => {
+            let path = full_path(attr);
+            if let Some(attr_type) = attribute_type_for(resource_type, &path) {
+                if matches!(
+                    attr_type,
+                    crate::schema::AttributeType::Boolean | crate::schema::AttributeType::Binary
+                ) {
+                    return Err(AppError::FilterParse(format!(
+                        "Relational operators are not applicable to attribute '{}'",
+                        path
+                    )));
+                }
+            }
+            Ok(())
+        }
+        FilterOperator::And(left, right) | FilterOperator::Or(left, right) => {
+            validate_filter_attribute_types_with_prefix(left, resource_type, prefix)?;
+            validate_filter_attribute_types_with_prefix(right, resource_type, prefix)
+        }
+        FilterOperator::Not(inner) => {
+            validate_filter_attribute_types_with_prefix(inner, resource_type, prefix)
+        }
+        FilterOperator::Complex(attr, inner) => {
+            validate_filter_attribute_types_with_prefix(inner, resource_type, &full_path(attr))
+        }
+        _ => Ok(()),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

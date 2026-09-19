@@ -1,5 +1,6 @@
 //! Simple test to verify the PATCH fix works
 use scim_server::parser::patch_parser::ScimPath;
+use scim_server::parser::ResourceType;
 use serde_json::json;
 
 #[test]
@@ -21,7 +22,7 @@ fn test_patch_remove_emails_simple() {
     });
 
     // Apply PATCH remove with path="emails" and value array
-    let path = ScimPath::parse("emails").unwrap();
+    let path = ScimPath::parse("emails", ResourceType::User).unwrap();
     let remove_value = json!([
         {
             "value": "primary@example.com"
@@ -69,7 +70,7 @@ fn test_patch_remove_phone_numbers_simple() {
         ]
     });
 
-    let path = ScimPath::parse("phoneNumbers").unwrap();
+    let path = ScimPath::parse("phoneNumbers", ResourceType::User).unwrap();
     let remove_value = json!([
         {
             "value": "+1-555-0100"
@@ -109,7 +110,7 @@ fn test_patch_remove_members_simple() {
         ]
     });
 
-    let path = ScimPath::parse("members").unwrap();
+    let path = ScimPath::parse("members", ResourceType::Group).unwrap();
     let remove_value = json!([
         {
             "value": "user-1"

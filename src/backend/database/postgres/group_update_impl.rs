@@ -75,26 +75,25 @@ impl PostgresGroupUpdater {
                 let mut group: Group = serde_json::from_value(row.get("data_orig"))
                     .map_err(AppError::Serialization)?;
 
-                // Set version in meta (ensure meta exists)
+                // `resourceType`, `created`, `lastModified`, and `version` are
+                // server-owned per RFC 7643 §7 (mutability: readOnly) and are
+                // always rebuilt here from the authoritative `created_at`,
+                // `updated_at`, and `version` database columns -- never from
+                // whatever happens to be stored in `data_orig`'s `meta`.
+                // `location` is set later by the resource handler, so any
+                // existing value is preserved as-is.
                 let version: i64 = row.get("version");
-                if group.meta().is_none() {
-                    // Create meta if it doesn't exist
-                    let created_at: chrono::DateTime<chrono::Utc> = row.get("created_at");
-                    let updated_at: chrono::DateTime<chrono::Utc> = row.get("updated_at");
-                    let meta = scim_v2::models::scim_schema::Meta {
-                        resource_type: Some("Group".to_string()),
-                        created: Some(crate::utils::format_scim_datetime(created_at)),
-                        last_modified: Some(crate::utils::format_scim_datetime(updated_at)),
-                        location: None,
-                        version: Some(format!("W/\"{}\"", version)),
-                    };
-                    *group.meta_mut() = Some(meta);
-                } else {
-                    // Update existing meta with version
-                    if let Some(ref mut meta) = group.meta_mut() {
-                        meta.version = Some(format!("W/\"{}\"", version));
-                    }
-                }
+                let created_at: chrono::DateTime<chrono::Utc> = row.get("created_at");
+                let updated_at: chrono::DateTime<chrono::Utc> = row.get("updated_at");
+                let existing_location = group.meta().as_ref().and_then(|m| m.location.clone());
+                let meta = scim_v2::models::scim_schema::Meta {
+                    resource_type: Some("Group".to_string()),
+                    created: Some(crate::utils::format_scim_datetime(created_at)),
+                    last_modified: Some(crate::utils::format_scim_datetime(updated_at)),
+                    location: existing_location,
+                    version: Some(format!("W/\"{}\"", version)),
+                };
+                *group.meta_mut() = Some(meta);
 
                 // Fetch members
                 let members = self.fetch_group_members(tenant_id, id).await?;
