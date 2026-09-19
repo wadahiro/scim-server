@@ -206,8 +206,12 @@ tenants:
       token: "${TOKEN_SCIM_TOKEN:-token_xxxxxxxxxxxxxxxxxxxx}"
 
   # Host-specific tenant with X-Forwarded headers (behind load balancer)
+  # NOTE: each tenant needs a distinct `path`. Routes are registered per path
+  # only -- `host` is matched later, inside the handler -- so two tenants
+  # sharing a path make the server panic at startup with
+  # "Overlapping method route", even when their `host` values differ.
   - id: 30
-    path: "/api/scim"
+    path: "/api/scim-lb"
     host: "api.loadbalancer.com"
     host_resolution:
       type: "xforwarded"
@@ -218,7 +222,7 @@ tenants:
 
   # Tenant with custom endpoints and override base URL
   - id: 40
-    path: "/scim/v2"
+    path: "/scim/public"
     override_base_url: "https://public.example.com"  # Forces response URLs
     auth:
       auth_type: "bearer"

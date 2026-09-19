@@ -153,8 +153,12 @@ tenants:
       token: "${TOKEN_SCIM_TOKEN:-token_xxxxxxxxxxxxxxxxxxxx}"
 
   # Host-specific tenant with X-Forwarded headers (behind load balancer)
+  # NOTE: each tenant needs a distinct `path`. Routes are registered per path
+  # only -- `host` is matched later, inside the handler -- so two tenants
+  # sharing a path make the server panic at startup with
+  # "Overlapping method route", even when their `host` values differ.
   - id: 30
-    path: "/api/scim"
+    path: "/api/scim-lb"
     host: "api.loadbalancer.com"
     host_resolution:
       type: "xforwarded"
@@ -165,7 +169,7 @@ tenants:
 
   # Tenant with custom endpoints and override base URL
   - id: 40
-    path: "/scim/v2"
+    path: "/scim/public"
     override_base_url: "https://public.example.com"  # Forces response URLs
     auth:
       type: "bearer"
@@ -208,7 +212,16 @@ The server supports extensive compatibility options to emulate various SCIM impl
 
 #### Global vs Tenant-Specific Settings
 - **Global settings**: Applied to all tenants by default (defined at top level)
-- **Tenant overrides**: Each tenant can override global settings
+- **Tenant overrides**: A tenant may set its own `compatibility:` block instead of the global one
+
+> **⚠️ A tenant's `compatibility:` block replaces the entire struct — it does not merge
+> field-by-field with the global settings.** `AppConfig::get_effective_compatibility` picks either
+> the tenant's block *or* the global one, whole; it never combines the two. If a tenant sets only
+> `meta_datetime_format`, the other six options silently fall back to their **built-in defaults**
+> for that tenant, not to whatever the global `compatibility:` block says. Always write out the
+> **complete** set of options you want for a tenant that needs any override at all — copy the
+> global block and change what differs, rather than listing only the one field you meant to
+> change.
 
 ```yaml
 # Global defaults
@@ -216,13 +229,20 @@ compatibility:
   meta_datetime_format: "rfc3339"
   show_empty_groups_members: true
 
-# Tenant-specific override
+# Tenant-specific override — this REPLACES the global block above for this
+# tenant, so every option not listed here reverts to its built-in default
+# (not to the global value shown above).
 tenants:
   - id: 1
     path: "/scim/v2"
-    compatibility:  # Overrides global settings for this tenant
+    compatibility:
       meta_datetime_format: "epoch"
       show_empty_groups_members: false
+      include_user_groups: true
+      support_group_members_filter: true
+      support_group_displayname_filter: true
+      support_patch_replace_empty_array: true
+      support_patch_replace_empty_value: false
 ```
 
 #### Available Options
@@ -530,6 +550,88 @@ Content-Type: application/scim+json
   "scimType": "preconditionFailed"
 }
 ```
+
+## 🩺 Diagnosing a SCIM Server
+
+`scim-server diagnose <base-url>` probes any SCIM 2.0 service provider — not just this one — over
+real HTTP and reports how closely it follows RFC 7644, and which of this server's `compatibility:`
+quirks it would need in order to behave the same way. It ships in the same binary/container as the
+server itself, as a subcommand.
+
+```bash
+# Point it at a running SCIM server (read-only: no data is created)
+scim-server diagnose https://api.example.com/scim/v2 --auth bearer --token "$TOKEN" --read-only
+
+# Full run, including write probes, with a suggested compatibility: block
+scim-server diagnose https://api.example.com/scim/v2 --auth bearer --token "$TOKEN" \
+  --probe-email '{prefix}+{n}@corp.example.com' --emit-config-snippet
+
+# Markdown output, e.g. to paste into an issue or a PR description
+scim-server diagnose https://api.example.com/scim/v2 --auth none --format markdown
+
+# From the container image — the ENTRYPOINT is `scim-server`, so the
+# subcommand form works exactly like the local binary
+docker run --rm ghcr.io/wadahiro/scim-server:latest \
+  diagnose https://api.example.com/scim/v2 --auth none --read-only
+```
+
+It checks four tiers: the 7 `compatibility:` knobs below (Tier 1), basic RFC 7644 conformance
+(Tier 2), advertised `ServiceProviderConfig` capabilities vs actual behaviour (Tier 3), and RFC 7232
+ETag/conditional-request support (Tier 4). The full report — including which checks Passed, Failed,
+were a known `Quirk`, or were Skipped, and why — is described in each check's own output; run
+`scim-server diagnose --help` for the complete flag reference.
+
+### ⚠️ Before you run this against a real SaaS
+
+**Write probes create real resources on the target server.** By default `diagnose` runs in
+read-write mode: it creates a handful of throwaway Users and Groups (named with a random
+`scimdiag-<prefix>`), exercises PATCH/PUT/DELETE/filter/pagination/ETag behaviour against them, and
+deletes everything it created when it's done (see "Cleanup" in the report).
+
+- **`--probe-email` is required for any write probe**, and has no default — you must supply an
+  address you control, using the template form `{prefix}+{n}@your-domain.example.com`. Without it,
+  `diagnose` degrades to read-only automatically rather than inventing an address.
+- **The target may send real invitation/notification email** to that address when it creates a
+  user — this is unavoidable for any SCIM server that treats `userName`/`emails` as email
+  addresses. Plus-addressing (`{prefix}+{n}@...`) means every probe run lands in one mailbox you
+  can filter and delete, and puts the run's prefix in the local part for later grepping.
+  Consumer mailbox domains (`gmail.com`, `outlook.com`, etc.) are rejected unless you pass
+  `--allow-consumer-email`.
+- **If you don't control the target, or don't want it to write anything, use `--read-only`**
+  (skips every write probe; only reads) **or `--dry-run`** (prints every request it *would* send,
+  including full bodies, without sending any of them).
+- A write-mode banner is always printed to stderr before the first request that creates anything,
+  naming every address and group name that will be used and how many times user creation will be
+  attempted.
+
+### The 7 compatibility knobs
+
+`diagnose`'s Tier 1 detects exactly the 7 knobs below and, with `--emit-config-snippet`, prints a
+`compatibility:` block you can paste straight into `config.yaml` to make this scim-server emulate
+whatever it just diagnosed:
+
+| Knob | Meaning |
+|------|---------|
+| `meta_datetime_format` | `"rfc3339"` vs `"epoch"` timestamps in `meta.created`/`meta.lastModified` |
+| `show_empty_groups_members` | Whether an empty `Group.members`/`User.groups` is `[]` or omitted |
+| `include_user_groups` | Whether `User.groups` is populated at all |
+| `support_group_members_filter` | Whether `filter=members[value eq "..."]` on Groups is accepted |
+| `support_group_displayname_filter` | Whether `filter=displayName eq "..."` on Groups is accepted |
+| `support_patch_replace_empty_array` | Whether PATCH `replace` with `[]` clears a multi-valued attribute |
+| `support_patch_replace_empty_value` | Whether the non-RFC `[{"value":""}]` clearing pattern is accepted |
+
+A knob that couldn't be determined (e.g. under `--read-only`, or because a required probe was
+rejected) shows as `SKIP` and is simply omitted from the `--emit-config-snippet` output — it is
+never guessed.
+
+### `--insecure`
+
+`--insecure` disables both TLS certificate *and* hostname verification for the probe connection.
+It exists for one-off debugging against a self-signed or misconfigured endpoint, never for routine
+use — a report produced with it prints a loud `TLS verification DISABLED (--insecure)` warning in
+its header so a Pass obtained that way is never mistaken for a clean, verified run. Prefer
+`--ca-cert <pem>` (repeatable) to add a specific trust anchor instead, which stays verified and
+records exactly what was trusted.
 
 ## 🧪 Testing
 

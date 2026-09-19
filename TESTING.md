@@ -84,6 +84,47 @@ The SCIM server includes **134+ tests** covering all aspects of functionality:
 - Per-tenant authentication testing
 - URL-based routing validation
 
+## `diagnose` Manual Acceptance
+
+`tests/diagnose_self_test.rs` covers `scim-server diagnose` against an in-process HTTP listener,
+and `tests/diagnose_render_test.rs` covers the text/Markdown renderers against a hand-built
+`Report` — neither of those touches the actual release container. Before a release, additionally
+verify the container's `ENTRYPOINT ["scim-server"]` contract by hand:
+
+```bash
+# 1. Build (or pull) the image and start it in the background
+docker build -t scim-server:local .
+docker run -d --rm --name scim-server-diag -p 3000:3000 scim-server:local
+
+# 2. Run diagnose against it from the host — the subcommand form must just work,
+#    with no extra flags or entrypoint override needed
+docker run --rm --network host scim-server:local \
+  diagnose http://127.0.0.1:3000/scim/v2 --auth none --read-only
+
+# Or, without --network host (e.g. on macOS/Windows Docker Desktop):
+docker run --rm scim-server:local \
+  diagnose http://host.docker.internal:3000/scim/v2 --auth none --read-only
+
+# 3. A full write-mode run, then confirm cleanup left nothing behind
+docker run --rm scim-server:local \
+  diagnose http://host.docker.internal:3000/scim/v2 --auth none \
+  --probe-email '{prefix}+{n}@example.test' --emit-config-snippet
+# -> report's "Cleanup" line should read "N of N probe resources deleted"
+curl -s "http://127.0.0.1:3000/scim/v2/Users?filter=userName%20sw%20%22scimdiag%22" \
+  | python3 -c "import json,sys;print(json.load(sys.stdin)['totalResults'])"
+# -> should print 0
+
+# 4. Stop the container
+docker stop scim-server-diag
+```
+
+Expect exit code `0` if the target is fully conformant, or `1` if any check genuinely `Fail`s
+(this is not a bug in the test — see the report body for which check and why). Confirm:
+- the report prints (the `diagnose` subcommand parsed and ran through the `ENTRYPOINT`, not just
+  the default `serve` behaviour),
+- `--format markdown` also renders correctly through the container,
+- and, for the write-mode run, that cleanup removed every probe resource it created.
+
 ## About TestContainers
 
 ### Prerequisites
