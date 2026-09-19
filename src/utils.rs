@@ -175,6 +175,41 @@ pub fn handle_group_empty_members_for_response(
     group
 }
 
+/// Check whether an `If-Match` precondition is satisfied (RFC 7232 §3.1).
+///
+/// `*` matches any existing representation, so it always succeeds here -
+/// callers only invoke this when the resource exists. Otherwise the header
+/// is satisfied if it contains `current_version` as one of a comma-separated
+/// list of entity-tags (e.g. `If-Match: W/"1", W/"2"`), compared
+/// byte-for-byte against the stored weak ETag.
+///
+/// The naive `split(',')` below would mis-parse an entity-tag containing a
+/// literal comma inside its quoted opaque-tag; this server's ETags are
+/// always `W/"<integer>"`, so that never occurs here.
+pub fn if_match_satisfied(header: &str, current_version: &str) -> bool {
+    let header = header.trim();
+    header == "*" || header.split(',').any(|tag| tag.trim() == current_version)
+}
+
+/// Check whether an `If-None-Match` precondition is satisfied, i.e. whether
+/// the request should proceed normally rather than short-circuit (RFC 7232
+/// §3.2).
+///
+/// `*` never matches for `If-None-Match` on an existing resource - it always
+/// fails, so callers should treat that as "return 304 Not Modified" /
+/// "return 412 Precondition Failed" as appropriate. Otherwise the header is
+/// satisfied unless it contains `current_version` as one of a
+/// comma-separated list of entity-tags, compared byte-for-byte.
+///
+/// See `if_match_satisfied` for why a naive `split(',')` is safe here.
+pub fn if_none_match_satisfied(header: &str, current_version: &str) -> bool {
+    let header = header.trim();
+    if header == "*" {
+        return false;
+    }
+    !header.split(',').any(|tag| tag.trim() == current_version)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -343,5 +378,35 @@ mod tests {
 
         let result = handle_group_empty_members_for_response(group, false);
         assert!(result.base.members.is_none());
+    }
+
+    #[test]
+    fn test_if_match_satisfied() {
+        // `*` always matches an existing resource.
+        assert!(if_match_satisfied("*", "W/\"1\""));
+        // Exact match still succeeds.
+        assert!(if_match_satisfied("W/\"1\"", "W/\"1\""));
+        // Stale ETag still fails.
+        assert!(!if_match_satisfied("W/\"0\"", "W/\"1\""));
+        // Whitespace around the header value is tolerated.
+        assert!(if_match_satisfied(" * ", "W/\"1\""));
+        // Comma-separated list: satisfied if any entity-tag matches.
+        assert!(if_match_satisfied("W/\"0\", W/\"1\"", "W/\"1\""));
+        // Comma-separated list: fails if none match.
+        assert!(!if_match_satisfied("W/\"0\", W/\"9\"", "W/\"1\""));
+    }
+
+    #[test]
+    fn test_if_none_match_satisfied() {
+        // `*` never matches for If-None-Match on an existing resource.
+        assert!(!if_none_match_satisfied("*", "W/\"1\""));
+        // Exact match means "not satisfied" (should short-circuit to 304).
+        assert!(!if_none_match_satisfied("W/\"1\"", "W/\"1\""));
+        // A bogus ETag is satisfied (request proceeds normally).
+        assert!(if_none_match_satisfied("W/\"0\"", "W/\"1\""));
+        // Comma-separated list containing the current version: not satisfied.
+        assert!(!if_none_match_satisfied("W/\"0\", W/\"1\"", "W/\"1\""));
+        // Comma-separated list with no match: satisfied.
+        assert!(if_none_match_satisfied("W/\"0\", W/\"9\"", "W/\"1\""));
     }
 }

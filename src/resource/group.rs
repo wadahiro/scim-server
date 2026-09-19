@@ -384,8 +384,13 @@ pub async fn get_group(
                     (if_none_match.to_str(), &group.base.meta)
                 {
                     if let Some(ref current_version) = meta.version {
-                        // If the ETag matches, return 304 Not Modified
-                        if if_none_match_str == current_version {
+                        // `*` never satisfies If-None-Match on an existing
+                        // resource, and an exact match doesn't either -
+                        // both cases return 304 Not Modified (RFC 7232 §3.2).
+                        if !crate::utils::if_none_match_satisfied(
+                            if_none_match_str,
+                            current_version,
+                        ) {
                             let mut response =
                                 axum::response::Response::new(axum::body::Body::empty());
                             *response.status_mut() = StatusCode::NOT_MODIFIED;
@@ -704,8 +709,10 @@ pub async fn update_group(
                 Ok(Some(current_group)) => {
                     if let Some(ref meta) = current_group.base.meta {
                         if let Some(ref current_version) = meta.version {
-                            // If the ETag doesn't match, return 412 Precondition Failed
-                            if if_match_str != current_version {
+                            // `*` always matches an existing resource
+                            // (RFC 7232 §3.1); otherwise require an exact
+                            // match, else return 412 Precondition Failed.
+                            if !crate::utils::if_match_satisfied(if_match_str, current_version) {
                                 return Err((
                                     StatusCode::PRECONDITION_FAILED,
                                     Json(json!({
@@ -819,8 +826,10 @@ pub async fn delete_group(
                 Ok(Some(current_group)) => {
                     if let Some(ref meta) = current_group.base.meta {
                         if let Some(ref current_version) = meta.version {
-                            // If the ETag doesn't match, return 412 Precondition Failed
-                            if if_match_str != current_version {
+                            // `*` always matches an existing resource
+                            // (RFC 7232 §3.1); otherwise require an exact
+                            // match, else return 412 Precondition Failed.
+                            if !crate::utils::if_match_satisfied(if_match_str, current_version) {
                                 return Err((
                                     StatusCode::PRECONDITION_FAILED,
                                     Json(json!({
@@ -886,8 +895,10 @@ pub async fn patch_group(
                 Ok(Some(current_group)) => {
                     if let Some(ref meta) = current_group.base.meta {
                         if let Some(ref current_version) = meta.version {
-                            // If the ETag doesn't match, return 412 Precondition Failed
-                            if if_match_str != current_version {
+                            // `*` always matches an existing resource
+                            // (RFC 7232 §3.1); otherwise require an exact
+                            // match, else return 412 Precondition Failed.
+                            if !crate::utils::if_match_satisfied(if_match_str, current_version) {
                                 return Err((
                                     StatusCode::PRECONDITION_FAILED,
                                     Json(json!({
