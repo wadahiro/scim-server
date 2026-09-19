@@ -153,9 +153,10 @@ pub async fn create_user(
     let user: User = match serde_json::from_value(payload) {
         Ok(user) => user,
         Err(e) => {
-            return Err((
+            return Err(scim_error_response(
                 StatusCode::BAD_REQUEST,
-                Json(json!({"message": format!("Invalid user data: {}", e)})),
+                Some("invalidSyntax"),
+                &format!("Invalid user data: {}", e),
             ))
         }
     };
@@ -192,17 +193,19 @@ pub async fn create_user(
             let location_url = if let Some(ref user_id) = created_user.base.id {
                 build_resource_location(&tenant_info, "Users", user_id)
             } else {
-                return Err((
+                return Err(scim_error_response(
                     StatusCode::INTERNAL_SERVER_ERROR,
-                    Json(serde_json::json!({"message": "Created user missing ID"})),
+                    None,
+                    "Created user missing ID",
                 ));
             };
 
             // Convert to JSON and remove null fields to comply with SCIM specification
             let user_json = serde_json::to_value(&created_user).map_err(|_| {
-                (
+                scim_error_response(
                     StatusCode::INTERNAL_SERVER_ERROR,
-                    Json(serde_json::json!({"message": "Serialization error"})),
+                    None,
+                    "Serialization error",
                 )
             })?;
 
@@ -213,9 +216,10 @@ pub async fn create_user(
             headers.insert(
                 "Location",
                 HeaderValue::from_str(&location_url).map_err(|_| {
-                    (
+                    scim_error_response(
                         StatusCode::INTERNAL_SERVER_ERROR,
-                        Json(serde_json::json!({"message": "Invalid location header"})),
+                        None,
+                        "Invalid location header",
                     )
                 })?,
             );
@@ -226,9 +230,10 @@ pub async fn create_user(
                     headers.insert(
                         "ETag",
                         HeaderValue::from_str(version).map_err(|_| {
-                            (
+                            scim_error_response(
                                 StatusCode::INTERNAL_SERVER_ERROR,
-                                Json(serde_json::json!({"message": "Invalid ETag header"})),
+                                None,
+                                "Invalid ETag header",
                             )
                         })?,
                     );
@@ -258,9 +263,10 @@ pub async fn get_user(
     let id = match extract_resource_id_from_uri(&uri) {
         Some(id) => id,
         None => {
-            return Err((
+            return Err(scim_error_response(
                 StatusCode::BAD_REQUEST,
-                Json(json!({"message": "User ID not found in path"})),
+                Some("invalidValue"),
+                "User ID not found in path",
             ))
         }
     };
@@ -326,9 +332,10 @@ pub async fn get_user(
 
             // Convert to JSON and apply attribute filtering
             let user_json = serde_json::to_value(&user).map_err(|_| {
-                (
+                scim_error_response(
                     StatusCode::INTERNAL_SERVER_ERROR,
-                    Json(json!({"message": "Serialization error"})),
+                    None,
+                    "Serialization error",
                 )
             })?;
 
@@ -341,9 +348,10 @@ pub async fn get_user(
                     headers.insert(
                         "ETag",
                         HeaderValue::from_str(version).map_err(|_| {
-                            (
+                            scim_error_response(
                                 StatusCode::INTERNAL_SERVER_ERROR,
-                                Json(json!({"message": "Invalid ETag header"})),
+                                None,
+                                "Invalid ETag header",
                             )
                         })?,
                     );
@@ -355,9 +363,10 @@ pub async fn get_user(
             response.headers_mut().extend(headers);
             Ok(response)
         }
-        Ok(None) => Err((
+        Ok(None) => Err(scim_error_response(
             StatusCode::NOT_FOUND,
-            Json(json!({"message": "User not found"})),
+            None,
+            "User not found",
         )),
         Err(e) => Err(e.to_response()),
     }
@@ -397,22 +406,25 @@ pub async fn search_users(
         if filter_str.starts_with("groups[value eq ") && filter_str.ends_with("]") {
             // Extract group ID from filter: groups[value eq "group-id"]
             let start_quote = filter_str.find('"').ok_or_else(|| {
-                (
+                scim_error_response(
                     StatusCode::BAD_REQUEST,
-                    Json(json!({"message": "Invalid filter format"})),
+                    Some("invalidFilter"),
+                    "Invalid filter format",
                 )
             })?;
             let end_quote = filter_str.rfind('"').ok_or_else(|| {
-                (
+                scim_error_response(
                     StatusCode::BAD_REQUEST,
-                    Json(json!({"message": "Invalid filter format"})),
+                    Some("invalidFilter"),
+                    "Invalid filter format",
                 )
             })?;
 
             if start_quote >= end_quote {
-                return Err((
+                return Err(scim_error_response(
                     StatusCode::BAD_REQUEST,
-                    Json(json!({"message": "Invalid filter format"})),
+                    Some("invalidFilter"),
+                    "Invalid filter format",
                 ));
             }
 
@@ -501,9 +513,10 @@ pub async fn search_users(
             }
             Err(e) => {
                 eprintln!("Filter parsing error for '{}': {}", filter_str, e);
-                return Err((
+                return Err(scim_error_response(
                     StatusCode::BAD_REQUEST,
-                    Json(json!({"message": format!("Invalid filter: {}", e)})),
+                    Some("invalidFilter"),
+                    &format!("Invalid filter: {}", e),
                 ));
             }
         }
@@ -567,9 +580,10 @@ pub async fn update_user(
     let id = match extract_resource_id_from_uri(&uri) {
         Some(id) => id,
         None => {
-            return Err((
+            return Err(scim_error_response(
                 StatusCode::BAD_REQUEST,
-                Json(json!({"message": "User ID not found in path"})),
+                Some("invalidValue"),
+                "User ID not found in path",
             ))
         }
     };
@@ -578,9 +592,10 @@ pub async fn update_user(
     let user: User = match serde_json::from_value(payload) {
         Ok(user) => user,
         Err(e) => {
-            return Err((
+            return Err(scim_error_response(
                 StatusCode::BAD_REQUEST,
-                Json(json!({"message": format!("Invalid user data: {}", e)})),
+                Some("invalidSyntax"),
+                &format!("Invalid user data: {}", e),
             ))
         }
     };
@@ -614,9 +629,10 @@ pub async fn update_user(
                     }
                 }
                 Ok(None) => {
-                    return Err((
+                    return Err(scim_error_response(
                         StatusCode::NOT_FOUND,
-                        Json(json!({"message": "User not found"})),
+                        None,
+                        "User not found",
                     ));
                 }
                 Err(e) => return Err(e.to_response()),
@@ -646,9 +662,10 @@ pub async fn update_user(
 
             // Convert to JSON and remove null fields to comply with SCIM specification
             let user_json = serde_json::to_value(&updated_user).map_err(|_| {
-                (
+                scim_error_response(
                     StatusCode::INTERNAL_SERVER_ERROR,
-                    Json(serde_json::json!({"message": "Serialization error"})),
+                    None,
+                    "Serialization error",
                 )
             })?;
 
@@ -661,9 +678,10 @@ pub async fn update_user(
                     headers.insert(
                         "ETag",
                         HeaderValue::from_str(version).map_err(|_| {
-                            (
+                            scim_error_response(
                                 StatusCode::INTERNAL_SERVER_ERROR,
-                                Json(serde_json::json!({"message": "Invalid ETag header"})),
+                                None,
+                                "Invalid ETag header",
                             )
                         })?,
                     );
@@ -675,9 +693,10 @@ pub async fn update_user(
             response.headers_mut().extend(headers);
             Ok(response)
         }
-        Ok(None) => Err((
+        Ok(None) => Err(scim_error_response(
             StatusCode::NOT_FOUND,
-            Json(json!({"message": "User not found"})),
+            None,
+            "User not found",
         )),
         Err(e) => Err(e.to_response()),
     }
@@ -695,9 +714,10 @@ pub async fn delete_user(
     let id = match extract_resource_id_from_uri(&uri) {
         Some(id) => id,
         None => {
-            return Err((
+            return Err(scim_error_response(
                 StatusCode::BAD_REQUEST,
-                Json(json!({"message": "User ID not found in path"})),
+                Some("invalidValue"),
+                "User ID not found in path",
             ))
         }
     };
@@ -726,9 +746,10 @@ pub async fn delete_user(
                     }
                 }
                 Ok(None) => {
-                    return Err((
+                    return Err(scim_error_response(
                         StatusCode::NOT_FOUND,
-                        Json(json!({"message": "User not found"})),
+                        None,
+                        "User not found",
                     ));
                 }
                 Err(e) => return Err(e.to_response()),
@@ -738,9 +759,10 @@ pub async fn delete_user(
 
     match backend.delete_user(tenant_id, &id).await {
         Ok(true) => Ok(StatusCode::NO_CONTENT),
-        Ok(false) => Err((
+        Ok(false) => Err(scim_error_response(
             StatusCode::NOT_FOUND,
-            Json(json!({"message": "User not found"})),
+            None,
+            "User not found",
         )),
         Err(e) => Err(e.to_response()),
     }
@@ -759,9 +781,10 @@ pub async fn patch_user(
     let id = match extract_resource_id_from_uri(&uri) {
         Some(id) => id,
         None => {
-            return Err((
+            return Err(scim_error_response(
                 StatusCode::BAD_REQUEST,
-                Json(json!({"message": "User ID not found in path"})),
+                Some("invalidValue"),
+                "User ID not found in path",
             ))
         }
     };
@@ -790,9 +813,10 @@ pub async fn patch_user(
                     }
                 }
                 Ok(None) => {
-                    return Err((
+                    return Err(scim_error_response(
                         StatusCode::NOT_FOUND,
-                        Json(json!({"message": "User not found"})),
+                        None,
+                        "User not found",
                     ));
                 }
                 Err(e) => return Err(e.to_response()),
@@ -812,7 +836,7 @@ pub async fn patch_user(
                 if arr.is_empty() && !compatibility.support_patch_replace_empty_array {
                     return Err(scim_error_response(
                         StatusCode::BAD_REQUEST,
-                        "unsupported",
+                        Some("unsupported"),
                         "PATCH replace with empty array is not supported for this tenant",
                     ));
                 }
@@ -825,7 +849,7 @@ pub async fn patch_user(
                         {
                             return Err(scim_error_response(
                                 StatusCode::BAD_REQUEST,
-                                "unsupported",
+                                Some("unsupported"),
                                 "PATCH replace with empty value pattern is not supported for this tenant",
                             ));
                         }
@@ -860,9 +884,10 @@ pub async fn patch_user(
 
             // Convert to JSON and remove null fields to comply with SCIM specification
             let user_json = serde_json::to_value(&user).map_err(|_| {
-                (
+                scim_error_response(
                     StatusCode::INTERNAL_SERVER_ERROR,
-                    Json(serde_json::json!({"message": "Serialization error"})),
+                    None,
+                    "Serialization error",
                 )
             })?;
 
@@ -875,9 +900,10 @@ pub async fn patch_user(
                     headers.insert(
                         "ETag",
                         HeaderValue::from_str(version).map_err(|_| {
-                            (
+                            scim_error_response(
                                 StatusCode::INTERNAL_SERVER_ERROR,
-                                Json(serde_json::json!({"message": "Invalid ETag header"})),
+                                None,
+                                "Invalid ETag header",
                             )
                         })?,
                     );
@@ -889,9 +915,10 @@ pub async fn patch_user(
             response.headers_mut().extend(headers);
             Ok(response)
         }
-        Ok(None) => Err((
+        Ok(None) => Err(scim_error_response(
             StatusCode::NOT_FOUND,
-            Json(json!({"message": "User not found"})),
+            None,
+            "User not found",
         )),
         Err(e) => Err(e.to_response()),
     }

@@ -5,11 +5,11 @@ use axum::{
     response::Response,
     Json,
 };
-use serde_json::json;
 use std::net::SocketAddr;
 use std::sync::Arc;
 
 use crate::config::{AppConfig, AuthConfig, RequestInfo, TenantConfig};
+use crate::error::scim_error_response;
 
 /// Tenant information extracted from request
 #[derive(Debug, Clone)]
@@ -46,15 +46,17 @@ pub async fn auth_middleware(
     {
         Ok(info) => info,
         Err(StatusCode::UNAUTHORIZED) => {
-            return Err((
+            return Err(scim_error_response(
                 StatusCode::UNAUTHORIZED,
-                Json(json!({"message": "Authentication required"})),
+                None,
+                "Authentication required",
             ));
         }
         Err(status) => {
-            return Err((
+            return Err(scim_error_response(
                 status,
-                Json(json!({"message": format!("Tenant not found for path '{}'", path)})),
+                None,
+                &format!("Tenant not found for path '{}'", path),
             ));
         }
     };

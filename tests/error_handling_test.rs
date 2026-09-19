@@ -15,7 +15,18 @@ async fn test_user_not_found() {
 
     assert_eq!(response.status_code(), StatusCode::NOT_FOUND);
     let json: serde_json::Value = response.json();
-    assert!(json["message"].as_str().unwrap().contains("User not found"));
+
+    // RFC 7644 §3.12: the body must be the SCIM Error resource, with
+    // "status" as a JSON *string* (not a number), and no "scimType" for a
+    // 404 (scimType is only defined for 400-class errors, plus 409/412).
+    assert_eq!(
+        json["schemas"],
+        json!(["urn:ietf:params:scim:api:messages:2.0:Error"])
+    );
+    assert_eq!(json["status"], json!("404"));
+    assert!(json["status"].is_string());
+    assert!(json["detail"].as_str().unwrap().contains("User not found"));
+    assert!(json.get("scimType").is_none());
 
     // Test updating non-existent user
     let update_payload = common::create_test_user_json("test", "Test", "User");
