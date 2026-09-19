@@ -17,7 +17,9 @@ use crate::error::scim_error_response;
 use crate::models::{ScimListResponse, ScimPatchOp, User};
 use crate::parser::filter_parser::{parse_filter, validate_filter_attribute_types};
 use crate::parser::{ResourceType, SortSpec};
-use crate::schema::{should_fetch_external_attributes, validate_user};
+use crate::schema::{
+    should_fetch_external_attributes, validate_addresses_primary_constraint, validate_user,
+};
 
 type AppState = (Arc<dyn ScimBackend>, Arc<AppConfig>);
 
@@ -163,6 +165,13 @@ pub async fn create_user(
 
     // Validate user data
     if let Err(e) = validate_user(&user.base) {
+        return Err(e.to_response());
+    }
+
+    // `addresses` is deserialized into `User::addresses` (raw JSON) rather
+    // than `User::base.addresses`, so `validate_user` above never sees it.
+    // Enforce the RFC 7643 §2.4 primary constraint for it separately.
+    if let Err(e) = validate_addresses_primary_constraint(user.addresses.as_ref()) {
         return Err(e.to_response());
     }
 
@@ -632,6 +641,13 @@ pub async fn update_user(
 
     // Validate user data
     if let Err(e) = validate_user(&user.base) {
+        return Err(e.to_response());
+    }
+
+    // `addresses` is deserialized into `User::addresses` (raw JSON) rather
+    // than `User::base.addresses`, so `validate_user` above never sees it.
+    // Enforce the RFC 7643 §2.4 primary constraint for it separately.
+    if let Err(e) = validate_addresses_primary_constraint(user.addresses.as_ref()) {
         return Err(e.to_response());
     }
 

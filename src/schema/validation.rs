@@ -96,6 +96,25 @@ pub fn validate_user_primary_constraints(user_json: &Value) -> AppResult<()> {
     Ok(())
 }
 
+/// Validates the `primary` constraint (RFC 7643 §2.4) for the `addresses`
+/// sub-attribute carried on the `crate::models::User` request wrapper.
+///
+/// `addresses` is modeled there as raw JSON (rather than on the inner
+/// `scim_v2::models::user::User`) so that `primary` round-trips through
+/// requests, storage, and responses. Because that wrapper field owns the
+/// `addresses` JSON key during deserialization, the inner user's own
+/// `addresses` is always `None` and [`validate_user_primary_constraints`]
+/// (which only ever sees the inner user) can never observe it. This
+/// function is the addresses-specific counterpart callers must run
+/// alongside [`validate_user`] to restore that coverage.
+pub fn validate_addresses_primary_constraint(addresses: Option<&Vec<Value>>) -> AppResult<()> {
+    if let Some(addresses) = addresses {
+        validate_primary_constraint(addresses)?;
+    }
+
+    Ok(())
+}
+
 /// Multi-valued complex attributes whose entries are identified by a
 /// `(type, value)` pair, per RFC 7643 §2.4 ("A service provider SHOULD NOT
 /// return the same value more than once within a multi-valued attribute").

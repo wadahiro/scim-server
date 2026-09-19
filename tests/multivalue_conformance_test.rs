@@ -5,6 +5,10 @@
 //! RFC 7643 §4.1.2 also defines a `primary` sub-attribute for `addresses`,
 //! matching `emails`/`phoneNumbers`; client-supplied `primary` values on
 //! addresses must be preserved, not silently discarded.
+//!
+//! RFC 7643 §2.4 further requires that at most one element of a
+//! multi-valued attribute have `primary: true`; this must hold for
+//! `addresses` exactly as it does for `emails`/`phoneNumbers`.
 
 use axum_test::TestServer;
 use http::StatusCode;
@@ -99,5 +103,73 @@ async fn test_address_primary_is_preserved_not_dropped() {
     assert_eq!(
         fetched["addresses"][0]["primary"], true,
         "primary must survive a round trip through storage"
+    );
+}
+
+#[tokio::test]
+async fn test_two_primary_addresses_are_rejected_on_create() {
+    let app_config = common::create_test_app_config();
+    let app = common::setup_test_app(app_config).await.unwrap();
+    let server = TestServer::new(app).unwrap();
+
+    let user = json!({
+        "schemas": ["urn:ietf:params:scim:schemas:core:2.0:User"],
+        "userName": "dual.primary.address.create",
+        "addresses": [
+            {"type": "work", "streetAddress": "1 Main", "primary": true},
+            {"type": "home", "streetAddress": "2 Side", "primary": true}
+        ]
+    });
+
+    let response = server.post("/scim/v2/Users").json(&user).await;
+    response.assert_status(StatusCode::BAD_REQUEST);
+    let error: Value = response.json();
+    assert!(
+        error["detail"]
+            .as_str()
+            .unwrap()
+            .contains("At most one element can have primary=true"),
+        "unexpected error body: {:?}",
+        error
+    );
+}
+
+#[tokio::test]
+async fn test_two_primary_addresses_are_rejected_on_update() {
+    let app_config = common::create_test_app_config();
+    let app = common::setup_test_app(app_config).await.unwrap();
+    let server = TestServer::new(app).unwrap();
+
+    let user = json!({
+        "schemas": ["urn:ietf:params:scim:schemas:core:2.0:User"],
+        "userName": "dual.primary.address.update",
+        "addresses": [{"type": "work", "streetAddress": "1 Main", "primary": true}]
+    });
+    let create_response = server.post("/scim/v2/Users").json(&user).await;
+    create_response.assert_status(StatusCode::CREATED);
+    let created_user: Value = create_response.json();
+    let user_id = created_user["id"].as_str().unwrap();
+
+    let updated_user = json!({
+        "schemas": ["urn:ietf:params:scim:schemas:core:2.0:User"],
+        "userName": "dual.primary.address.update",
+        "addresses": [
+            {"type": "work", "streetAddress": "1 Main", "primary": true},
+            {"type": "home", "streetAddress": "2 Side", "primary": true}
+        ]
+    });
+    let response = server
+        .put(&format!("/scim/v2/Users/{}", user_id))
+        .json(&updated_user)
+        .await;
+    response.assert_status(StatusCode::BAD_REQUEST);
+    let error: Value = response.json();
+    assert!(
+        error["detail"]
+            .as_str()
+            .unwrap()
+            .contains("At most one element can have primary=true"),
+        "unexpected error body: {:?}",
+        error
     );
 }
