@@ -194,6 +194,24 @@ impl Default for CompatibilityConfig {
     }
 }
 
+impl CompatibilityConfig {
+    /// Rejects `meta_datetime_format` values other than `"rfc3339"` /
+    /// `"epoch"`. Without this, an unrecognized value was previously
+    /// accepted silently and just treated as rfc3339 wherever it's
+    /// consumed (`utils.rs`) — a config typo nobody would notice until a
+    /// downstream consumer complained about datetime formatting, and
+    /// exactly the kind of value `diagnose --emit-config-snippet` would
+    /// otherwise have no qualms suggesting back to an operator.
+    pub fn validate(&self) -> Result<(), String> {
+        match self.meta_datetime_format.as_str() {
+            "rfc3339" | "epoch" => Ok(()),
+            other => Err(format!(
+                "compatibility.meta_datetime_format must be \"rfc3339\" or \"epoch\", got {other:?}"
+            )),
+        }
+    }
+}
+
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct CustomEndpoint {
     pub path: String,
@@ -574,6 +592,21 @@ impl AppConfig {
 
         if app_config.tenants.is_empty() {
             return Err("Configuration must contain at least one tenant".to_string());
+        }
+
+        app_config
+            .compatibility
+            .validate()
+            .map_err(|e| format!("global compatibility: {e}"))?;
+        for tenant in &app_config.tenants {
+            if let Some(compat) = &tenant.compatibility {
+                compat.validate().map_err(|e| {
+                    format!(
+                        "tenant {} (id={}) compatibility: {e}",
+                        tenant.path, tenant.id
+                    )
+                })?;
+            }
         }
 
         Ok(app_config)
