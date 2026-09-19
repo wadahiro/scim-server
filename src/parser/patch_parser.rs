@@ -44,11 +44,13 @@ impl ScimPath {
     /// own casing, and reject a path that names no attribute this server
     /// can actually persist.
     ///
-    /// RFC 7643 §2.1 states, with no scoping to any particular context,
-    /// "Attribute names are case insensitive". RFC 7644 §3.4.2.2 restates
-    /// that explicitly for filters, but is silent about case for the PATCH
-    /// `path` specifically -- so resolving `path` segments against §2.1's
-    /// general rule here is an interpretation, not explicit text.
+    /// RFC 7644 §3.5.2 incorporates the attribute-notation rules directly:
+    /// "The attribute notation rules described in Section 3.10 apply for
+    /// describing attribute paths." §3.10 in turn states "All operations
+    /// share a common scheme for referencing simple and complex attributes"
+    /// and "All facets (URN, attribute, and sub-attribute name) of the fully
+    /// encoded attribute name are case insensitive." So resolving `path`
+    /// segments case-insensitively is required, not an interpretation.
     ///
     /// Separately, RFC 7644 §3.12 defines `invalidPath` for "The 'path'
     /// attribute was invalid or malformed". This server's `User` model has

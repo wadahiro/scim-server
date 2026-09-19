@@ -1,13 +1,17 @@
-//! RFC 7643 §2.1 states, with no scoping to any particular context,
-//! "Attribute names are case insensitive and are often 'camel-cased' (e.g.,
-//! 'camelCase')". RFC 7644 §3.4.2.2 restates that explicitly for filters:
-//! "Attribute names and attribute operators used in filters are case
-//! insensitive." RFC 7644 is silent about case for the `attributes` /
-//! `excludedAttributes` query parameters, `sortBy`, and the PATCH `path`
-//! specifically -- so resolving those against §2.1's general rule (this
-//! file's coverage) is an interpretation, not explicit text; filters already
-//! resolved case correctly before this change and are re-verified here only
-//! as a regression guard.
+//! RFC 7644 §3.10 ("Attribute Notation") states "All operations share a
+//! common scheme for referencing simple and complex attributes" and ends
+//! "All facets (URN, attribute, and sub-attribute name) of the fully encoded
+//! attribute name are case insensitive." RFC 7643 §2.1 says the same of
+//! attribute names generally.
+//!
+//! The contexts covered by this file are bound to that notation explicitly:
+//! `attributes` and `excludedAttributes` -- "Attribute names MUST be in
+//! standard attribute notation (Section 3.10) form" (§3.4.2.5, and §3.4.3
+//! for POST /.search); `sortBy` -- the same MUST in §3.4.3; the PATCH `path`
+//! -- "The attribute notation rules described in Section 3.10 apply for
+//! describing attribute paths" (§3.5.2). Filters already resolved case
+//! correctly before this change (§3.4.2.2 restates it for them) and are
+//! re-verified here only as a regression guard.
 //!
 //! Separately, RFC 7644 §3.12 defines `invalidPath` for "The 'path'
 //! attribute was invalid or malformed". A PATCH `path` that names no
@@ -33,8 +37,9 @@ use common::create_test_app_config;
 
 #[tokio::test]
 async fn test_get_attributes_param_case_insensitive() {
-    // RFC 7643 §2.1 by interpretation (RFC 7644 is silent for this
-    // context): `attributes=USERNAME` must resolve to `userName`.
+    // RFC 7644 §3.4.2.5 requires `attributes` to be in standard attribute
+    // notation (§3.10), which is case insensitive: `attributes=USERNAME`
+    // must resolve to `userName`.
     let app = common::setup_test_app(create_test_app_config())
         .await
         .unwrap();
@@ -110,8 +115,9 @@ async fn test_filter_case_insensitive_still_works() {
 
 #[tokio::test]
 async fn test_sort_by_case_insensitive_matches_lowercase_sort() {
-    // RFC 7643 §2.1 by interpretation (RFC 7644 is silent for `sortBy`):
-    // `sortBy=USERNAME` must sort the same way as `sortBy=userName`.
+    // RFC 7644 §3.4.3 requires `sortBy` to be in standard attribute
+    // notation (§3.10), which is case insensitive: `sortBy=USERNAME` must
+    // sort the same way as `sortBy=userName`.
     let app = common::setup_test_app(create_test_app_config())
         .await
         .unwrap();
@@ -160,9 +166,10 @@ async fn test_sort_by_case_insensitive_matches_lowercase_sort() {
 
 #[tokio::test]
 async fn test_patch_top_level_attribute_case_insensitive() {
-    // RFC 7643 §2.1 by interpretation (RFC 7644 is silent for the PATCH
-    // `path`): upper, lower, and mixed case must all resolve to `nickName`,
-    // not silently no-op or create a distinct pseudo-attribute.
+    // RFC 7644 §3.5.2 applies the §3.10 attribute-notation rules to PATCH
+    // paths, and §3.10 makes every facet case insensitive: upper, lower and
+    // mixed case must all resolve to `nickName`, not silently no-op or
+    // create a distinct pseudo-attribute.
     for (case_label, path) in [
         ("upper", "NICKNAME"),
         ("lower", "nickname"),

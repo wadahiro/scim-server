@@ -85,11 +85,11 @@ impl AttributeFilter {
         let mut included = std::collections::HashSet::new();
 
         for attr in attrs {
-            // RFC 7643 §2.1's general "attribute names are case insensitive"
-            // rule, applied here by interpretation since RFC 7644 is silent
-            // about case for the `attributes` parameter (unlike filters,
-            // where §3.4.2.2 states it explicitly). Resolve to the schema's
-            // own casing so matching against actual resource JSON keys
+            // RFC 7644 §3.4.2.5: "Attribute names MUST be in standard
+            // attribute notation (Section 3.10) form", and §3.10 states that
+            // all facets of an attribute name are case insensitive.
+            // Resolve to the schema's own casing so matching against actual
+            // resource JSON keys
             // (which are always in that casing) below works regardless of
             // the case the client used; an attribute the schema doesn't
             // recognize is left exactly as given.
@@ -143,8 +143,8 @@ impl AttributeFilter {
         if let Some(ref excluded) = self.excluded_attributes {
             for excluded_attr in excluded {
                 // See the matching comment in `get_included_attributes_from_list`:
-                // RFC 7644 is silent on case for `excludedAttributes`, so this
-                // extends RFC 7643 §2.1's general case-insensitivity rule to it.
+                // §3.4.2.5 binds `excludedAttributes` to the same standard
+                // attribute notation (§3.10), which is case insensitive.
                 let excluded_attr = resolve_attribute_path_case(schema, excluded_attr);
                 if let Some(attr_def) = find_attribute(schema, &excluded_attr) {
                     // Cannot exclude attributes with "returned" = "always"
@@ -549,10 +549,8 @@ mod tests {
 
     #[test]
     fn test_attributes_parameter_case_insensitive() {
-        // RFC 7643 §2.1's general "attribute names are case insensitive"
-        // rule, applied here by interpretation: RFC 7644 is silent about
-        // case for the `attributes` parameter specifically (unlike filters,
-        // where §3.4.2.2 states it explicitly).
+        // RFC 7644 §3.4.2.5 requires `attributes` to be in standard
+        // attribute notation (§3.10), which is case insensitive.
         let filter = AttributeFilter::from_params(Some("USERNAME"), None);
         let user = json!({
             "id": "123",

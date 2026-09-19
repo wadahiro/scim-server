@@ -1366,13 +1366,18 @@ pub fn get_all_schemas() -> Vec<&'static SchemaDefinition> {
 /// Resolve a dot-separated attribute path to the schema's own casing,
 /// segment by segment.
 ///
-/// RFC 7643 §2.1 states, with no scoping to any particular context,
-/// "Attribute names are case insensitive". RFC 7644 §3.4.2.2 restates that
-/// explicitly for filters, but is silent about case for the `attributes` /
-/// `excludedAttributes` query parameters, `sortBy`, and the PATCH `path` --
-/// so resolving those against §2.1's general rule is an interpretation, not
-/// explicit text, applied here to those contexts (filters already resolve
-/// case correctly through a separate mechanism and are left untouched).
+/// RFC 7644 §3.10 ("Attribute Notation") states "All operations share a
+/// common scheme for referencing simple and complex attributes" and ends
+/// "All facets (URN, attribute, and sub-attribute name) of the fully encoded
+/// attribute name are case insensitive." It is not scoped to filters.
+///
+/// The contexts resolved here are bound to it explicitly: `attributes` and
+/// `excludedAttributes` -- "Attribute names MUST be in standard attribute
+/// notation (Section 3.10) form" (§3.4.2.5, and §3.4.3 for POST /.search);
+/// `sortBy` -- same MUST in §3.4.3; the PATCH `path` -- "The attribute
+/// notation rules described in Section 3.10 apply for describing attribute
+/// paths" (§3.5.2). Filters already resolve case through a separate
+/// mechanism and are left untouched.
 ///
 /// A segment that doesn't match any known (sub-)attribute -- and every
 /// segment after it, since there is no further schema to traverse -- is
@@ -1532,9 +1537,10 @@ mod tests {
 
     #[test]
     fn test_resolve_attribute_path_case() {
-        // RFC 7643 §2.1 general rule, applied by interpretation (RFC 7644
-        // is silent for this context): a top-level attribute in any case
-        // resolves to the schema's own casing.
+        // RFC 7644 §3.10: all facets of an attribute name are case
+        // insensitive, and §3.4.2.5 / §3.5.2 bind these contexts to that
+        // notation. A top-level attribute in any case resolves to the
+        // schema's own casing.
         let schema = &*USER_SCHEMA;
         assert_eq!(resolve_attribute_path_case(schema, "USERNAME"), "userName");
         assert_eq!(resolve_attribute_path_case(schema, "username"), "userName");

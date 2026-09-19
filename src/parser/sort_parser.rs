@@ -38,11 +38,13 @@ impl SortSpec {
     /// Like [`from_params`](Self::from_params), but first resolves `sort_by`
     /// to the resource schema's own attribute-name casing.
     ///
-    /// RFC 7643 §2.1 states, with no scoping to any particular context,
-    /// "Attribute names are case insensitive". RFC 7644 §3.4.2.2 restates
-    /// that explicitly for filters, but is silent about case for `sortBy`
-    /// specifically -- so applying §2.1's general rule here is an
-    /// interpretation, not explicit text. Without this, `sortBy=USERNAME`
+    /// RFC 7644 §3.10 defines the notation these parameters use: "All
+    /// operations share a common scheme for referencing simple and complex
+    /// attributes", ending "All facets (URN, attribute, and sub-attribute
+    /// name) of the fully encoded attribute name are case insensitive."
+    /// §3.4.3 binds `sortBy` to it: "The "sortBy" attribute MUST be in
+    /// standard attribute notation (Section 3.10) form."
+    /// Without this, `sortBy=USERNAME`
     /// would fail to match the `userName` column/JSON-path special-casing
     /// the database layer looks for and silently fall back to an
     /// unsorted (or meaninglessly sorted) result.
@@ -96,10 +98,9 @@ mod tests {
 
     #[test]
     fn test_sort_spec_from_params_for_resource_case_insensitive() {
-        // RFC 7643 §2.1's general "attribute names are case insensitive"
-        // rule, applied here by interpretation: RFC 7644 is silent about
-        // case for `sortBy` specifically (unlike filters, where §3.4.2.2
-        // states it explicitly).
+        // RFC 7644 §3.4.3 requires `sortBy` to be in standard attribute
+        // notation (§3.10), and §3.10 states that all facets of an attribute
+        // name are case insensitive.
         let spec = SortSpec::from_params_for_resource(
             Some("USERNAME"),
             None,

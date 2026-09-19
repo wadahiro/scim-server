@@ -80,11 +80,11 @@ fn test_complex_multi_valued_attribute_filters() {
 
 #[test]
 fn test_case_insensitive_attribute_names() {
-    // RFC 7643 §2.1 states, with no scoping to any particular context,
-    // "Attribute names are case insensitive". RFC 7644 is silent about
-    // case for the PATCH `path` specifically (unlike filters, where
-    // §3.4.2.2 states it explicitly), so applying §2.1's general rule to
-    // `path` here is an interpretation: "Name.GivenName" must resolve to
+    // RFC 7644 §3.5.2: "The attribute notation rules described in
+    // Section 3.10 apply for describing attribute paths", and §3.10 ends
+    // "All facets (URN, attribute, and sub-attribute name) of the fully
+    // encoded attribute name are case insensitive."
+    // So "Name.GivenName" must resolve to
     // the schema's own "name.givenName", not to a distinct, literally
     // capitalized "Name.GivenName" pseudo-attribute.
     let path = "Name.GivenName";
