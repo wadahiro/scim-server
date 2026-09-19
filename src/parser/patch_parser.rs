@@ -63,7 +63,19 @@ impl ScimPath {
                         continue;
                     }
 
-                    let mut parts = vec![(*schema_urn).to_string()];
+                    // RFC 7643 §3 places core-schema attributes at the top
+                    // level of the resource -- unlike extension attributes,
+                    // they are never namespaced under a container keyed by
+                    // the schema URN. So a core-schema-qualified path (e.g.
+                    // "urn:ietf:params:scim:schemas:core:2.0:User:userName")
+                    // must resolve to the plain attribute path ("userName"),
+                    // not to a container entry that would create a bogus
+                    // top-level "urn:...:core:2.0:User" key.
+                    let mut parts = if is_core_schema_urn(schema_urn) {
+                        Vec::new()
+                    } else {
+                        vec![(*schema_urn).to_string()]
+                    };
                     parts.extend(attr_path.split('.').map(|s| s.to_string()));
 
                     if parts.iter().any(|p| p.is_empty()) {
@@ -686,6 +698,15 @@ impl ScimPath {
 
         Ok(())
     }
+}
+
+/// Check whether a schema URN identifies a core resource schema (RFC 7643
+/// §3), whose attributes live at the top level of the resource, as opposed
+/// to an extension schema, whose attributes are namespaced under a
+/// container keyed by the schema URN.
+fn is_core_schema_urn(schema_urn: &str) -> bool {
+    schema_urn == crate::schema::SCIM_SCHEMA_CORE_USER
+        || schema_urn == crate::schema::SCIM_SCHEMA_CORE_GROUP
 }
 
 /// Check if an attribute is a multi-valued attribute that supports primary
