@@ -151,10 +151,17 @@ async fn test_simple_mode_service_provider_config() {
     assert_eq!(auth_schemes[0]["type"], "none");
     assert_eq!(auth_schemes[0]["name"], "Anonymous Access");
 
-    // Verify that location contains absolute URL
+    // Verify that location is an absolute URL with exactly one copy of the
+    // tenant path (RFC 7643 §3.1) -- not a doubled tenant path segment.
     let location = config["meta"]["location"].as_str().unwrap();
     assert!(location.starts_with("http://"));
-    assert!(location.contains("/scim/v2/ServiceProviderConfig"));
+    assert!(location.ends_with("/scim/v2/ServiceProviderConfig"));
+    assert_eq!(
+        location.matches("/scim/v2").count(),
+        1,
+        "tenant path must not be duplicated in location: {}",
+        location
+    );
     println!("ServiceProviderConfig location: {}", location);
 }
 
@@ -189,6 +196,12 @@ async fn test_simple_mode_schemas_endpoint() {
 
     assert_eq!(user_schema["name"], "User");
     assert!(!user_schema["attributes"].as_array().unwrap().is_empty());
+
+    // RFC 7643 §3.1: `meta.location` must be an absolute URI of the
+    // resource being returned, not the bare schema URN (already in `id`).
+    let location = user_schema["meta"]["location"].as_str().unwrap();
+    assert!(location.starts_with("http://"));
+    assert!(location.ends_with("/scim/v2/Schemas/urn:ietf:params:scim:schemas:core:2.0:User"));
 }
 
 #[tokio::test]
@@ -222,6 +235,12 @@ async fn test_simple_mode_resource_types_endpoint() {
     assert_eq!(user_rt["name"], "User");
     assert_eq!(user_rt["endpoint"], "/Users");
 
+    // RFC 7643 §3.1: `meta.location` must be an absolute URI of the
+    // resource being returned, not a bare schema URN.
+    let user_rt_location = user_rt["meta"]["location"].as_str().unwrap();
+    assert!(user_rt_location.starts_with("http://"));
+    assert!(user_rt_location.ends_with("/scim/v2/ResourceTypes/User"));
+
     // Find Group resource type
     let group_rt = resources
         .iter()
@@ -229,4 +248,8 @@ async fn test_simple_mode_resource_types_endpoint() {
         .expect("Group resource type should exist");
     assert_eq!(group_rt["name"], "Group");
     assert_eq!(group_rt["endpoint"], "/Groups");
+
+    let group_rt_location = group_rt["meta"]["location"].as_str().unwrap();
+    assert!(group_rt_location.starts_with("http://"));
+    assert!(group_rt_location.ends_with("/scim/v2/ResourceTypes/Group"));
 }

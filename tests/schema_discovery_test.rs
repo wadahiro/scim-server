@@ -27,6 +27,49 @@ async fn test_get_schema_by_id_returns_the_matching_schema() {
 }
 
 #[tokio::test]
+async fn test_schema_meta_location_is_an_absolute_url_not_a_bare_urn() {
+    // RFC 7643 §3.1 defines `meta.location` as "The URI of the resource
+    // being returned" -- an absolute URL consistent with the tenant's base
+    // URL, not the schema's own `id` URN (a schema is not located at its
+    // own identifying URN).
+    let app_config = common::create_test_app_config();
+    let app = common::setup_test_app(app_config).await.unwrap();
+    let server = TestServer::new(app).unwrap();
+
+    let response = server
+        .get("/scim/v2/Schemas/urn:ietf:params:scim:schemas:core:2.0:User")
+        .await;
+    response.assert_status(StatusCode::OK);
+    let body: Value = response.json();
+
+    let location = body["meta"]["location"].as_str().unwrap();
+    assert!(location.starts_with("http://"));
+    assert!(location.ends_with("/scim/v2/Schemas/urn:ietf:params:scim:schemas:core:2.0:User"));
+}
+
+#[tokio::test]
+async fn test_resource_type_meta_location_is_an_absolute_url_not_a_bare_urn() {
+    // RFC 7643 §3.1: same requirement as schemas, for the sibling
+    // /ResourceTypes/{id} endpoint.
+    let app_config = common::create_test_app_config();
+    let app = common::setup_test_app(app_config).await.unwrap();
+    let server = TestServer::new(app).unwrap();
+
+    let response = server.get("/scim/v2/ResourceTypes/User").await;
+    response.assert_status(StatusCode::OK);
+    let body: Value = response.json();
+
+    let location = body["meta"]["location"].as_str().unwrap();
+    assert!(location.starts_with("http://"));
+    assert!(location.ends_with("/scim/v2/ResourceTypes/User"));
+    assert!(
+        !location.contains("urn:ietf:params:scim:schemas"),
+        "ResourceTypes location must be a URL, not a schema URN: {}",
+        location
+    );
+}
+
+#[tokio::test]
 async fn test_get_schema_by_unknown_id_returns_scim_404() {
     let app_config = common::create_test_app_config();
     let app = common::setup_test_app(app_config).await.unwrap();

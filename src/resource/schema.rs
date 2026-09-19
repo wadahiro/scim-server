@@ -107,7 +107,11 @@ fn build_attribute_json(attr: &crate::schema::AttributeDefinition) -> Value {
 /// Build the full list of `/Schemas` resources (the core, extension, and
 /// ServiceProviderConfig schema definitions). Shared by the collection
 /// endpoint and the single-resource-by-id endpoint (RFC 7644 §4).
-fn build_schema_resources() -> Vec<Value> {
+///
+/// RFC 7643 §3.1 defines `meta.location` as "The URI of the resource being
+/// returned", i.e. an absolute URL consistent with the tenant's resolved
+/// base URL -- not the bare schema URN, which is already carried in `id`.
+fn build_schema_resources(tenant_info: &crate::auth::TenantInfo) -> Vec<Value> {
     // Get all schemas from the centralized schema module
     let all_schemas = get_all_schemas();
 
@@ -128,7 +132,10 @@ fn build_schema_resources() -> Vec<Value> {
             "attributes": attributes,
             "meta": {
                 "resourceType": "Schema",
-                "location": schema_def.id
+                "location": crate::utils::build_resource_location(
+                    tenant_info,
+                    &format!("Schemas/{}", schema_def.id)
+                )
             }
         }));
     }
@@ -344,7 +351,10 @@ fn build_schema_resources() -> Vec<Value> {
         ],
         "meta": {
             "resourceType": "Schema",
-            "location": "urn:ietf:params:scim:schemas:core:2.0:ServiceProviderConfig"
+            "location": crate::utils::build_resource_location(
+                tenant_info,
+                "Schemas/urn:ietf:params:scim:schemas:core:2.0:ServiceProviderConfig"
+            )
         }
     }));
 
@@ -357,7 +367,7 @@ pub async fn schemas(
 ) -> Result<(StatusCode, Json<Value>), (StatusCode, Json<Value>)> {
     let _tenant_id = tenant_info.tenant_id;
 
-    let resources = build_schema_resources();
+    let resources = build_schema_resources(&tenant_info);
 
     let schemas = json!({
         "schemas": [SCIM_API_MESSAGES_LIST_RESPONSE],
@@ -381,7 +391,7 @@ pub async fn schema_by_id(
 ) -> Result<(StatusCode, Json<Value>), (StatusCode, Json<Value>)> {
     let _tenant_id = tenant_info.tenant_id;
 
-    let resources = build_schema_resources();
+    let resources = build_schema_resources(&tenant_info);
 
     match resources
         .into_iter()

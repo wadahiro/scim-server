@@ -42,11 +42,20 @@ async fn test_service_provider_config() {
         "ServiceProviderConfig must advertise etag support since RFC 7232 conditional requests are implemented"
     );
 
-    // Verify tenant-specific URLs
+    // Verify tenant-specific URLs. RFC 7643 §3.1 defines `meta.location` as
+    // an absolute URI of the resource, so it must end with exactly one copy
+    // of the tenant path plus "/ServiceProviderConfig" -- not a doubled
+    // tenant path segment (e.g. ".../scim/v2/scim/v2/ServiceProviderConfig").
     let meta = json_scim.get("meta").unwrap();
     let location = meta.get("location").unwrap().as_str().unwrap();
     assert!(location.starts_with("http://"));
-    assert!(location.contains("/scim/v2/ServiceProviderConfig"));
+    assert!(location.ends_with("/scim/v2/ServiceProviderConfig"));
+    assert_eq!(
+        location.matches("/scim/v2").count(),
+        1,
+        "tenant path must not be duplicated in location: {}",
+        location
+    );
 
     // Test another tenant
     let response_tenant_a = server.get("/tenant-a/scim/v2/ServiceProviderConfig").await;
@@ -56,5 +65,11 @@ async fn test_service_provider_config() {
     let meta_tenant_a = json_tenant_a.get("meta").unwrap();
     let location_tenant_a = meta_tenant_a.get("location").unwrap().as_str().unwrap();
     assert!(location_tenant_a.starts_with("http://"));
-    assert!(location_tenant_a.contains("/tenant-a/scim/v2/ServiceProviderConfig"));
+    assert!(location_tenant_a.ends_with("/tenant-a/scim/v2/ServiceProviderConfig"));
+    assert_eq!(
+        location_tenant_a.matches("/tenant-a/scim/v2").count(),
+        1,
+        "tenant path must not be duplicated in location: {}",
+        location_tenant_a
+    );
 }

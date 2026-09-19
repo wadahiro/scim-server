@@ -210,6 +210,23 @@ pub fn if_none_match_satisfied(header: &str, current_version: &str) -> bool {
     !header.split(',').any(|tag| tag.trim() == current_version)
 }
 
+/// Builds an absolute `meta.location` URL for a resource under a tenant.
+///
+/// RFC 7643 §3.1 defines `meta.location` as "The URI of the resource being
+/// returned", which must be an absolute URL consistent with the tenant's
+/// resolved base URL (honoring `override_base_url` and host-based routing).
+/// `tenant_info.base_path` already includes the tenant's configured path, so
+/// callers must not prepend it again -- `path_suffix` is just the part after
+/// that (e.g. `"Users/<id>"`, `"ServiceProviderConfig"`, or
+/// `"Schemas/<schema-urn>"`).
+pub fn build_resource_location(tenant_info: &crate::auth::TenantInfo, path_suffix: &str) -> String {
+    format!(
+        "{}/{}",
+        tenant_info.base_path.trim_end_matches('/'),
+        path_suffix.trim_start_matches('/')
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

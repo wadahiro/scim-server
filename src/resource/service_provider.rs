@@ -79,13 +79,6 @@ pub async fn service_provider_config(
 ) -> Result<(StatusCode, Json<Value>), (StatusCode, Json<Value>)> {
     let _tenant_id = tenant_info.tenant_id;
 
-    // Get the correct path from tenant configuration
-    let tenant_path = tenant_info
-        .tenant_config
-        .path
-        .trim_end_matches('/')
-        .to_string();
-
     // Create auth schemes based on the specific tenant
     let auth_schemes = create_authentication_schemes_for_tenant(&tenant_info);
 
@@ -107,9 +100,9 @@ pub async fn service_provider_config(
             resource_type: Some("ServiceProviderConfig".to_string()),
             created: None,
             last_modified: None,
-            location: Some(format!(
-                "{}{}/ServiceProviderConfig",
-                tenant_info.base_path, tenant_path
+            location: Some(crate::utils::build_resource_location(
+                &tenant_info,
+                "ServiceProviderConfig",
             )),
             version: None,
         }),
