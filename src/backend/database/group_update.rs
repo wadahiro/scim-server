@@ -108,13 +108,18 @@ impl GroupUpdateProcessor {
         Ok(())
     }
 
-    /// Set group metadata for update operations
+    /// Clear any client-supplied `meta` before storage.
     ///
-    /// This updates the lastModified timestamp in the SCIM meta attribute.
-    fn set_group_metadata(group: &mut Group, timestamp: &DateTime<Utc>) {
-        if let Some(meta) = group.meta_mut() {
-            meta.last_modified = Some(crate::utils::format_scim_datetime(*timestamp));
-        }
+    /// `meta` (`resourceType`, `created`, `lastModified`, `location`,
+    /// `version`) is entirely server-controlled per RFC 7643 §7 (mutability
+    /// "readOnly"): RFC 7644 §3.5.1 requires the server to ignore
+    /// client-supplied values for it, rather than let a PUT overwrite them
+    /// or drop `created` because the client didn't echo it back. The
+    /// authoritative values are always reconstructed from the
+    /// `created_at`/`updated_at`/`version` database columns when the
+    /// resource is read back, so nothing needs to be set here.
+    fn set_group_metadata(group: &mut Group, _timestamp: &DateTime<Utc>) {
+        group.base.meta = None;
     }
 }
 
