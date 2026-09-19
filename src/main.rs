@@ -145,8 +145,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Use AppConfig directly
     let app_config_arc = Arc::new(app_config.clone());
 
-    // Build our application with multi-tenant routes
-    let mut app = Router::new();
+    // Build our application with multi-tenant routes.
+    //
+    // Custom endpoints live in their own router: they serve operator-configured
+    // content types (text/plain, text/html, ...) and must NOT be rewritten to
+    // application/scim+json, so the SCIM content-type layer below is applied to
+    // the SCIM router only and the two are merged afterwards.
+    let mut custom_app = Router::new();
 
     // Add custom endpoints first (before SCIM routes)
     // Custom endpoints are routed as absolute paths, not under tenant URLs
@@ -156,12 +161,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 "🔗 Setting up custom endpoint for tenant {} at {}",
                 tenant.id, endpoint.path
             );
-            app = app.route(
+            custom_app = custom_app.route(
                 &endpoint.path,
                 get(resource::custom::handle_custom_endpoint),
             );
         }
     }
+
+    let mut app = Router::new();
 
     // Always use the existing handlers, but enhance them to support host resolution
     // For now, let's use a unified approach that supports both static and dynamic routing
@@ -265,7 +272,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         );
     }
 
-    let app = app
+    // RFC 7644 §3.1: SCIM responses use application/scim+json. Applied here so
+    // it covers every SCIM route without touching each handler, and so the
+    // custom-endpoint router keeps its configured content types.
+    let app = app.layer(middleware::from_fn(
+        extractors::scim_content_type_middleware,
+    ));
+
+    let app = custom_app
+        .merge(app)
         .layer(middleware::from_fn(logging::logging_middleware))
         .layer(middleware::from_fn_with_state(
             app_config_arc.clone(),

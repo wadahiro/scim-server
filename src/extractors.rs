@@ -1,6 +1,7 @@
 use axum::{
     extract::{rejection::JsonRejection, FromRequest, Request},
     http::{header, HeaderMap, StatusCode},
+    middleware::Next,
     response::{IntoResponse, Response},
     Json,
 };
@@ -80,8 +81,7 @@ impl IntoResponse for ScimJsonRejection {
     }
 }
 
-// Helper function to set SCIM content type in responses
-#[allow(dead_code)]
+// Helper function to build SCIM content type headers
 pub fn scim_content_type() -> HeaderMap {
     let mut headers = HeaderMap::new();
     headers.insert(
@@ -89,4 +89,31 @@ pub fn scim_content_type() -> HeaderMap {
         header::HeaderValue::from_static("application/scim+json; charset=utf-8"),
     );
     headers
+}
+
+/// Middleware that rewrites `Content-Type: application/json...` responses to
+/// `application/scim+json; charset=utf-8`, per RFC 7644 §3.1.
+///
+/// This is applied only to the per-tenant SCIM router (`ServiceProviderConfig`,
+/// `Schemas`, `ResourceTypes`, `Users`, `Groups`) in `app::build_router` — it
+/// must NOT be layered onto the custom-endpoints router, whose responses use
+/// whatever `content_type` the tenant configured (including `text/plain`).
+///
+/// Responses without a body (e.g. 204 No Content, 304 Not Modified) or with a
+/// non-JSON Content-Type are left untouched.
+pub async fn scim_content_type_middleware(request: Request, next: Next) -> Response {
+    let mut response = next.run(request).await;
+
+    let is_json = response
+        .headers()
+        .get(header::CONTENT_TYPE)
+        .and_then(|v| v.to_str().ok())
+        .map(|v| v.starts_with("application/json"))
+        .unwrap_or(false);
+
+    if is_json {
+        response.headers_mut().extend(scim_content_type());
+    }
+
+    response
 }
