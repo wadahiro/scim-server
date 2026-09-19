@@ -1,5 +1,7 @@
 use crate::parser::ResourceType;
-use crate::schema::definitions::{find_attribute, Returned, GROUP_SCHEMA, USER_SCHEMA};
+use crate::schema::definitions::{
+    find_attribute, resolve_attribute_path_case, Returned, GROUP_SCHEMA, USER_SCHEMA,
+};
 use serde_json::{Map, Value};
 
 /// Core SCIM attributes that RFC 7644 §3.4.2.5 requires to survive attribute
@@ -83,8 +85,18 @@ impl AttributeFilter {
         let mut included = std::collections::HashSet::new();
 
         for attr in attrs {
+            // RFC 7643 §2.1's general "attribute names are case insensitive"
+            // rule, applied here by interpretation since RFC 7644 is silent
+            // about case for the `attributes` parameter (unlike filters,
+            // where §3.4.2.2 states it explicitly). Resolve to the schema's
+            // own casing so matching against actual resource JSON keys
+            // (which are always in that casing) below works regardless of
+            // the case the client used; an attribute the schema doesn't
+            // recognize is left exactly as given.
+            let attr = resolve_attribute_path_case(schema, attr);
+
             // Always include attributes with "returned" = "always"
-            if let Some(attr_def) = find_attribute(schema, attr) {
+            if let Some(attr_def) = find_attribute(schema, &attr) {
                 if matches!(attr_def.returned, Returned::Always) {
                     included.insert(attr.clone());
                     continue;
@@ -95,7 +107,7 @@ impl AttributeFilter {
             included.insert(attr.clone());
 
             // For complex attributes, include sub-attributes if needed
-            self.add_sub_attributes(attr, schema, &mut included);
+            self.add_sub_attributes(&attr, schema, &mut included);
         }
 
         // Always include mandatory attributes (id, meta, etc.)
@@ -130,12 +142,16 @@ impl AttributeFilter {
         // Remove excluded attributes (except those with "returned" = "always")
         if let Some(ref excluded) = self.excluded_attributes {
             for excluded_attr in excluded {
-                if let Some(attr_def) = find_attribute(schema, excluded_attr) {
+                // See the matching comment in `get_included_attributes_from_list`:
+                // RFC 7644 is silent on case for `excludedAttributes`, so this
+                // extends RFC 7643 §2.1's general case-insensitivity rule to it.
+                let excluded_attr = resolve_attribute_path_case(schema, excluded_attr);
+                if let Some(attr_def) = find_attribute(schema, &excluded_attr) {
                     // Cannot exclude attributes with "returned" = "always"
                     if !matches!(attr_def.returned, Returned::Always) {
-                        included.remove(excluded_attr);
+                        included.remove(&excluded_attr);
                         // Also remove sub-attributes
-                        self.remove_sub_attributes(excluded_attr, &mut included);
+                        self.remove_sub_attributes(&excluded_attr, &mut included);
                     }
                 }
             }
@@ -529,6 +545,44 @@ mod tests {
         assert!(result.get("id").is_some()); // Always returned
         assert!(result.get("name").is_none()); // Not requested
         assert!(result.get("phoneNumbers").is_none()); // Not requested
+    }
+
+    #[test]
+    fn test_attributes_parameter_case_insensitive() {
+        // RFC 7643 §2.1's general "attribute names are case insensitive"
+        // rule, applied here by interpretation: RFC 7644 is silent about
+        // case for the `attributes` parameter specifically (unlike filters,
+        // where §3.4.2.2 states it explicitly).
+        let filter = AttributeFilter::from_params(Some("USERNAME"), None);
+        let user = json!({
+            "id": "123",
+            "userName": "john.doe",
+            "emails": [{"value": "john@example.com", "primary": true}]
+        });
+
+        let result = filter.apply_to_resource(&user, ResourceType::User);
+
+        assert!(result.get("userName").is_some());
+        assert!(result.get("id").is_some()); // Always returned
+        assert!(result.get("emails").is_none()); // Not requested
+    }
+
+    #[test]
+    fn test_excluded_attributes_parameter_case_insensitive() {
+        // Same §2.1-by-interpretation rule as `attributes`, applied to
+        // `excludedAttributes`.
+        let filter = AttributeFilter::from_params(None, Some("USERNAME"));
+        let user = json!({
+            "id": "123",
+            "userName": "john.doe",
+            "emails": [{"value": "john@example.com", "primary": true}]
+        });
+
+        let result = filter.apply_to_resource(&user, ResourceType::User);
+
+        assert!(result.get("userName").is_none()); // Excluded
+        assert!(result.get("emails").is_some());
+        assert!(result.get("id").is_some()); // Always returned
     }
 
     #[test]

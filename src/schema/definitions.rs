@@ -1363,6 +1363,44 @@ pub fn get_all_schemas() -> Vec<&'static SchemaDefinition> {
     SCHEMA_REGISTRY.values().copied().collect()
 }
 
+/// Resolve a dot-separated attribute path to the schema's own casing,
+/// segment by segment.
+///
+/// RFC 7643 §2.1 states, with no scoping to any particular context,
+/// "Attribute names are case insensitive". RFC 7644 §3.4.2.2 restates that
+/// explicitly for filters, but is silent about case for the `attributes` /
+/// `excludedAttributes` query parameters, `sortBy`, and the PATCH `path` --
+/// so resolving those against §2.1's general rule is an interpretation, not
+/// explicit text, applied here to those contexts (filters already resolve
+/// case correctly through a separate mechanism and are left untouched).
+///
+/// A segment that doesn't match any known (sub-)attribute -- and every
+/// segment after it, since there is no further schema to traverse -- is
+/// left exactly as given, so an unresolved or custom attribute keeps
+/// whatever casing the client used.
+pub fn resolve_attribute_path_case(schema: &SchemaDefinition, attr_path: &str) -> String {
+    let mut current_attrs: &[AttributeDefinition] = &schema.attributes;
+    let mut resolved: Vec<String> = Vec::new();
+    let mut still_matching = true;
+
+    for part in attr_path.split('.') {
+        if still_matching {
+            if let Some(attr) = current_attrs
+                .iter()
+                .find(|a| a.name.eq_ignore_ascii_case(part))
+            {
+                resolved.push(attr.name.to_string());
+                current_attrs = &attr.sub_attributes;
+                continue;
+            }
+            still_matching = false;
+        }
+        resolved.push(part.to_string());
+    }
+
+    resolved.join(".")
+}
+
 /// Find attribute definition in schema
 pub fn find_attribute<'a>(
     schema: &'a SchemaDefinition,
@@ -1490,6 +1528,38 @@ mod tests {
 
         // Non-existent
         assert!(find_attribute(schema, "nonExistent").is_none());
+    }
+
+    #[test]
+    fn test_resolve_attribute_path_case() {
+        // RFC 7643 §2.1 general rule, applied by interpretation (RFC 7644
+        // is silent for this context): a top-level attribute in any case
+        // resolves to the schema's own casing.
+        let schema = &*USER_SCHEMA;
+        assert_eq!(resolve_attribute_path_case(schema, "USERNAME"), "userName");
+        assert_eq!(resolve_attribute_path_case(schema, "username"), "userName");
+        assert_eq!(resolve_attribute_path_case(schema, "UserName"), "userName");
+
+        // Sub-attributes resolve segment by segment.
+        assert_eq!(
+            resolve_attribute_path_case(schema, "NAME.GIVENNAME"),
+            "name.givenName"
+        );
+        assert_eq!(
+            resolve_attribute_path_case(schema, "emails.VALUE"),
+            "emails.value"
+        );
+
+        // An unresolved segment (and anything after it) is left exactly as
+        // given, so unknown/custom attributes keep the client's casing.
+        assert_eq!(
+            resolve_attribute_path_case(schema, "totallyBogusAttr"),
+            "totallyBogusAttr"
+        );
+        assert_eq!(
+            resolve_attribute_path_case(schema, "name.BOGUS"),
+            "name.BOGUS"
+        );
     }
 
     #[test]

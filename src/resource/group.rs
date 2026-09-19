@@ -592,7 +592,11 @@ async fn search_groups_with_params(
             Ok(filter_op)
         }) {
             Ok(filter_op) => {
-                let sort_spec = SortSpec::from_params(sort_by.as_deref(), sort_order.as_deref());
+                let sort_spec = SortSpec::from_params_for_resource(
+                    sort_by.as_deref(),
+                    sort_order.as_deref(),
+                    ResourceType::Group,
+                );
 
                 match backend
                     .find_groups_by_filter(
@@ -642,7 +646,11 @@ async fn search_groups_with_params(
     }
 
     // Default behavior: get all groups paginated with optional sorting
-    let sort_spec = SortSpec::from_params(sort_by.as_deref(), sort_order.as_deref());
+    let sort_spec = SortSpec::from_params_for_resource(
+        sort_by.as_deref(),
+        sort_order.as_deref(),
+        ResourceType::Group,
+    );
 
     let result = if sort_spec.is_some() {
         backend
@@ -1013,6 +1021,7 @@ pub async fn patch_group(
         for operation in &patch_ops.operations {
             let scim_path = crate::parser::patch_parser::ScimPath::parse(
                 &operation.path.clone().unwrap_or_default(),
+                crate::parser::ResourceType::Group,
             )
             .map_err(|e| e.to_response())?;
             let mut group_json = serde_json::to_value(&prospective).map_err(|_| {

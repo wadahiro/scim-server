@@ -62,7 +62,10 @@ impl UserPatchProcessor {
 
         // Apply patch operations
         for operation in &patch_ops.operations {
-            let scim_path = ScimPath::parse(&operation.path.clone().unwrap_or_default())?;
+            let scim_path = ScimPath::parse(
+                &operation.path.clone().unwrap_or_default(),
+                crate::parser::ResourceType::User,
+            )?;
 
             // Convert user to JSON for patch operations
             let mut user_json = serde_json::to_value(&user).map_err(AppError::Serialization)?;

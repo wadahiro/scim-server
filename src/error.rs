@@ -23,6 +23,13 @@ pub enum AppError {
     /// A PATCH `path` selected a value via a filter that matched nothing.
     /// Maps to HTTP 400 with `scimType: "noTarget"` (RFC 7644 §3.5.2).
     NoTarget(String),
+    /// A PATCH `path` named no attribute this server can actually persist
+    /// (e.g. a sub-attribute of a known complex attribute, or an attribute
+    /// inside a schema-extension container, that the schema doesn't
+    /// define) -- so applying the operation would silently have no effect.
+    /// Maps to HTTP 400 with `scimType: "invalidPath"` (RFC 7644 §3.12:
+    /// "The 'path' attribute was invalid or malformed").
+    InvalidPath(String),
 }
 
 impl fmt::Display for AppError {
@@ -41,6 +48,7 @@ impl fmt::Display for AppError {
             }
             AppError::Mutability(e) => write!(f, "Mutability violation: {}", e),
             AppError::NoTarget(e) => write!(f, "No target: {}", e),
+            AppError::InvalidPath(e) => write!(f, "Invalid path: {}", e),
         }
     }
 }
@@ -169,6 +177,9 @@ impl AppError {
             }
             AppError::NoTarget(e) => {
                 scim_error_response(StatusCode::BAD_REQUEST, Some("noTarget"), e)
+            }
+            AppError::InvalidPath(e) => {
+                scim_error_response(StatusCode::BAD_REQUEST, Some("invalidPath"), e)
             }
         }
     }

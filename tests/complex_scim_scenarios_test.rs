@@ -1,11 +1,13 @@
 /// Tests for complex SCIM scenarios and edge cases
 use scim_server::parser::patch_parser::ScimPath;
+use scim_server::parser::ResourceType;
 use serde_json::json;
 
 #[test]
 fn test_nested_schema_qualified_paths() {
     let path = "urn:ietf:params:scim:schemas:extension:enterprise:2.0:User:manager.value";
-    let parsed = ScimPath::parse(path).expect("Should parse nested schema qualified path");
+    let parsed = ScimPath::parse(path, ResourceType::User)
+        .expect("Should parse nested schema qualified path");
 
     let mut user = json!({
         "schemas": [
@@ -37,7 +39,8 @@ fn test_nested_schema_qualified_paths() {
 fn test_complex_multi_valued_attribute_filters() {
     // Test simple filter (complex AND conditions not yet supported)
     let path = "emails[type eq \"work\"].value";
-    let parsed = ScimPath::parse(path).expect("Should parse simple filter path");
+    let parsed =
+        ScimPath::parse(path, ResourceType::User).expect("Should parse simple filter path");
 
     let mut user = json!({
         "schemas": ["urn:ietf:params:scim:schemas:core:2.0:User"],
@@ -76,16 +79,21 @@ fn test_complex_multi_valued_attribute_filters() {
 }
 
 #[test]
-fn test_case_sensitive_attribute_names() {
-    let path = "Name.GivenName"; // Should be case sensitive
-    let parsed = ScimPath::parse(path).expect("Should parse case sensitive path");
+fn test_case_insensitive_attribute_names() {
+    // RFC 7643 §2.1 states, with no scoping to any particular context,
+    // "Attribute names are case insensitive". RFC 7644 is silent about
+    // case for the PATCH `path` specifically (unlike filters, where
+    // §3.4.2.2 states it explicitly), so applying §2.1's general rule to
+    // `path` here is an interpretation: "Name.GivenName" must resolve to
+    // the schema's own "name.givenName", not to a distinct, literally
+    // capitalized "Name.GivenName" pseudo-attribute.
+    let path = "Name.GivenName";
+    let parsed =
+        ScimPath::parse(path, ResourceType::User).expect("Should parse case insensitive path");
 
     let mut user = json!({
         "schemas": ["urn:ietf:params:scim:schemas:core:2.0:User"],
         "userName": "case.user",
-        "Name": {
-            "GivenName": "John"
-        },
         "name": {
             "givenName": "jane"
         }
@@ -94,18 +102,19 @@ fn test_case_sensitive_attribute_names() {
     let result = parsed.apply_operation(&mut user, "replace", &json!("JOHN"));
     assert!(
         result.is_ok(),
-        "Should successfully replace case sensitive attribute"
+        "Should successfully replace the case-insensitively resolved attribute"
     );
 
-    // Should only update the capitalized version
-    assert_eq!(user["Name"]["GivenName"].as_str(), Some("JOHN"));
-    assert_eq!(user["name"]["givenName"].as_str(), Some("jane")); // unchanged
+    // Resolved to the schema's own casing -- no separate "Name.GivenName"
+    // pseudo-attribute is created.
+    assert_eq!(user["name"]["givenName"].as_str(), Some("JOHN"));
+    assert!(user.get("Name").is_none());
 }
 
 #[test]
 fn test_deep_nested_path_with_arrays() {
     let path = "addresses[type eq \"work\"].streetAddress";
-    let parsed = ScimPath::parse(path).expect("Should parse deep nested path");
+    let parsed = ScimPath::parse(path, ResourceType::User).expect("Should parse deep nested path");
 
     let mut user = json!({
         "schemas": ["urn:ietf:params:scim:schemas:core:2.0:User"],
@@ -142,7 +151,8 @@ fn test_deep_nested_path_with_arrays() {
 fn test_multiple_filter_conditions() {
     // Test simple filter (complex AND conditions not yet supported)
     let path = "phoneNumbers[type eq \"mobile\"]";
-    let parsed = ScimPath::parse(path).expect("Should parse single condition filter");
+    let parsed =
+        ScimPath::parse(path, ResourceType::User).expect("Should parse single condition filter");
 
     let mut user = json!({
         "schemas": ["urn:ietf:params:scim:schemas:core:2.0:User"],
@@ -178,7 +188,7 @@ fn test_multiple_filter_conditions() {
 #[test]
 fn test_add_to_non_existent_array() {
     let path = "groups[display eq \"Administrators\"].value";
-    let parsed = ScimPath::parse(path).expect("Should parse array path");
+    let parsed = ScimPath::parse(path, ResourceType::User).expect("Should parse array path");
 
     let mut user = json!({
         "schemas": ["urn:ietf:params:scim:schemas:core:2.0:User"],
@@ -201,7 +211,7 @@ fn test_add_to_non_existent_array() {
 #[test]
 fn test_edge_case_empty_filter_value() {
     let path = "emails[value eq \"\"].type";
-    let parsed_result = ScimPath::parse(path);
+    let parsed_result = ScimPath::parse(path, ResourceType::User);
 
     // Should handle empty string in filter gracefully
     match parsed_result {
@@ -234,7 +244,8 @@ fn test_edge_case_empty_filter_value() {
 #[test]
 fn test_special_characters_in_filter_values() {
     let path = r#"emails[value eq "test@domain.com"].primary"#;
-    let parsed = ScimPath::parse(path).expect("Should parse path with special chars in filter");
+    let parsed = ScimPath::parse(path, ResourceType::User)
+        .expect("Should parse path with special chars in filter");
 
     let mut user = json!({
         "schemas": ["urn:ietf:params:scim:schemas:core:2.0:User"],
@@ -264,7 +275,7 @@ fn test_special_characters_in_filter_values() {
 #[test]
 fn test_performance_with_large_arrays() {
     let path = "groups[display eq \"Target Group\"].value";
-    let parsed = ScimPath::parse(path).expect("Should parse path");
+    let parsed = ScimPath::parse(path, ResourceType::User).expect("Should parse path");
 
     // Create user with large groups array
     let mut groups = Vec::new();

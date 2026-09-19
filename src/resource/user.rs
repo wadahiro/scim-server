@@ -509,7 +509,11 @@ async fn search_users_with_params(
             Ok(filter_op)
         }) {
             Ok(filter_op) => {
-                let sort_spec = SortSpec::from_params(sort_by.as_deref(), sort_order.as_deref());
+                let sort_spec = SortSpec::from_params_for_resource(
+                    sort_by.as_deref(),
+                    sort_order.as_deref(),
+                    ResourceType::User,
+                );
 
                 match backend
                     .find_users_by_filter(
@@ -562,7 +566,11 @@ async fn search_users_with_params(
     }
 
     // Default behavior: get all users paginated with optional sorting
-    let sort_spec = SortSpec::from_params(sort_by.as_deref(), sort_order.as_deref());
+    let sort_spec = SortSpec::from_params_for_resource(
+        sort_by.as_deref(),
+        sort_order.as_deref(),
+        ResourceType::User,
+    );
 
     let result = if sort_spec.is_some() {
         backend

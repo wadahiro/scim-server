@@ -450,7 +450,10 @@ impl GroupReader for SqliteGroupReader {
 
         // Apply patch operations
         for operation in &patch_ops.operations {
-            let scim_path = ScimPath::parse(&operation.path.clone().unwrap_or_default())?;
+            let scim_path = ScimPath::parse(
+                &operation.path.clone().unwrap_or_default(),
+                crate::parser::ResourceType::Group,
+            )?;
 
             // Convert group to JSON for patch operations
             let mut group_json = serde_json::to_value(&group).map_err(AppError::Serialization)?;

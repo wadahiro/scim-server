@@ -2,6 +2,7 @@ use crate::config::CompatibilityConfig;
 use crate::error::{AppError, AppResult};
 use crate::parser::filter_operator::FilterOperator;
 use crate::parser::filter_parser::parse_filter;
+use crate::parser::ResourceType;
 use serde_json::Value;
 
 /// SCIM PATH parser and processor according to RFC 7644
@@ -25,15 +26,173 @@ pub struct ScimFilter {
 }
 
 impl ScimPath {
-    /// Parse a SCIM path according to RFC 7644 PATH ABNF
-    pub fn parse(path: &str) -> AppResult<Self> {
-        if path.contains('[') {
+    /// Parse a SCIM path according to RFC 7644 PATH ABNF, resolving
+    /// attribute names against `resource_type`'s schema (see
+    /// `resolve_case_and_validate`).
+    pub fn parse(path: &str, resource_type: ResourceType) -> AppResult<Self> {
+        let parsed = if path.contains('[') {
             // This is a valuePath with filter
-            Self::parse_value_path(path)
+            Self::parse_value_path(path)?
         } else {
             // This is a simple attrPath
-            Self::parse_attr_path(path)
+            Self::parse_attr_path(path)?
+        };
+        parsed.resolve_case_and_validate(resource_type)
+    }
+
+    /// Resolve every attribute-name segment of this path to the schema's
+    /// own casing, and reject a path that names no attribute this server
+    /// can actually persist.
+    ///
+    /// RFC 7643 §2.1 states, with no scoping to any particular context,
+    /// "Attribute names are case insensitive". RFC 7644 §3.4.2.2 restates
+    /// that explicitly for filters, but is silent about case for the PATCH
+    /// `path` specifically -- so resolving `path` segments against §2.1's
+    /// general rule here is an interpretation, not explicit text.
+    ///
+    /// Separately, RFC 7644 §3.12 defines `invalidPath` for "The 'path'
+    /// attribute was invalid or malformed". This server's `User` model has
+    /// an open `additional_fields` map (see `models::User`) that lets a
+    /// PATCH create genuinely new, arbitrary top-level attributes -- a
+    /// deliberate custom-attribute feature -- so an unrecognized *top-level*
+    /// attribute name on a bare (non-schema-qualified) User path is left
+    /// alone. Everywhere else -- a sub-attribute of a known complex
+    /// attribute, any path on Group (whose model has no such catch-all), or
+    /// an attribute inside a registered schema-extension container (e.g.
+    /// the enterprise-user extension, whose Rust type likewise has no
+    /// catch-all) -- an unresolved path has nowhere to land: it is silently
+    /// dropped when the patched JSON round-trips through the typed model,
+    /// which would report success (200) for an operation that had no
+    /// effect. Those are rejected here instead.
+    fn resolve_case_and_validate(self, resource_type: ResourceType) -> AppResult<Self> {
+        match self {
+            ScimPath::AttrPath(parts) => {
+                let resolved = Self::resolve_attr_path(&parts, resource_type)?;
+                Ok(ScimPath::AttrPath(resolved))
+            }
+            ScimPath::ValuePath {
+                attr_path,
+                filter,
+                sub_attr,
+            } => {
+                let (attr_path, sub_attr) =
+                    Self::resolve_value_path(&attr_path, sub_attr.as_deref(), resource_type);
+                Ok(ScimPath::ValuePath {
+                    attr_path,
+                    filter,
+                    sub_attr,
+                })
+            }
         }
+    }
+
+    /// Resolve (and validate) the segments of an `AttrPath`. See
+    /// `resolve_case_and_validate` for the rules applied.
+    fn resolve_attr_path(parts: &[String], resource_type: ResourceType) -> AppResult<Vec<String>> {
+        if parts.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let first = &parts[0];
+        if first.starts_with("urn:ietf:params:scim:schemas:") {
+            // The whole path is a bare extension schema URN (RFC 7644
+            // §3.5.2, example 3) -- nothing further to resolve or validate.
+            if parts.len() == 1 {
+                return Ok(parts.to_vec());
+            }
+
+            // A schema-URN-qualified attribute. Only a *registered*
+            // extension schema (currently just the enterprise-user
+            // extension for User) has a known attribute list to resolve
+            // and validate against; an unregistered/unknown schema URN is
+            // stored as an opaque nested value with no per-attribute
+            // validation, so it is left untouched.
+            if let Some(schema) = crate::schema::SCHEMA_REGISTRY.get(first.as_str()) {
+                let rest = parts[1..].join(".");
+                let resolved_rest = crate::schema::resolve_attribute_path_case(schema, &rest);
+                if crate::schema::find_attribute(schema, &resolved_rest).is_none() {
+                    return Err(AppError::InvalidPath(format!(
+                        "No such attribute '{}' in schema '{}'",
+                        rest, first
+                    )));
+                }
+                let mut resolved = vec![first.clone()];
+                resolved.extend(resolved_rest.split('.').map(|s| s.to_string()));
+                return Ok(resolved);
+            }
+
+            return Ok(parts.to_vec());
+        }
+
+        // A plain path against the resource's own core schema.
+        let schema = match resource_type {
+            ResourceType::User => &*crate::schema::USER_SCHEMA,
+            ResourceType::Group => &*crate::schema::GROUP_SCHEMA,
+        };
+        let joined = parts.join(".");
+        let resolved = crate::schema::resolve_attribute_path_case(schema, &joined);
+
+        if crate::schema::find_attribute(schema, &resolved).is_none() {
+            let is_supported_custom_top_level =
+                parts.len() == 1 && matches!(resource_type, ResourceType::User);
+            if !is_supported_custom_top_level {
+                return Err(AppError::InvalidPath(format!(
+                    "No such attribute '{}'",
+                    joined
+                )));
+            }
+            // Unknown top-level custom attribute on User: keep the
+            // client's own casing -- it becomes the literal stored key.
+            return Ok(parts.to_vec());
+        }
+
+        Ok(resolved.split('.').map(|s| s.to_string()).collect())
+    }
+
+    /// Resolve the segments of a `ValuePath`'s base attribute and optional
+    /// trailing sub-attribute to the schema's own casing.
+    ///
+    /// An unresolved base attribute is *not* rejected here: unlike
+    /// `AttrPath`, `apply_value_path_operation_with_compatibility` already
+    /// requires the target key to be present in the resource and returns
+    /// `noTarget`/`invalidValue` otherwise (RFC 7644 §3.5.2.3), so there is
+    /// no silent-success case to guard against for the base attribute; an
+    /// unresolved sub-attribute is likewise left as given, matching that
+    /// same downstream behavior.
+    fn resolve_value_path(
+        attr_path: &[String],
+        sub_attr: Option<&str>,
+        resource_type: ResourceType,
+    ) -> (Vec<String>, Option<String>) {
+        if attr_path.is_empty() {
+            return (attr_path.to_vec(), sub_attr.map(|s| s.to_string()));
+        }
+
+        let schema = match resource_type {
+            ResourceType::User => &*crate::schema::USER_SCHEMA,
+            ResourceType::Group => &*crate::schema::GROUP_SCHEMA,
+        };
+
+        let joined = attr_path.join(".");
+        let resolved_attr = crate::schema::resolve_attribute_path_case(schema, &joined);
+        let attr_def = crate::schema::find_attribute(schema, &resolved_attr);
+
+        let resolved_attr_path: Vec<String> =
+            resolved_attr.split('.').map(|s| s.to_string()).collect();
+
+        let resolved_sub_attr = sub_attr.map(|s| {
+            attr_def
+                .and_then(|attr_def| {
+                    attr_def
+                        .sub_attributes
+                        .iter()
+                        .find(|a| a.name.eq_ignore_ascii_case(s))
+                        .map(|a| a.name.to_string())
+                })
+                .unwrap_or_else(|| s.to_string())
+        });
+
+        (resolved_attr_path, resolved_sub_attr)
     }
 
     fn parse_attr_path(path: &str) -> AppResult<Self> {
@@ -935,7 +1094,7 @@ mod tests {
 
     #[test]
     fn test_parse_simple_attr_path() {
-        let path = ScimPath::parse("name.givenName").unwrap();
+        let path = ScimPath::parse("name.givenName", ResourceType::User).unwrap();
         match path {
             ScimPath::AttrPath(parts) => {
                 assert_eq!(parts, vec!["name", "givenName"]);
@@ -946,7 +1105,7 @@ mod tests {
 
     #[test]
     fn test_parse_value_path_with_filter() {
-        let path = ScimPath::parse("addresses[type eq \"work\"]").unwrap();
+        let path = ScimPath::parse("addresses[type eq \"work\"]", ResourceType::User).unwrap();
         match path {
             ScimPath::ValuePath {
                 attr_path,
@@ -966,7 +1125,8 @@ mod tests {
 
     #[test]
     fn test_parse_value_path_with_sub_attr() {
-        let path = ScimPath::parse("addresses[type eq \"work\"].street").unwrap();
+        let path =
+            ScimPath::parse("addresses[type eq \"work\"].street", ResourceType::User).unwrap();
         match path {
             ScimPath::ValuePath {
                 attr_path,
