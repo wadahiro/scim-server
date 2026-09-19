@@ -61,6 +61,32 @@ jobs:
         if: matrix.rust == 'stable'
         run: cargo clippy --all-targets --all-features -- -W clippy::all
 
+      # rustls is pinned to the ring crypto provider (see Cargo.toml) so the
+      # cargo-zigbuild cross-compilation path used for releases never needs
+      # cmake/NASM for aws-lc-rs. `cargo tree -i` exits non-zero with "did not
+      # match any packages" when the crate is absent (the desired state) and
+      # exits zero (printing the dependency path) if it ever gets pulled back
+      # in by a feature change — so success here is the failure case.
+      - name: Ensure aws-lc-rs is not pulled into the dependency tree
+        if: matrix.rust == 'stable'
+        run: |
+          set +e
+          out=$(cargo tree -i aws-lc-rs -e normal --all-features 2>&1)
+          status=$?
+          set -e
+          if [ "$status" -eq 0 ]; then
+            echo "$out"
+            echo "::error::aws-lc-rs is present in the dependency tree (rustls must use the ring backend)"
+            exit 1
+          fi
+          if echo "$out" | grep -q "did not match any packages"; then
+            echo "aws-lc-rs not found in the dependency tree (expected)"
+          else
+            echo "$out"
+            echo "::error::cargo tree failed unexpectedly"
+            exit 1
+          fi
+
       - name: Run tests (SQLite only)
         run: cargo test
 

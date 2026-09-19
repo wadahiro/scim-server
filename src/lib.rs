@@ -1,7 +1,9 @@
 pub mod app;
 pub mod auth;
 pub mod backend;
+pub mod cli;
 pub mod config;
+pub mod diag;
 pub mod error;
 pub mod extractors;
 pub mod logging;

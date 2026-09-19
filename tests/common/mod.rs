@@ -6,6 +6,7 @@ use scim_server::config::{
     TenantConfig,
 };
 use serde_json::json;
+use std::net::SocketAddr;
 use std::sync::Arc;
 #[cfg(test)]
 use testcontainers::ContainerAsync;
@@ -46,6 +47,62 @@ pub async fn setup_test_database() -> Result<Arc<dyn ScimBackend>, Box<dyn std::
     }
 
     Ok(backend)
+}
+
+/// A real (not in-memory-transport) SCIM server bound to `127.0.0.1:0`, for
+/// tests that need to speak actual HTTP — currently only `diagnose`, which
+/// drives a real `reqwest::Client` rather than `axum_test::TestServer`'s
+/// in-process transport.
+#[allow(dead_code)]
+pub struct TestServerHandle {
+    pub base_url: String,
+    shutdown: Option<tokio::sync::oneshot::Sender<()>>,
+    join: tokio::task::JoinHandle<()>,
+}
+
+#[allow(dead_code)]
+impl TestServerHandle {
+    pub async fn shutdown(mut self) {
+        let _ = self.shutdown.take().unwrap().send(());
+        let _ = self.join.await;
+    }
+}
+
+/// Spawns `app_config` behind a real listener on an OS-assigned port
+/// (port 0, so parallel tests never collide).
+///
+/// Must use `into_make_service_with_connect_info::<SocketAddr>()`: the auth
+/// middleware reads `ConnectInfo<SocketAddr>` (`src/auth.rs`), and without
+/// it every request served through a real listener 500s.
+#[allow(dead_code)]
+pub async fn spawn_real_server(cfg: AppConfig) -> TestServerHandle {
+    let backend = setup_test_database().await.unwrap();
+    let app_config_arc = Arc::new(cfg);
+    let router = scim_server::app::build_router(&app_config_arc)
+        .layer(middleware::from_fn_with_state(
+            app_config_arc.clone(),
+            scim_server::auth::auth_middleware,
+        ))
+        .with_state((backend, app_config_arc));
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    let join = tokio::spawn(async move {
+        axum::serve(
+            listener,
+            router.into_make_service_with_connect_info::<SocketAddr>(),
+        )
+        .with_graceful_shutdown(async {
+            rx.await.ok();
+        })
+        .await
+        .unwrap();
+    });
+    TestServerHandle {
+        base_url: format!("http://{addr}/scim/v2"),
+        shutdown: Some(tx),
+        join,
+    }
 }
 
 /// Create backend for testing with PostgreSQL using TestContainers
