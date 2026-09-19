@@ -96,6 +96,90 @@ pub fn validate_user_primary_constraints(user_json: &Value) -> AppResult<()> {
     Ok(())
 }
 
+/// Multi-valued complex attributes whose entries are identified by a
+/// `(type, value)` pair, per RFC 7643 §2.4 ("A service provider SHOULD NOT
+/// return the same value more than once within a multi-valued attribute").
+const DEDUPLICATED_MULTIVALUED_ATTRIBUTES: &[&str] = &[
+    "emails",
+    "phoneNumbers",
+    "ims",
+    "photos",
+    "entitlements",
+    "roles",
+    "x509Certificates",
+];
+
+/// De-duplicates `(type, value)` pairs within the multi-valued complex
+/// attributes listed in [`DEDUPLICATED_MULTIVALUED_ATTRIBUTES`], preserving
+/// first-occurrence order (RFC 7643 §2.4).
+pub fn dedupe_multivalued_attributes(resource_json: &mut Value) {
+    let Value::Object(obj) = resource_json else {
+        return;
+    };
+
+    for key in DEDUPLICATED_MULTIVALUED_ATTRIBUTES {
+        if let Some(Value::Array(arr)) = obj.get_mut(*key) {
+            let mut seen = std::collections::HashSet::new();
+            arr.retain(|item| {
+                let Value::Object(item_obj) = item else {
+                    return true;
+                };
+                let type_val = item_obj.get("type").cloned().unwrap_or(Value::Null);
+                let value_val = item_obj.get("value").cloned().unwrap_or(Value::Null);
+                seen.insert((type_val.to_string(), value_val.to_string()))
+            });
+        }
+    }
+}
+
+/// Ensures a PATCH (or other partial update) operation did not remove a
+/// top-level attribute the schema marks `required`.
+///
+/// RFC 7644 §3.5.2.2 requires the service provider to reject a "remove" of a
+/// required attribute with HTTP 400 and `scimType: "mutability"`. The
+/// resource models here use non-`Option` Rust fields for some required
+/// attributes (e.g. `userName`), so removing the JSON key and only then
+/// deserializing back into the typed model would otherwise surface as an
+/// opaque serde "missing field" error. Calling this first, on the JSON
+/// representation, lets us report the correct SCIM error instead.
+pub fn validate_required_attributes_present(
+    resource_json: &Value,
+    schema: &crate::schema::SchemaDefinition,
+) -> AppResult<()> {
+    let Value::Object(obj) = resource_json else {
+        return Ok(());
+    };
+
+    for attr in &schema.attributes {
+        if !attr.required {
+            continue;
+        }
+        match obj.get(attr.name) {
+            None => {
+                return Err(AppError::Mutability(format!(
+                    "'{}' is a required attribute and cannot be removed",
+                    attr.name
+                )));
+            }
+            Some(Value::Null) => {
+                return Err(AppError::Mutability(format!(
+                    "'{}' is a required attribute and cannot be removed",
+                    attr.name
+                )));
+            }
+            Some(Value::String(s)) if s.is_empty() => {
+                return Err(AppError::Mutability(format!(
+                    "'{}' is a required attribute and cannot be removed",
+                    attr.name
+                )));
+            }
+            _ => {}
+        }
+    }
+
+    Ok(())
+}
+
 /// Ensures at most one primary value when adding/replacing multi-valued attributes
 pub fn enforce_single_primary(multi_value_attr: &mut [Value]) -> AppResult<()> {
     let mut primary_indices = Vec::new();

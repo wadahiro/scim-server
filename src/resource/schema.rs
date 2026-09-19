@@ -26,6 +26,7 @@ fn attribute_type_to_string(attr_type: &AttributeType) -> &'static str {
         AttributeType::DateTime => "dateTime",
         AttributeType::Reference => "reference",
         AttributeType::Complex => "complex",
+        AttributeType::Binary => "binary",
     }
 }
 
@@ -82,19 +83,9 @@ fn build_attribute_json(attr: &crate::schema::AttributeDefinition) -> Value {
         attr_json["subAttributes"] = json!(sub_attrs);
     }
 
-    // Add canonical values for specific attributes
-    match (attr.name, &attr.attr_type) {
-        ("type", AttributeType::String) if attr.description.contains("email") => {
-            attr_json["canonicalValues"] = json!(["work", "home", "other"]);
-        }
-        ("type", AttributeType::String) if attr.description.contains("phone") => {
-            attr_json["canonicalValues"] =
-                json!(["work", "home", "mobile", "fax", "pager", "other"]);
-        }
-        ("type", AttributeType::String) if attr.description.contains("member") => {
-            attr_json["canonicalValues"] = json!(["User", "Group"]);
-        }
-        _ => {}
+    // Add canonical values, if any are defined for this attribute (RFC 7643 §7).
+    if !attr.canonical_values.is_empty() {
+        attr_json["canonicalValues"] = json!(attr.canonical_values);
     }
 
     // Add referenceTypes for reference attributes
@@ -113,12 +104,10 @@ fn build_attribute_json(attr: &crate::schema::AttributeDefinition) -> Value {
     attr_json
 }
 
-pub async fn schemas(
-    State((_storage, _)): State<AppState>,
-    Extension(tenant_info): Extension<TenantInfo>,
-) -> Result<(StatusCode, Json<Value>), (StatusCode, Json<Value>)> {
-    let _tenant_id = tenant_info.tenant_id;
-
+/// Build the full list of `/Schemas` resources (the core, extension, and
+/// ServiceProviderConfig schema definitions). Shared by the collection
+/// endpoint and the single-resource-by-id endpoint (RFC 7644 §4).
+fn build_schema_resources() -> Vec<Value> {
     // Get all schemas from the centralized schema module
     let all_schemas = get_all_schemas();
 
@@ -359,6 +348,17 @@ pub async fn schemas(
         }
     }));
 
+    resources
+}
+
+pub async fn schemas(
+    State((_storage, _)): State<AppState>,
+    Extension(tenant_info): Extension<TenantInfo>,
+) -> Result<(StatusCode, Json<Value>), (StatusCode, Json<Value>)> {
+    let _tenant_id = tenant_info.tenant_id;
+
+    let resources = build_schema_resources();
+
     let schemas = json!({
         "schemas": [SCIM_API_MESSAGES_LIST_RESPONSE],
         "totalResults": resources.len(),
@@ -368,4 +368,30 @@ pub async fn schemas(
     });
 
     Ok((StatusCode::OK, Json(schemas)))
+}
+
+/// `GET /Schemas/{id}` (RFC 7644 §4). A schema id is a URN (e.g.
+/// `urn:ietf:params:scim:schemas:core:2.0:User`), so the route parameter
+/// must tolerate colons -- axum path segments only split on `/`, so this
+/// works without any special routing configuration.
+pub async fn schema_by_id(
+    State((_storage, _)): State<AppState>,
+    Extension(tenant_info): Extension<TenantInfo>,
+    axum::extract::Path(id): axum::extract::Path<String>,
+) -> Result<(StatusCode, Json<Value>), (StatusCode, Json<Value>)> {
+    let _tenant_id = tenant_info.tenant_id;
+
+    let resources = build_schema_resources();
+
+    match resources
+        .into_iter()
+        .find(|r| r["id"] == Value::String(id.clone()))
+    {
+        Some(resource) => Ok((StatusCode::OK, Json(resource))),
+        None => Err(crate::error::scim_error_response(
+            StatusCode::NOT_FOUND,
+            None,
+            &format!("Schema '{}' not found", id),
+        )),
+    }
 }
