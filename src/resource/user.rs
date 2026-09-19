@@ -15,7 +15,7 @@ use crate::backend::ScimBackend;
 use crate::config::AppConfig;
 use crate::error::scim_error_response;
 use crate::models::{ScimListResponse, ScimPatchOp, User};
-use crate::parser::filter_parser::parse_filter;
+use crate::parser::filter_parser::{parse_filter, validate_filter_attribute_types};
 use crate::parser::{ResourceType, SortSpec};
 use crate::schema::{should_fetch_external_attributes, validate_user};
 
@@ -378,9 +378,31 @@ pub async fn get_user(
 }
 
 pub async fn search_users(
+    state: State<AppState>,
+    tenant_info: Extension<TenantInfo>,
+    Query(params): Query<HashMap<String, String>>,
+) -> Result<(StatusCode, Json<ScimListResponse>), (StatusCode, Json<serde_json::Value>)> {
+    search_users_with_params(state, tenant_info, params).await
+}
+
+/// `POST /Users/.search` (RFC 7644 §3.4.3): the same search as
+/// `GET /Users`, but with the query parameters carried in a JSON
+/// `SearchRequest` body instead of the URL, for queries too large for a
+/// query string. Reuses the same search/filter/projection code path as the
+/// GET form.
+pub async fn search_users_post(
+    state: State<AppState>,
+    tenant_info: Extension<TenantInfo>,
+    ScimJson(search_request): ScimJson<crate::models::SearchRequest>,
+) -> Result<(StatusCode, Json<ScimListResponse>), (StatusCode, Json<serde_json::Value>)> {
+    let params = search_request.into_query_params()?;
+    search_users_with_params(state, tenant_info, params).await
+}
+
+async fn search_users_with_params(
     State((backend, app_config)): State<AppState>,
     Extension(tenant_info): Extension<TenantInfo>,
-    Query(params): Query<HashMap<String, String>>,
+    params: HashMap<String, String>,
 ) -> Result<(StatusCode, Json<ScimListResponse>), (StatusCode, Json<serde_json::Value>)> {
     let tenant_id = tenant_info.tenant_id;
 
@@ -473,7 +495,10 @@ pub async fn search_users(
 
     // Handle general filtering
     if let Some(filter_str) = filter {
-        match parse_filter(filter_str) {
+        match parse_filter(filter_str).and_then(|filter_op| {
+            validate_filter_attribute_types(&filter_op, ResourceType::User)?;
+            Ok(filter_op)
+        }) {
             Ok(filter_op) => {
                 let sort_spec = SortSpec::from_params(sort_by.as_deref(), sort_order.as_deref());
 

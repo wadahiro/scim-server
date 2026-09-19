@@ -15,7 +15,7 @@ use crate::backend::ScimBackend;
 use crate::config::AppConfig;
 use crate::error::scim_error_response;
 use crate::models::{Group, ScimListResponse, ScimPatchOp};
-use crate::parser::filter_parser::parse_filter;
+use crate::parser::filter_parser::{parse_filter, validate_filter_attribute_types};
 use crate::parser::{ResourceType, SortSpec};
 
 type AppState = (Arc<dyn ScimBackend>, Arc<AppConfig>);
@@ -118,6 +118,22 @@ async fn validate_group_members(
             if let Some(member_id) = &member.value {
                 // Check if the member type is User (default if not specified)
                 let member_type = member.type_.as_deref().unwrap_or("User");
+
+                // The set of acceptable member types comes from the schema's
+                // `canonicalValues` for Group.members.type (RFC 7643 §7),
+                // rather than being duplicated here.
+                let allowed_types: &[&str] =
+                    crate::schema::find_attribute(&crate::schema::GROUP_SCHEMA, "members.type")
+                        .map(|attr| attr.canonical_values.as_slice())
+                        .unwrap_or(&[]);
+
+                if !allowed_types.contains(&member_type) {
+                    return Err(scim_error_response(
+                        StatusCode::BAD_REQUEST,
+                        Some("invalidValue"),
+                        &format!("Invalid member type '{}'.", member_type),
+                    ));
+                }
 
                 match member_type {
                     "User" => {
@@ -448,9 +464,30 @@ pub async fn get_group(
 }
 
 pub async fn search_groups(
+    state: State<AppState>,
+    tenant_info: Extension<TenantInfo>,
+    Query(params): Query<HashMap<String, String>>,
+) -> Result<(StatusCode, Json<ScimListResponse>), (StatusCode, Json<serde_json::Value>)> {
+    search_groups_with_params(state, tenant_info, params).await
+}
+
+/// `POST /Groups/.search` (RFC 7644 §3.4.3): the same search as
+/// `GET /Groups`, but with the query parameters carried in a JSON
+/// `SearchRequest` body instead of the URL. Reuses the same
+/// search/filter/projection code path as the GET form.
+pub async fn search_groups_post(
+    state: State<AppState>,
+    tenant_info: Extension<TenantInfo>,
+    ScimJson(search_request): ScimJson<crate::models::SearchRequest>,
+) -> Result<(StatusCode, Json<ScimListResponse>), (StatusCode, Json<serde_json::Value>)> {
+    let params = search_request.into_query_params()?;
+    search_groups_with_params(state, tenant_info, params).await
+}
+
+async fn search_groups_with_params(
     State((backend, app_config)): State<AppState>,
     Extension(tenant_info): Extension<TenantInfo>,
-    Query(params): Query<HashMap<String, String>>,
+    params: HashMap<String, String>,
 ) -> Result<(StatusCode, Json<ScimListResponse>), (StatusCode, Json<serde_json::Value>)> {
     let tenant_id = tenant_info.tenant_id;
 
@@ -550,7 +587,10 @@ pub async fn search_groups(
             ));
         }
 
-        match parse_filter(filter_str) {
+        match parse_filter(filter_str).and_then(|filter_op| {
+            validate_filter_attribute_types(&filter_op, ResourceType::Group)?;
+            Ok(filter_op)
+        }) {
             Ok(filter_op) => {
                 let sort_spec = SortSpec::from_params(sort_by.as_deref(), sort_order.as_deref());
 
@@ -922,6 +962,49 @@ pub async fn patch_group(
                 Err(e) => return Err(e.to_response()),
             }
         }
+    }
+
+    // Validate the post-patch resource with the same member-existence and
+    // member-type checks `create_group`/`update_group` use, so PATCH cannot
+    // introduce a member those paths would reject. This computes the
+    // prospective patched resource in-memory (using the same `ScimPath`
+    // logic the backend applies) purely for validation; the backend below
+    // re-applies the operations for the actual write.
+    if let Ok(Some(current_group)) = backend.find_group_by_id(tenant_id, &id).await {
+        let mut prospective = current_group;
+        for operation in &patch_ops.operations {
+            let scim_path = crate::parser::patch_parser::ScimPath::parse(
+                &operation.path.clone().unwrap_or_default(),
+            )
+            .map_err(|e| e.to_response())?;
+            let mut group_json = serde_json::to_value(&prospective).map_err(|_| {
+                scim_error_response(
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    None,
+                    "Serialization error",
+                )
+            })?;
+            scim_path
+                .apply_operation(
+                    &mut group_json,
+                    &operation.op,
+                    operation.value.as_ref().unwrap_or(&serde_json::Value::Null),
+                )
+                .map_err(|e| e.to_response())?;
+            crate::schema::validate_required_attributes_present(
+                &group_json,
+                &crate::schema::GROUP_SCHEMA,
+            )
+            .map_err(|e| e.to_response())?;
+            prospective = serde_json::from_value(group_json).map_err(|_| {
+                scim_error_response(
+                    StatusCode::BAD_REQUEST,
+                    Some("invalidValue"),
+                    "Invalid resource data after applying patch operations",
+                )
+            })?;
+        }
+        validate_group_members(&backend, tenant_id, &prospective.base.members).await?;
     }
 
     match backend.patch_group(tenant_id, &id, &patch_ops).await {
