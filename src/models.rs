@@ -30,6 +30,18 @@ pub struct User {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(rename = "externalId")]
     pub external_id: Option<String>,
+    /// Physical mailing addresses.
+    ///
+    /// RFC 7643 §4.1.2 defines a `primary` sub-attribute for `addresses`
+    /// (as it does for `emails` and `phoneNumbers`), but the upstream
+    /// `scim_v2::models::user::Address` type has no field for it. Declaring
+    /// `addresses` here as raw JSON takes priority over the flattened
+    /// `base.addresses` field of the same name during both serialization and
+    /// deserialization, so `primary` (and any other sub-attribute) round-trips
+    /// through requests, storage, and responses unchanged instead of being
+    /// silently dropped.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub addresses: Option<Vec<serde_json::Value>>,
     // Support for arbitrary additional fields (for custom attributes and testing)
     #[serde(flatten)]
     pub additional_fields: std::collections::HashMap<String, serde_json::Value>,
@@ -42,6 +54,7 @@ impl User {
         Self {
             base,
             external_id: None,
+            addresses: None,
             additional_fields: std::collections::HashMap::new(),
         }
     }
@@ -52,6 +65,7 @@ impl User {
         Self {
             base,
             external_id,
+            addresses: None,
             additional_fields: std::collections::HashMap::new(),
         }
     }
@@ -91,6 +105,7 @@ impl Clone for User {
         Self {
             base: cloned_base,
             external_id: self.external_id.clone(),
+            addresses: self.addresses.clone(),
             additional_fields: self.additional_fields.clone(),
         }
     }
