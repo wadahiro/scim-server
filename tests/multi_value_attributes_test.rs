@@ -157,7 +157,7 @@ async fn test_invalid_email_in_multi_value() {
 
     response.assert_status(StatusCode::BAD_REQUEST);
     let error: Value = response.json();
-    assert!(error["error"]
+    assert!(error["detail"]
         .as_str()
         .unwrap()
         .contains("Invalid email format"));
@@ -513,7 +513,7 @@ async fn test_multiple_primary_constraint() {
     // SCIM spec requires at most one primary=true
     response.assert_status(StatusCode::BAD_REQUEST);
     let error: Value = response.json();
-    assert!(error["error"]
+    assert!(error["detail"]
         .as_str()
         .unwrap()
         .contains("At most one element can have primary=true"));

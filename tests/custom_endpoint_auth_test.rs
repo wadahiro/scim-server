@@ -335,7 +335,15 @@ async fn test_custom_endpoint_not_found() {
     let response = server.get("/custom/nonexistent").await;
     assert_eq!(response.status_code(), StatusCode::NOT_FOUND);
     let error = response.json::<serde_json::Value>();
-    assert!(error["message"]
+
+    // RFC 7644 §3.12: the SCIM Error resource shape, with "status" as a
+    // JSON string and no "scimType" (only defined for 400/409/412).
+    assert_eq!(
+        error["schemas"],
+        json!(["urn:ietf:params:scim:api:messages:2.0:Error"])
+    );
+    assert_eq!(error["status"], json!("404"));
+    assert!(error["detail"]
         .as_str()
         .unwrap()
         .contains("Tenant not found"));

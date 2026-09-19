@@ -126,15 +126,16 @@ async fn validate_group_members(
                             Ok(None) => {
                                 return Err(scim_error_response(
                                     StatusCode::BAD_REQUEST,
-                                    "invalidValue",
+                                    Some("invalidValue"),
                                     &format!("User with id '{}' does not exist.", member_id),
                                 ));
                             }
                             Err(e) => {
                                 eprintln!("Error checking user existence: {}", e);
-                                return Err((
+                                return Err(scim_error_response(
                                     StatusCode::INTERNAL_SERVER_ERROR,
-                                    Json(json!({"message": "Error validating member"})),
+                                    None,
+                                    "Error validating member",
                                 ));
                             }
                         }
@@ -145,15 +146,16 @@ async fn validate_group_members(
                             Ok(None) => {
                                 return Err(scim_error_response(
                                     StatusCode::BAD_REQUEST,
-                                    "invalidValue",
+                                    Some("invalidValue"),
                                     &format!("Group with id '{}' does not exist.", member_id),
                                 ));
                             }
                             Err(e) => {
                                 eprintln!("Error checking group existence: {}", e);
-                                return Err((
+                                return Err(scim_error_response(
                                     StatusCode::INTERNAL_SERVER_ERROR,
-                                    Json(json!({"message": "Error validating member"})),
+                                    None,
+                                    "Error validating member",
                                 ));
                             }
                         }
@@ -161,7 +163,7 @@ async fn validate_group_members(
                     _ => {
                         return Err(scim_error_response(
                             StatusCode::BAD_REQUEST,
-                            "invalidValue",
+                            Some("invalidValue"),
                             &format!("Invalid member type '{}'.", member_type),
                         ));
                     }
@@ -216,9 +218,10 @@ pub async fn create_group(
     if let Some(display_name) = payload.get("displayName").and_then(|v| v.as_str()) {
         group.base.display_name = display_name.to_string();
     } else {
-        return Err((
+        return Err(scim_error_response(
             StatusCode::BAD_REQUEST,
-            Json(json!({"message": "displayName is required"})),
+            Some("invalidValue"),
+            "displayName is required",
         ));
     }
 
@@ -282,9 +285,10 @@ pub async fn create_group(
 
             // Convert to JSON and remove null fields to comply with SCIM specification
             let group_json = serde_json::to_value(&created_group).map_err(|_| {
-                (
+                scim_error_response(
                     StatusCode::INTERNAL_SERVER_ERROR,
-                    Json(serde_json::json!({"message": "Serialization error"})),
+                    None,
+                    "Serialization error",
                 )
             })?;
 
@@ -295,9 +299,10 @@ pub async fn create_group(
             headers.insert(
                 "Location",
                 HeaderValue::from_str(&location_url).map_err(|_| {
-                    (
+                    scim_error_response(
                         StatusCode::INTERNAL_SERVER_ERROR,
-                        Json(serde_json::json!({"message": "Invalid location header"})),
+                        None,
+                        "Invalid location header",
                     )
                 })?,
             );
@@ -308,9 +313,10 @@ pub async fn create_group(
                     headers.insert(
                         "ETag",
                         HeaderValue::from_str(version).map_err(|_| {
-                            (
+                            scim_error_response(
                                 StatusCode::INTERNAL_SERVER_ERROR,
-                                Json(serde_json::json!({"message": "Invalid ETag header"})),
+                                None,
+                                "Invalid ETag header",
                             )
                         })?,
                     );
@@ -340,9 +346,10 @@ pub async fn get_group(
     let id = match extract_resource_id_from_uri(&uri) {
         Some(id) => id,
         None => {
-            return Err((
+            return Err(scim_error_response(
                 StatusCode::BAD_REQUEST,
-                Json(json!({"message": "Group ID not found in path"})),
+                Some("invalidValue"),
+                "Group ID not found in path",
             ))
         }
     };
@@ -377,8 +384,13 @@ pub async fn get_group(
                     (if_none_match.to_str(), &group.base.meta)
                 {
                     if let Some(ref current_version) = meta.version {
-                        // If the ETag matches, return 304 Not Modified
-                        if if_none_match_str == current_version {
+                        // `*` never satisfies If-None-Match on an existing
+                        // resource, and an exact match doesn't either -
+                        // both cases return 304 Not Modified (RFC 7232 §3.2).
+                        if !crate::utils::if_none_match_satisfied(
+                            if_none_match_str,
+                            current_version,
+                        ) {
                             let mut response =
                                 axum::response::Response::new(axum::body::Body::empty());
                             *response.status_mut() = StatusCode::NOT_MODIFIED;
@@ -394,9 +406,10 @@ pub async fn get_group(
 
             // Convert to JSON and apply attribute filtering
             let group_json = serde_json::to_value(&group).map_err(|_| {
-                (
+                scim_error_response(
                     StatusCode::INTERNAL_SERVER_ERROR,
-                    Json(json!({"message": "Serialization error"})),
+                    None,
+                    "Serialization error",
                 )
             })?;
 
@@ -410,9 +423,10 @@ pub async fn get_group(
                     headers.insert(
                         "ETag",
                         HeaderValue::from_str(version).map_err(|_| {
-                            (
+                            scim_error_response(
                                 StatusCode::INTERNAL_SERVER_ERROR,
-                                Json(json!({"message": "Invalid ETag header"})),
+                                None,
+                                "Invalid ETag header",
                             )
                         })?,
                     );
@@ -424,9 +438,10 @@ pub async fn get_group(
             response.headers_mut().extend(headers);
             Ok(response)
         }
-        Ok(None) => Err((
+        Ok(None) => Err(scim_error_response(
             StatusCode::NOT_FOUND,
-            Json(json!({"message": "Group not found"})),
+            None,
+            "Group not found",
         )),
         Err(e) => Err(e.to_response()),
     }
@@ -461,28 +476,31 @@ pub async fn search_groups(
             if !compatibility.support_group_members_filter {
                 return Err(scim_error_response(
                     StatusCode::BAD_REQUEST,
-                    "unsupported",
+                    Some("unsupported"),
                     "Filtering Groups by members is not supported",
                 ));
             }
             // Extract user ID from filter
             let start_quote = filter_str.find('"').ok_or_else(|| {
-                (
+                scim_error_response(
                     StatusCode::BAD_REQUEST,
-                    Json(json!({"message": "Invalid filter format"})),
+                    Some("invalidFilter"),
+                    "Invalid filter format",
                 )
             })?;
             let end_quote = filter_str.rfind('"').ok_or_else(|| {
-                (
+                scim_error_response(
                     StatusCode::BAD_REQUEST,
-                    Json(json!({"message": "Invalid filter format"})),
+                    Some("invalidFilter"),
+                    "Invalid filter format",
                 )
             })?;
 
             if start_quote >= end_quote {
-                return Err((
+                return Err(scim_error_response(
                     StatusCode::BAD_REQUEST,
-                    Json(json!({"message": "Invalid filter format"})),
+                    Some("invalidFilter"),
+                    "Invalid filter format",
                 ));
             }
 
@@ -527,7 +545,7 @@ pub async fn search_groups(
         {
             return Err(scim_error_response(
                 StatusCode::BAD_REQUEST,
-                "unsupported",
+                Some("unsupported"),
                 "Filtering Groups by displayName is not supported",
             ));
         }
@@ -574,9 +592,10 @@ pub async fn search_groups(
             }
             Err(e) => {
                 eprintln!("Filter parsing error for '{}': {}", filter_str, e);
-                return Err((
+                return Err(scim_error_response(
                     StatusCode::BAD_REQUEST,
-                    Json(json!({"message": format!("Invalid filter: {}", e)})),
+                    Some("invalidFilter"),
+                    &format!("Invalid filter: {}", e),
                 ));
             }
         }
@@ -630,9 +649,10 @@ pub async fn update_group(
     let id = match extract_resource_id_from_uri(&uri) {
         Some(id) => id,
         None => {
-            return Err((
+            return Err(scim_error_response(
                 StatusCode::BAD_REQUEST,
-                Json(json!({"message": "Group ID not found in path"})),
+                Some("invalidValue"),
+                "Group ID not found in path",
             ))
         }
     };
@@ -689,8 +709,10 @@ pub async fn update_group(
                 Ok(Some(current_group)) => {
                     if let Some(ref meta) = current_group.base.meta {
                         if let Some(ref current_version) = meta.version {
-                            // If the ETag doesn't match, return 412 Precondition Failed
-                            if if_match_str != current_version {
+                            // `*` always matches an existing resource
+                            // (RFC 7232 §3.1); otherwise require an exact
+                            // match, else return 412 Precondition Failed.
+                            if !crate::utils::if_match_satisfied(if_match_str, current_version) {
                                 return Err((
                                     StatusCode::PRECONDITION_FAILED,
                                     Json(json!({
@@ -705,9 +727,10 @@ pub async fn update_group(
                     }
                 }
                 Ok(None) => {
-                    return Err((
+                    return Err(scim_error_response(
                         StatusCode::NOT_FOUND,
-                        Json(json!({"message": "Group not found"})),
+                        None,
+                        "Group not found",
                     ));
                 }
                 Err(e) => return Err(e.to_response()),
@@ -735,9 +758,10 @@ pub async fn update_group(
 
             // Convert to JSON and remove null fields to comply with SCIM specification
             let group_json = serde_json::to_value(&updated_group).map_err(|_| {
-                (
+                scim_error_response(
                     StatusCode::INTERNAL_SERVER_ERROR,
-                    Json(serde_json::json!({"message": "Serialization error"})),
+                    None,
+                    "Serialization error",
                 )
             })?;
 
@@ -750,9 +774,10 @@ pub async fn update_group(
                     headers.insert(
                         "ETag",
                         HeaderValue::from_str(version).map_err(|_| {
-                            (
+                            scim_error_response(
                                 StatusCode::INTERNAL_SERVER_ERROR,
-                                Json(serde_json::json!({"message": "Invalid ETag header"})),
+                                None,
+                                "Invalid ETag header",
                             )
                         })?,
                     );
@@ -764,9 +789,10 @@ pub async fn update_group(
             response.headers_mut().extend(headers);
             Ok(response)
         }
-        Ok(None) => Err((
+        Ok(None) => Err(scim_error_response(
             StatusCode::NOT_FOUND,
-            Json(json!({"message": "Group not found"})),
+            None,
+            "Group not found",
         )),
         Err(e) => Err(e.to_response()),
     }
@@ -784,9 +810,10 @@ pub async fn delete_group(
     let id = match extract_resource_id_from_uri(&uri) {
         Some(id) => id,
         None => {
-            return Err((
+            return Err(scim_error_response(
                 StatusCode::BAD_REQUEST,
-                Json(json!({"message": "Group ID not found in path"})),
+                Some("invalidValue"),
+                "Group ID not found in path",
             ))
         }
     };
@@ -799,8 +826,10 @@ pub async fn delete_group(
                 Ok(Some(current_group)) => {
                     if let Some(ref meta) = current_group.base.meta {
                         if let Some(ref current_version) = meta.version {
-                            // If the ETag doesn't match, return 412 Precondition Failed
-                            if if_match_str != current_version {
+                            // `*` always matches an existing resource
+                            // (RFC 7232 §3.1); otherwise require an exact
+                            // match, else return 412 Precondition Failed.
+                            if !crate::utils::if_match_satisfied(if_match_str, current_version) {
                                 return Err((
                                     StatusCode::PRECONDITION_FAILED,
                                     Json(json!({
@@ -815,9 +844,10 @@ pub async fn delete_group(
                     }
                 }
                 Ok(None) => {
-                    return Err((
+                    return Err(scim_error_response(
                         StatusCode::NOT_FOUND,
-                        Json(json!({"message": "Group not found"})),
+                        None,
+                        "Group not found",
                     ));
                 }
                 Err(e) => return Err(e.to_response()),
@@ -827,9 +857,10 @@ pub async fn delete_group(
 
     match backend.delete_group(tenant_id, &id).await {
         Ok(true) => Ok(StatusCode::NO_CONTENT),
-        Ok(false) => Err((
+        Ok(false) => Err(scim_error_response(
             StatusCode::NOT_FOUND,
-            Json(json!({"message": "Group not found"})),
+            None,
+            "Group not found",
         )),
         Err(e) => Err(e.to_response()),
     }
@@ -848,9 +879,10 @@ pub async fn patch_group(
     let id = match extract_resource_id_from_uri(&uri) {
         Some(id) => id,
         None => {
-            return Err((
+            return Err(scim_error_response(
                 StatusCode::BAD_REQUEST,
-                Json(json!({"message": "Group ID not found in path"})),
+                Some("invalidValue"),
+                "Group ID not found in path",
             ))
         }
     };
@@ -863,8 +895,10 @@ pub async fn patch_group(
                 Ok(Some(current_group)) => {
                     if let Some(ref meta) = current_group.base.meta {
                         if let Some(ref current_version) = meta.version {
-                            // If the ETag doesn't match, return 412 Precondition Failed
-                            if if_match_str != current_version {
+                            // `*` always matches an existing resource
+                            // (RFC 7232 §3.1); otherwise require an exact
+                            // match, else return 412 Precondition Failed.
+                            if !crate::utils::if_match_satisfied(if_match_str, current_version) {
                                 return Err((
                                     StatusCode::PRECONDITION_FAILED,
                                     Json(json!({
@@ -879,9 +913,10 @@ pub async fn patch_group(
                     }
                 }
                 Ok(None) => {
-                    return Err((
+                    return Err(scim_error_response(
                         StatusCode::NOT_FOUND,
-                        Json(json!({"message": "Group not found"})),
+                        None,
+                        "Group not found",
                     ));
                 }
                 Err(e) => return Err(e.to_response()),
@@ -909,9 +944,10 @@ pub async fn patch_group(
 
             // Convert to JSON and remove null fields to comply with SCIM specification
             let group_json = serde_json::to_value(&group).map_err(|_| {
-                (
+                scim_error_response(
                     StatusCode::INTERNAL_SERVER_ERROR,
-                    Json(serde_json::json!({"message": "Serialization error"})),
+                    None,
+                    "Serialization error",
                 )
             })?;
 
@@ -924,9 +960,10 @@ pub async fn patch_group(
                     headers.insert(
                         "ETag",
                         HeaderValue::from_str(version).map_err(|_| {
-                            (
+                            scim_error_response(
                                 StatusCode::INTERNAL_SERVER_ERROR,
-                                Json(serde_json::json!({"message": "Invalid ETag header"})),
+                                None,
+                                "Invalid ETag header",
                             )
                         })?,
                     );
@@ -938,9 +975,10 @@ pub async fn patch_group(
             response.headers_mut().extend(headers);
             Ok(response)
         }
-        Ok(None) => Err((
+        Ok(None) => Err(scim_error_response(
             StatusCode::NOT_FOUND,
-            Json(json!({"message": "Group not found"})),
+            None,
+            "Group not found",
         )),
         Err(e) => Err(e.to_response()),
     }

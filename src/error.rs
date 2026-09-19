@@ -65,62 +65,68 @@ impl From<std::sync::PoisonError<std::sync::MutexGuard<'_, rusqlite::Connection>
 
 pub type AppResult<T> = Result<T, AppError>;
 
-// SCIM 2.0 standard error response helper
+// SCIM 2.0 standard error response helper (RFC 7644 §3.12).
+//
+// `scim_type` is the optional `scimType` detail keyword. RFC 7644 only
+// defines `scimType` values for 400-class errors (e.g. `invalidFilter`,
+// `invalidValue`, `invalidSyntax`, `invalidPath`) plus `uniqueness` (409) and
+// `preconditionFailed` (412); 404 and 5xx responses carry no `scimType` at
+// all, so callers pass `None` for those.
 pub fn scim_error_response(
     status_code: StatusCode,
-    scim_type: &str,
+    scim_type: Option<&str>,
     detail: &str,
 ) -> (StatusCode, Json<serde_json::Value>) {
     let status_str = status_code.as_u16().to_string();
-    (
-        status_code,
-        Json(json!({
-            "schemas": ["urn:ietf:params:scim:api:messages:2.0:Error"],
-            "detail": detail,
-            "status": status_str,
-            "scimType": scim_type
-        })),
-    )
+    let mut body = json!({
+        "schemas": ["urn:ietf:params:scim:api:messages:2.0:Error"],
+        "detail": detail,
+        "status": status_str,
+    });
+    if let Some(scim_type) = scim_type {
+        body["scimType"] = json!(scim_type);
+    }
+    (status_code, Json(body))
 }
 
 // HTTPレスポンスへの変換
 impl AppError {
     pub fn to_response(&self) -> (StatusCode, Json<serde_json::Value>) {
-        let (status, message) = match self {
+        match self {
             AppError::Database(e) => {
                 eprintln!("Database error: {}", e);
-                (StatusCode::INTERNAL_SERVER_ERROR, e.clone())
+                scim_error_response(StatusCode::INTERNAL_SERVER_ERROR, None, e)
             }
             AppError::Rusqlite(e) => {
                 eprintln!("SQLite error: {}", e);
-                (StatusCode::INTERNAL_SERVER_ERROR, e.to_string())
+                scim_error_response(StatusCode::INTERNAL_SERVER_ERROR, None, &e.to_string())
             }
             AppError::Serialization(e) => {
                 eprintln!("Serialization error: {}", e);
-                (StatusCode::INTERNAL_SERVER_ERROR, e.to_string())
+                scim_error_response(StatusCode::INTERNAL_SERVER_ERROR, None, &e.to_string())
             }
-            AppError::BadRequest(e) => (StatusCode::BAD_REQUEST, e.clone()),
+            AppError::BadRequest(e) => {
+                scim_error_response(StatusCode::BAD_REQUEST, Some("invalidValue"), e)
+            }
             AppError::Conflict(e) => {
-                return scim_error_response(StatusCode::CONFLICT, "uniqueness", e);
+                scim_error_response(StatusCode::CONFLICT, Some("uniqueness"), e)
             }
             AppError::Internal(e) => {
                 eprintln!("Internal error: {}", e);
-                (StatusCode::INTERNAL_SERVER_ERROR, e.clone())
+                scim_error_response(StatusCode::INTERNAL_SERVER_ERROR, None, e)
             }
-            AppError::FilterParse(e) => (StatusCode::BAD_REQUEST, e.clone()),
+            AppError::FilterParse(e) => {
+                scim_error_response(StatusCode::BAD_REQUEST, Some("invalidFilter"), e)
+            }
             AppError::Configuration(e) => {
                 eprintln!("Configuration error: {}", e);
-                (StatusCode::INTERNAL_SERVER_ERROR, e.clone())
+                scim_error_response(StatusCode::INTERNAL_SERVER_ERROR, None, e)
             }
-            AppError::PreconditionFailed => {
-                return scim_error_response(
-                    StatusCode::PRECONDITION_FAILED,
-                    "preconditionFailed",
-                    "Resource version mismatch",
-                );
-            }
-        };
-
-        (status, Json(json!({ "error": message })))
+            AppError::PreconditionFailed => scim_error_response(
+                StatusCode::PRECONDITION_FAILED,
+                Some("preconditionFailed"),
+                "Resource version mismatch",
+            ),
+        }
     }
 }

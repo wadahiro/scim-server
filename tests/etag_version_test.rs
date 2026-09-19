@@ -432,3 +432,189 @@ async fn test_group_version_functionality() {
     let created_group: serde_json::Value = create_response.json();
     assert_eq!(created_group["meta"]["version"], "W/\"1\"");
 }
+
+// RFC 7232 §3.1/§3.2: `*` must match any existing representation.
+//
+//   - `If-None-Match: *` on an existing resource -> the precondition fails
+//     -> 304 Not Modified for GET.
+//   - `If-Match: *` on an existing resource -> the precondition succeeds ->
+//     proceed normally (200, not 412).
+
+#[tokio::test]
+async fn test_user_get_with_if_none_match_star_returns_304() {
+    let app_config = common::create_test_app_config();
+    let app = common::setup_test_app(app_config).await.unwrap();
+    let server = TestServer::new(app).unwrap();
+
+    let user_payload = json!({
+        "schemas": ["urn:ietf:params:scim:schemas:core:2.0:User"],
+        "userName": "testuser",
+        "emails": [{"value": "test@example.com", "type": "work", "primary": true}]
+    });
+
+    let create_response = server.post("/scim/v2/Users").json(&user_payload).await;
+    let created_user: serde_json::Value = create_response.json();
+    let user_id = created_user["id"].as_str().unwrap();
+
+    let get_response = server
+        .get(&format!("/scim/v2/Users/{}", user_id))
+        .add_header("if-none-match", "*")
+        .await;
+
+    assert_eq!(get_response.status_code(), StatusCode::NOT_MODIFIED);
+}
+
+#[tokio::test]
+async fn test_user_put_with_if_match_star_succeeds() {
+    let app_config = common::create_test_app_config();
+    let app = common::setup_test_app(app_config).await.unwrap();
+    let server = TestServer::new(app).unwrap();
+
+    let user_payload = json!({
+        "schemas": ["urn:ietf:params:scim:schemas:core:2.0:User"],
+        "userName": "testuser",
+        "emails": [{"value": "test@example.com", "type": "work", "primary": true}]
+    });
+
+    let create_response = server.post("/scim/v2/Users").json(&user_payload).await;
+    let created_user: serde_json::Value = create_response.json();
+    let user_id = created_user["id"].as_str().unwrap();
+
+    let update_payload = json!({
+        "schemas": ["urn:ietf:params:scim:schemas:core:2.0:User"],
+        "userName": "testuser",
+        "emails": [{"value": "updated@example.com", "type": "work", "primary": true}]
+    });
+
+    let update_response = server
+        .put(&format!("/scim/v2/Users/{}", user_id))
+        .add_header("if-match", "*")
+        .json(&update_payload)
+        .await;
+
+    assert_eq!(update_response.status_code(), StatusCode::OK);
+    let updated_user: serde_json::Value = update_response.json();
+    assert_eq!(updated_user["meta"]["version"], "W/\"2\"");
+}
+
+#[tokio::test]
+async fn test_user_put_with_stale_if_match_still_fails_412() {
+    // Regression guard: `*` handling must not loosen the exact-match path.
+    let app_config = common::create_test_app_config();
+    let app = common::setup_test_app(app_config).await.unwrap();
+    let server = TestServer::new(app).unwrap();
+
+    let user_payload = json!({
+        "schemas": ["urn:ietf:params:scim:schemas:core:2.0:User"],
+        "userName": "testuser",
+        "emails": [{"value": "test@example.com", "type": "work", "primary": true}]
+    });
+
+    let create_response = server.post("/scim/v2/Users").json(&user_payload).await;
+    let created_user: serde_json::Value = create_response.json();
+    let user_id = created_user["id"].as_str().unwrap();
+
+    let update_payload = json!({
+        "schemas": ["urn:ietf:params:scim:schemas:core:2.0:User"],
+        "userName": "testuser",
+        "emails": [{"value": "updated@example.com", "type": "work", "primary": true}]
+    });
+
+    let update_response = server
+        .put(&format!("/scim/v2/Users/{}", user_id))
+        .add_header("if-match", "W/\"999\"")
+        .json(&update_payload)
+        .await;
+
+    assert_eq!(
+        update_response.status_code(),
+        StatusCode::PRECONDITION_FAILED
+    );
+}
+
+#[tokio::test]
+async fn test_group_get_with_if_none_match_star_returns_304() {
+    let app_config = common::create_test_app_config();
+    let app = common::setup_test_app(app_config).await.unwrap();
+    let server = TestServer::new(app).unwrap();
+
+    let group_payload = json!({
+        "schemas": ["urn:ietf:params:scim:schemas:core:2.0:Group"],
+        "displayName": "Star Test Group"
+    });
+
+    let create_response = server.post("/scim/v2/Groups").json(&group_payload).await;
+    let created_group: serde_json::Value = create_response.json();
+    let group_id = created_group["id"].as_str().unwrap();
+
+    let get_response = server
+        .get(&format!("/scim/v2/Groups/{}", group_id))
+        .add_header("if-none-match", "*")
+        .await;
+
+    assert_eq!(get_response.status_code(), StatusCode::NOT_MODIFIED);
+}
+
+#[tokio::test]
+async fn test_group_put_with_if_match_star_succeeds() {
+    let app_config = common::create_test_app_config();
+    let app = common::setup_test_app(app_config).await.unwrap();
+    let server = TestServer::new(app).unwrap();
+
+    let group_payload = json!({
+        "schemas": ["urn:ietf:params:scim:schemas:core:2.0:Group"],
+        "displayName": "Star Test Group 2"
+    });
+
+    let create_response = server.post("/scim/v2/Groups").json(&group_payload).await;
+    let created_group: serde_json::Value = create_response.json();
+    let group_id = created_group["id"].as_str().unwrap();
+
+    let update_payload = json!({
+        "schemas": ["urn:ietf:params:scim:schemas:core:2.0:Group"],
+        "displayName": "Star Test Group 2 Renamed"
+    });
+
+    let update_response = server
+        .put(&format!("/scim/v2/Groups/{}", group_id))
+        .add_header("if-match", "*")
+        .json(&update_payload)
+        .await;
+
+    assert_eq!(update_response.status_code(), StatusCode::OK);
+    let updated_group: serde_json::Value = update_response.json();
+    assert_eq!(updated_group["meta"]["version"], "W/\"2\"");
+}
+
+#[tokio::test]
+async fn test_group_put_with_stale_if_match_still_fails_412() {
+    // Regression guard: `*` handling must not loosen the exact-match path.
+    let app_config = common::create_test_app_config();
+    let app = common::setup_test_app(app_config).await.unwrap();
+    let server = TestServer::new(app).unwrap();
+
+    let group_payload = json!({
+        "schemas": ["urn:ietf:params:scim:schemas:core:2.0:Group"],
+        "displayName": "Star Test Group 3"
+    });
+
+    let create_response = server.post("/scim/v2/Groups").json(&group_payload).await;
+    let created_group: serde_json::Value = create_response.json();
+    let group_id = created_group["id"].as_str().unwrap();
+
+    let update_payload = json!({
+        "schemas": ["urn:ietf:params:scim:schemas:core:2.0:Group"],
+        "displayName": "Star Test Group 3 Renamed"
+    });
+
+    let update_response = server
+        .put(&format!("/scim/v2/Groups/{}", group_id))
+        .add_header("if-match", "W/\"999\"")
+        .json(&update_payload)
+        .await;
+
+    assert_eq!(
+        update_response.status_code(),
+        StatusCode::PRECONDITION_FAILED
+    );
+}

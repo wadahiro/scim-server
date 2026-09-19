@@ -55,6 +55,8 @@ async fn test_user_attributes_parameter() {
     assert!(filtered_user.get("userName").is_some());
     assert!(filtered_user.get("emails").is_some());
     assert!(filtered_user.get("id").is_some()); // Always returned
+    assert!(filtered_user.get("schemas").is_some()); // Core attribute, RFC 7644 §3.4.2.5
+    assert!(filtered_user.get("meta").is_some()); // Core attribute, RFC 7644 §3.4.2.5
 
     // Should not include unrequested attributes
     assert!(filtered_user.get("name").is_none());
@@ -111,6 +113,8 @@ async fn test_user_excluded_attributes_parameter() {
     assert!(filtered_user.get("userName").is_some());
     assert!(filtered_user.get("name").is_some());
     assert!(filtered_user.get("id").is_some()); // Always returned
+    assert!(filtered_user.get("schemas").is_some()); // Core attribute, RFC 7644 §3.4.2.5
+    assert!(filtered_user.get("meta").is_some()); // Core attribute, RFC 7644 §3.4.2.5
 
     // Should exclude the specified attributes
     assert!(filtered_user.get("emails").is_none());
@@ -153,6 +157,8 @@ async fn test_group_attributes_parameter() {
     // Should include requested attributes
     assert!(filtered_group.get("displayName").is_some());
     assert!(filtered_group.get("id").is_some()); // Always returned
+    assert!(filtered_group.get("schemas").is_some()); // Core attribute, RFC 7644 §3.4.2.5
+    assert!(filtered_group.get("meta").is_some()); // Core attribute, RFC 7644 §3.4.2.5
 
     // Should not include unrequested attributes
     assert!(filtered_group.get("members").is_none());
@@ -201,6 +207,8 @@ async fn test_user_list_attributes_parameter() {
     for user in resources {
         assert!(user.get("userName").is_some());
         assert!(user.get("id").is_some()); // Always returned
+        assert!(user.get("schemas").is_some()); // Core attribute, RFC 7644 §3.4.2.5
+        assert!(user.get("meta").is_some()); // Core attribute, RFC 7644 §3.4.2.5
         assert!(user.get("name").is_none()); // Not requested
         assert!(user.get("emails").is_none()); // Not requested
     }
@@ -253,6 +261,8 @@ async fn test_complex_attribute_filtering() {
     // Should include the name object with only givenName
     assert!(filtered_user.get("name").is_some());
     assert!(filtered_user.get("id").is_some()); // Always returned
+    assert!(filtered_user.get("schemas").is_some()); // Core attribute, RFC 7644 §3.4.2.5
+    assert!(filtered_user.get("meta").is_some()); // Core attribute, RFC 7644 §3.4.2.5
 
     let name_obj = filtered_user["name"].as_object().unwrap();
     assert!(name_obj.get("givenName").is_some());

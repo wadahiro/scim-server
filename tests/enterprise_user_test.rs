@@ -244,7 +244,7 @@ async fn test_email_validation() {
 
     response.assert_status(StatusCode::BAD_REQUEST);
     let error: Value = response.json();
-    assert!(error["error"]
+    assert!(error["detail"]
         .as_str()
         .unwrap()
         .contains("Invalid email format"));
@@ -340,7 +340,7 @@ async fn test_locale_timezone_validation() {
 
     response.assert_status(StatusCode::BAD_REQUEST);
     let error: Value = response.json();
-    assert!(error["error"]
+    assert!(error["detail"]
         .as_str()
         .unwrap()
         .contains("Invalid locale format"));
@@ -360,7 +360,7 @@ async fn test_locale_timezone_validation() {
 
     response.assert_status(StatusCode::BAD_REQUEST);
     let error: Value = response.json();
-    assert!(error["error"]
+    assert!(error["detail"]
         .as_str()
         .unwrap()
         .contains("Invalid timezone format"));

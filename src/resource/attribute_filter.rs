@@ -2,6 +2,15 @@ use crate::parser::ResourceType;
 use crate::schema::definitions::{find_attribute, Returned, GROUP_SCHEMA, USER_SCHEMA};
 use serde_json::{Map, Value};
 
+/// Core SCIM attributes that RFC 7644 §3.4.2.5 requires to survive attribute
+/// projection unconditionally, regardless of `attributes`/`excludedAttributes`:
+/// `id` and `schemas` identify the resource, and `meta` carries the resource
+/// metadata clients need to make sense of a partial response. `schemas` isn't
+/// even part of the attribute schema definitions below (it's a top-level
+/// common attribute, not a resource-specific one), so it needs this explicit
+/// passthrough to survive filtering at all.
+const ALWAYS_RETURNED_CORE_ATTRIBUTES: &[&str] = &["id", "schemas", "meta"];
+
 /// Query parameters for SCIM attribute filtering per RFC 7644 section 3.4.2.5
 #[derive(Debug, Clone)]
 pub struct AttributeFilter {
@@ -210,6 +219,13 @@ impl AttributeFilter {
                 let mut filtered = Map::new();
 
                 for (key, val) in obj {
+                    // Core attributes (id, schemas, meta) always survive projection
+                    // in full, per RFC 7644 §3.4.2.5 — never sub-attribute-filtered.
+                    if ALWAYS_RETURNED_CORE_ATTRIBUTES.contains(&key.as_str()) {
+                        filtered.insert(key.clone(), val.clone());
+                        continue;
+                    }
+
                     // Check if this attribute should be included
                     if self.should_include_attribute(key, included_attributes) {
                         // For complex attributes, recursively filter sub-attributes
