@@ -126,14 +126,18 @@ fn showcase_complex_filters() {
     let contains_path =
         ScimPath::parse("emails[value co \"@company\"]").expect("Should parse contains filter");
     let mut user_copy = user.clone();
+    // This filter matches both "@company" emails, so the replacement value
+    // is applied to two elements at once. It must not itself set
+    // `primary: true` -- doing so would set two elements' primary to true
+    // in a single operation, which RFC 7643 §2.4 forbids and the server
+    // now rejects with 400 (see `multivalue_conformance_test.rs`).
     contains_path
         .apply_operation(
             &mut user_copy,
             "replace",
             &json!({
                 "value": "updated@company.com",
-                "type": "business",
-                "primary": true
+                "type": "business"
             }),
         )
         .expect("Should replace company emails");

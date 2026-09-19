@@ -334,6 +334,17 @@ impl ScimPath {
 
                             // Validate and enforce primary constraints for multi-valued attributes
                             if is_multi_valued_attribute(final_key) {
+                                // RFC 7643 §2.4 / RFC 7644 §3.5.2: this
+                                // operation's own value must not itself
+                                // contradict "at most one primary" -- that
+                                // case is unspecified by either RFC, and
+                                // rejecting it is a deliberate choice (see
+                                // `reject_conflicting_primaries_in_operation_value`).
+                                crate::schema::reject_conflicting_primaries_in_operation_value(
+                                    final_key,
+                                    &new_elements,
+                                )?;
+
                                 // Enforce single primary in the new elements first
                                 crate::schema::enforce_single_primary(&mut new_elements)?;
 
@@ -369,6 +380,9 @@ impl ScimPath {
                         // Validate primary constraints for new multi-valued attributes
                         if is_multi_valued_attribute(final_key) {
                             if let Value::Array(arr) = &mut new_value {
+                                crate::schema::reject_conflicting_primaries_in_operation_value(
+                                    final_key, arr,
+                                )?;
                                 crate::schema::enforce_single_primary(arr)?;
                             }
                         }
@@ -412,6 +426,9 @@ impl ScimPath {
 
                             // Validate primary constraints for normal arrays
                             if let Value::Array(ref mut arr_mut) = new_value {
+                                crate::schema::reject_conflicting_primaries_in_operation_value(
+                                    final_key, arr_mut,
+                                )?;
                                 crate::schema::enforce_single_primary(arr_mut)?;
                             }
                         }
@@ -595,6 +612,37 @@ impl ScimPath {
             if let Value::Object(item_obj) = item {
                 if filter.matches(item_obj) {
                     matching_indices.push(index);
+                }
+            }
+        }
+
+        // RFC 7643 §2.4 / RFC 7644 §3.5.2: a single "replace" operation
+        // whose value-path filter matches more than one element, and which
+        // sets `primary: true` on every match, is the value-path spelling
+        // of the same "operation's own value contradicts itself" case as
+        // an attrPath operation whose `value` array holds two elements
+        // with `primary: true`. Reject it for the same reason (see
+        // `reject_conflicting_primaries_in_operation_value`): RFC 7644
+        // §3.5.2 only says a later "primary: true" clears earlier ones, it
+        // never says a *single* operation may set more than one, and RFC
+        // 7643 §2.4 forbids more than one `primary: true` outright.
+        if op == "replace" && matching_indices.len() > 1 {
+            let attr_name = attr_path.last().map(String::as_str).unwrap_or_default();
+            if crate::schema::attribute_has_primary_subattribute(attr_name) {
+                let sets_primary_true = match sub_attr {
+                    Some("primary") => matches!(value, Value::Bool(true)),
+                    None => {
+                        matches!(value, Value::Object(obj) if obj.get("primary") == Some(&Value::Bool(true)))
+                    }
+                    _ => false,
+                };
+                if sets_primary_true {
+                    return Err(AppError::BadRequest(format!(
+                        "PATCH operation's value for '{}' would set primary=true on {} elements; \
+                         a single operation may set at most one (RFC 7643 §2.4)",
+                        attr_name,
+                        matching_indices.len()
+                    )));
                 }
             }
         }
