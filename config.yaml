@@ -61,8 +61,14 @@ tenants:
       token: "${TOKEN_SCIM_TOKEN:-token_xxxxxxxxxxxxxxxxxxxx}"
 
   # Host-specific tenant with X-Forwarded headers (behind load balancer)
+  #
+  # NOTE: this path must not collide with another tenant's path. Routes are
+  # registered per path only -- `host` is matched later, inside the handler --
+  # so two tenants sharing a path make axum panic at startup with
+  # "Overlapping method route", even when their `host` values differ.
+  # Tenant 2 already owns "/api/scim", hence the distinct path here.
   - id: 30
-    path: "/api/scim"
+    path: "/api/scim-lb"
     host: "api.loadbalancer.com"
     host_resolution:
       type: "xforwarded"
@@ -74,8 +80,9 @@ tenants:
   # Tenant with custom endpoints and override base URL
   # override_base_url: Forces base URL override (for public-facing URLs in responses)
   # If not set, auto-constructed from host resolution + path
+  # NOTE: distinct from tenant 1's "/scim/v2" -- see the routing note on tenant 30.
   - id: 40
-    path: "/scim/v2"
+    path: "/scim/public"
     override_base_url: "https://public.example.com"  # Forces response URLs to use this base
     auth:
       type: "bearer"
