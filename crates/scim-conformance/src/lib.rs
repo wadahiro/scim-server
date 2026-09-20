@@ -12,11 +12,13 @@
 //! ([`basis::Basis`]).
 
 pub mod basis;
+pub mod capability;
 pub mod client;
 pub mod matrix;
 pub mod schema;
 
 pub use basis::Basis;
+pub use capability::{Capabilities, Capability, Gated};
 pub use client::{Auth, ClientConfig, ScimClient};
 pub use matrix::{Cell, Characteristic, Method, Outcome, Verdict};
 pub use schema::{decls_from_schemas, AttrDecl};

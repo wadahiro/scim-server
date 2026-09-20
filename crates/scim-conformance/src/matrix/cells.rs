@@ -6,6 +6,7 @@
 use serde::Serialize;
 
 use crate::basis::{self, Basis};
+use crate::capability::Capability;
 use crate::schema::{AttrDecl, Mutability, Resource};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -70,6 +71,20 @@ pub struct Cell {
     pub characteristic: Characteristic,
     pub method: Method,
     pub basis: Basis,
+    /// `Some(cap)` when this cell can only be exercised if the provider
+    /// advertises `cap` as supported (see `crate::capability::gate`). Set
+    /// for every PATCH-method cell (`Patch`, `PatchChange`,
+    /// `PatchDuplicate` all require `Capability::Patch`); nothing else in
+    /// the matrix needs one yet.
+    pub requires_capability: Option<Capability>,
+}
+
+/// The capability (if any) needed to exercise a cell with this `method`.
+fn requires_capability_for(method: Method) -> Option<Capability> {
+    match method {
+        Method::Patch | Method::PatchChange | Method::PatchDuplicate => Some(Capability::Patch),
+        _ => None,
+    }
 }
 
 /// Whether a top-level complex attribute with declared sub-attributes
@@ -86,6 +101,7 @@ fn cell(decl: &AttrDecl, characteristic: Characteristic, method: Method) -> Cell
         characteristic,
         method,
         basis: basis::basis_for(characteristic, method),
+        requires_capability: requires_capability_for(method),
     }
 }
 

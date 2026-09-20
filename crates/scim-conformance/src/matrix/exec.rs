@@ -13,17 +13,19 @@ use serde_json::{json, Value};
 use super::cells::{is_container_skip, is_group_member_ref, is_group_member_subattr};
 use super::{Cell, Characteristic, Method, Outcome, Verdict};
 use crate::basis;
+use crate::capability;
 use crate::client::{truncate, ScimClient, ScimResponse};
 use crate::schema::{AttrDecl, AttrType, Mutability, Resource, Returned};
 
-const USER_URN: &str = "urn:ietf:params:scim:schemas:core:2.0:User";
-const GROUP_URN: &str = "urn:ietf:params:scim:schemas:core:2.0:Group";
-const ENTERPRISE_URN: &str = "urn:ietf:params:scim:schemas:extension:enterprise:2.0:User";
-const PATCHOP_URN: &str = "urn:ietf:params:scim:api:messages:2.0:PatchOp";
+pub(crate) const USER_URN: &str = "urn:ietf:params:scim:schemas:core:2.0:User";
+pub(crate) const GROUP_URN: &str = "urn:ietf:params:scim:schemas:core:2.0:Group";
+pub(crate) const ENTERPRISE_URN: &str =
+    "urn:ietf:params:scim:schemas:extension:enterprise:2.0:User";
+pub(crate) const PATCHOP_URN: &str = "urn:ietf:params:scim:api:messages:2.0:PatchOp";
 
 static COUNTER: AtomicU64 = AtomicU64::new(0);
 
-fn short_uid() -> String {
+pub(crate) fn short_uid() -> String {
     let n = COUNTER.fetch_add(1, Ordering::Relaxed);
     let t = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -33,13 +35,21 @@ fn short_uid() -> String {
 }
 
 /// Every id this run created, so `run_cells` can best-effort delete them
-/// afterward (a 404 on delete counts as success).
-struct Bookkeeping {
+/// afterward (a 404 on delete counts as success). Also used by
+/// `crate::probes`, which creates its own fixtures and reuses this same
+/// bookkeeping/cleanup mechanism rather than reimplementing it.
+pub(crate) struct Bookkeeping {
     created: Vec<(&'static str, String)>,
 }
 
 impl Bookkeeping {
-    fn note(&mut self, endpoint: &'static str, id: String) {
+    pub(crate) fn new() -> Self {
+        Bookkeeping {
+            created: Vec::new(),
+        }
+    }
+
+    pub(crate) fn note(&mut self, endpoint: &'static str, id: String) {
         self.created.push((endpoint, id));
     }
 }
@@ -49,7 +59,7 @@ impl Bookkeeping {
 /// Runs a client call, turning a transport error into a synthetic response
 /// (status 0) instead of panicking — mirrors the Python client, which never
 /// raises: a socket-level failure still produces a `Resp`.
-async fn safe(
+pub(crate) async fn safe(
     fut: impl std::future::Future<Output = Result<ScimResponse, crate::client::Error>>,
 ) -> ScimResponse {
     match fut.await {
@@ -71,11 +81,11 @@ async fn safe(
     }
 }
 
-fn body_of(r: &ScimResponse) -> Value {
+pub(crate) fn body_of(r: &ScimResponse) -> Value {
     r.body.clone().unwrap_or(Value::Null)
 }
 
-fn is_2xx(status: u16) -> bool {
+pub(crate) fn is_2xx(status: u16) -> bool {
     (200..300).contains(&status)
 }
 
@@ -94,7 +104,7 @@ fn ensure_enterprise(payload: &mut Value) -> &mut Value {
     obj.entry(ENTERPRISE_URN).or_insert_with(|| json!({}))
 }
 
-fn make_baseline(resource: Resource) -> Value {
+pub(crate) fn make_baseline(resource: Resource) -> Value {
     match resource {
         Resource::User | Resource::EnterpriseUser => json!({
             "schemas": [USER_URN],
@@ -306,7 +316,7 @@ fn forged_value_for(decl: &AttrDecl) -> Value {
     }
 }
 
-async fn fresh_user_id(client: &ScimClient, bk: &mut Bookkeeping) -> Option<String> {
+pub(crate) async fn fresh_user_id(client: &ScimClient, bk: &mut Bookkeeping) -> Option<String> {
     let r = safe(client.post("/Users", &make_baseline(Resource::User))).await;
     if is_2xx(r.status) {
         let id = r.id()?;
@@ -414,7 +424,12 @@ fn error(
 
 // -------------------------------------------------------------- readOnly
 
-async fn exec_readonly(decl: &AttrDecl, client: &ScimClient, bk: &mut Bookkeeping) -> Vec<Outcome> {
+async fn exec_readonly(
+    decl: &AttrDecl,
+    client: &ScimClient,
+    bk: &mut Bookkeeping,
+    patch_skip: Option<Outcome>,
+) -> Vec<Outcome> {
     use Characteristic::MutabilityReadOnly as RO;
 
     if is_container_skip(decl) {
@@ -534,6 +549,11 @@ async fn exec_readonly(decl: &AttrDecl, client: &ScimClient, bk: &mut Bookkeepin
         }
     }
 
+    if let Some(gated) = patch_skip {
+        rows.push(gated);
+        return rows;
+    }
+
     // RFC 7644 §3.5.2 (L1886-1894) is stricter than POST's §3.3 / PUT's
     // §3.5.1 "ignore" rule: a PATCH "MUST NOT modify" a readOnly attribute,
     // and a non-compatible operation "SHALL return the appropriate HTTP
@@ -618,6 +638,7 @@ async fn exec_immutable(
     decl: &AttrDecl,
     client: &ScimClient,
     bk: &mut Bookkeeping,
+    patch_skip: Option<Outcome>,
 ) -> Vec<Outcome> {
     use Characteristic::MutabilityImmutable as IM;
 
@@ -687,6 +708,22 @@ async fn exec_immutable(
     };
     bk.note(endpoint, rid.clone());
 
+    match patch_skip {
+        Some(gated) => rows.push(gated),
+        None => rows.push(exec_immutable_patch_change(decl, client, &rid, endpoint).await),
+    }
+    rows.push(exec_immutable_put_change(decl, client, &rid, endpoint).await);
+    rows
+}
+
+async fn exec_immutable_patch_change(
+    decl: &AttrDecl,
+    client: &ScimClient,
+    rid: &str,
+    endpoint: &str,
+) -> Outcome {
+    use Characteristic::MutabilityImmutable as IM;
+
     let changed = forged_value_for(decl);
     let r2 = safe(client.patch(
         &format!("{endpoint}/{rid}"),
@@ -694,31 +731,31 @@ async fn exec_immutable(
     ))
     .await;
     if r2.status == 400 || r2.status == 409 {
-        rows.push(pass(
+        pass(
             decl,
             IM,
             Method::PatchChange,
             format!("change correctly rejected with status {}", r2.status),
-        ));
+        )
     } else if is_2xx(r2.status) {
         let (ok2, val2) = get_attr(&body_of(&r2), decl);
         if ok2 && values_match(decl, &changed, &val2) {
-            rows.push(fail(
+            fail(
                 decl,
                 IM,
                 Method::PatchChange,
                 format!("immutable value changed via PATCH to {val2:?}"),
-            ));
+            )
         } else {
-            rows.push(pass(
+            pass(
                 decl,
                 IM,
                 Method::PatchChange,
                 format!("PATCH returned 200 but value unchanged: {val2:?}"),
-            ));
+            )
         }
     } else {
-        rows.push(error(
+        error(
             decl,
             IM,
             Method::PatchChange,
@@ -727,51 +764,60 @@ async fn exec_immutable(
                 r2.status,
                 truncate(&r2.raw, 200)
             ),
-        ));
+        )
     }
+}
 
-    // PUT-change: same probe via a full replace instead of PATCH.
+/// PUT-change: same probe as [`exec_immutable_patch_change`], via a full
+/// replace instead of PATCH. Never gated: PUT requires no capability.
+async fn exec_immutable_put_change(
+    decl: &AttrDecl,
+    client: &ScimClient,
+    rid: &str,
+    endpoint: &str,
+) -> Outcome {
+    use Characteristic::MutabilityImmutable as IM;
+
     let getr = safe(client.get(&format!("{endpoint}/{rid}"))).await;
     let current = body_of(&getr);
     if !current.is_object() {
-        rows.push(error(
+        return error(
             decl,
             IM,
             Method::PutChange,
             "could not re-fetch resource before PUT",
-        ));
-        return rows;
+        );
     }
     let mut put_body = current;
     let changed2 = forged_value_for(decl);
     set_attr(&mut put_body, decl, changed2.clone());
     let r3 = safe(client.put(&format!("{endpoint}/{rid}"), &put_body)).await;
     if r3.status == 400 || r3.status == 409 {
-        rows.push(pass(
+        pass(
             decl,
             IM,
             Method::PutChange,
             format!("change correctly rejected with status {}", r3.status),
-        ));
+        )
     } else if is_2xx(r3.status) {
         let (ok3, val3) = get_attr(&body_of(&r3), decl);
         if ok3 && values_match(decl, &changed2, &val3) {
-            rows.push(fail(
+            fail(
                 decl,
                 IM,
                 Method::PutChange,
                 format!("immutable value changed via PUT to {val3:?}"),
-            ));
+            )
         } else {
-            rows.push(pass(
+            pass(
                 decl,
                 IM,
                 Method::PutChange,
                 format!("PUT returned 200 but value unchanged: {val3:?}"),
-            ));
+            )
         }
     } else {
-        rows.push(error(
+        error(
             decl,
             IM,
             Method::PutChange,
@@ -780,9 +826,8 @@ async fn exec_immutable(
                 r3.status,
                 truncate(&r3.raw, 200)
             ),
-        ));
+        )
     }
-    rows
 }
 
 // -------------------------------------------------------------- required
@@ -936,6 +981,7 @@ async fn exec_uniqueness(
     decl: &AttrDecl,
     client: &ScimClient,
     bk: &mut Bookkeeping,
+    patch_skip: Option<Outcome>,
 ) -> Vec<Outcome> {
     use Characteristic::Uniqueness as UQ;
 
@@ -1026,6 +1072,11 @@ async fn exec_uniqueness(
         }
     }
 
+    if let Some(gated) = patch_skip {
+        rows.push(gated);
+        return rows;
+    }
+
     let dup3 = json!(format!("dup-{}", short_uid()));
     let mut pa3 = make_baseline(decl.resource);
     set_attr(&mut pa3, decl, dup3.clone());
@@ -1079,6 +1130,7 @@ async fn exec_returned_never(
     decl: &AttrDecl,
     client: &ScimClient,
     bk: &mut Bookkeeping,
+    patch_skip: Option<Outcome>,
 ) -> Vec<Outcome> {
     use Characteristic::ReturnedNever as RN;
 
@@ -1130,6 +1182,11 @@ async fn exec_returned_never(
         if okp { Verdict::Fail } else { Verdict::Pass },
         format!("present_in_response={okp}"),
     ));
+
+    if let Some(gated) = patch_skip {
+        rows.push(gated);
+        return rows;
+    }
 
     let rpa = safe(client.patch(
         &format!("{endpoint}/{rid}"),
@@ -1551,10 +1608,19 @@ fn ordered_unique_decls(cells: &[Cell]) -> Vec<&AttrDecl> {
 /// Every resource this run creates is deleted best-effort afterward (a 404
 /// on delete counts as success).
 pub async fn run_cells(client: &mut ScimClient, cells: &[Cell]) -> Vec<Outcome> {
+    // Gating happens before execution (T9c): a provider that advertises
+    // `patch.supported: false` never receives the PATCH-family request a
+    // readOnly/immutable/uniqueness triad would otherwise send for its
+    // last row. `capability::gate` is the single source of truth for that
+    // decision (also unit-tested and integration-tested against a stub in
+    // isolation, with no execution at all); here its per-cell verdict is
+    // consulted once per group to decide whether that group's one
+    // PATCH-family HTTP call should be skipped.
+    let caps = capability::fetch(client).await;
+    let gated = capability::gate(cells, &caps);
+
     let universe = ordered_unique_decls(cells);
-    let mut bk = Bookkeeping {
-        created: Vec::new(),
-    };
+    let mut bk = Bookkeeping::new();
 
     // Group contiguous cells sharing (resource, path, group_kind).
     // `TypeWrong` and `TypeValid` collapse into one group: `exec_type`
@@ -1599,13 +1665,28 @@ pub async fn run_cells(client: &mut ScimClient, cells: &[Cell]) -> Vec<Outcome> 
         let group = &cells[start..end];
         let decl = &group[0].decl;
         let characteristic = group[0].characteristic;
+        // The one cell in this group (if any) that `capability::gate`
+        // decided to skip -- always the group's single PATCH-family cell,
+        // since that's the only `requires_capability` the matrix sets.
+        let patch_skip: Option<Outcome> = (start..end).find_map(|idx| match &gated[idx] {
+            capability::Gated::Skip(o) if cells[idx].requires_capability.is_some() => {
+                Some(o.clone())
+            }
+            _ => None,
+        });
         let rows: Vec<Outcome> = match characteristic {
-            Characteristic::MutabilityReadOnly => exec_readonly(decl, client, &mut bk).await,
-            Characteristic::MutabilityImmutable => exec_immutable(decl, client, &mut bk).await,
+            Characteristic::MutabilityReadOnly => {
+                exec_readonly(decl, client, &mut bk, patch_skip).await
+            }
+            Characteristic::MutabilityImmutable => {
+                exec_immutable(decl, client, &mut bk, patch_skip).await
+            }
             Characteristic::Required => exec_required(decl, client, &mut bk).await,
             Characteristic::CaseExact => exec_caseexact(decl, client, &mut bk).await,
-            Characteristic::Uniqueness => exec_uniqueness(decl, client, &mut bk).await,
-            Characteristic::ReturnedNever => exec_returned_never(decl, client, &mut bk).await,
+            Characteristic::Uniqueness => exec_uniqueness(decl, client, &mut bk, patch_skip).await,
+            Characteristic::ReturnedNever => {
+                exec_returned_never(decl, client, &mut bk, patch_skip).await
+            }
             Characteristic::TypeWrong | Characteristic::TypeValid => {
                 exec_type(decl, client, &mut bk, &universe).await
             }
@@ -1629,7 +1710,7 @@ pub async fn run_cells(client: &mut ScimClient, cells: &[Cell]) -> Vec<Outcome> 
     outcomes
 }
 
-async fn cleanup(client: &ScimClient, bk: &Bookkeeping) {
+pub(crate) async fn cleanup(client: &ScimClient, bk: &Bookkeeping) {
     // Dedup: the same id may have been noted more than once (e.g. a
     // duplicate-detection probe creates several resources that are each
     // noted once, which is fine; re-deleting the same id twice is also
