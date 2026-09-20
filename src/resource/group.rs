@@ -709,9 +709,20 @@ pub async fn update_group(
     let mut group = Group::default();
     group.base.id = id.clone();
 
-    // Extract fields
+    // Extract fields. `displayName` is required (RFC 7643 §4.2: "A
+    // human-readable name for the Group. REQUIRED."), the same as
+    // `create_group` enforces -- a PUT replaces the whole resource
+    // (RFC 7644 §3.5.1), so it must satisfy the same required-attribute
+    // constraint rather than silently falling back to `Group::default()`'s
+    // placeholder `display_name`.
     if let Some(display_name) = payload.get("displayName").and_then(|v| v.as_str()) {
         group.base.display_name = display_name.to_string();
+    } else {
+        return Err(scim_error_response(
+            StatusCode::BAD_REQUEST,
+            Some("invalidValue"),
+            "displayName is required",
+        ));
     }
 
     if let Some(schemas) = payload.get("schemas").and_then(|v| v.as_array()) {
