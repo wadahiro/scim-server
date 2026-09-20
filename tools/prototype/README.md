@@ -19,6 +19,7 @@ tools/prototype/
 ├── extract.py              # whole-document block extraction + classification
 ├── extract_attrdefs.py     # attribute-definition ("REQUIRED"/"OPTIONAL"/…) extraction
 ├── run_attrdef_checks.py   # runs extract_attrdefs.py's output against a live server
+├── relocate_ledger.py      # moves a ledger's `lines` from a reflowed working copy to spec/rfc/ raw coordinates
 ├── verify-quotes.rb        # checks that a ledger's `quote` occurs verbatim in its `lines` span
 ├── golden/                 # committed expected outputs (see below)
 └── proto-eval/             # schema-driven check generation + compatibility-knob detection
@@ -79,24 +80,51 @@ cargo run &
 python3 tools/prototype/run_attrdef_checks.py http://127.0.0.1:3000/scim/v2 out.json
 ```
 
+## `relocate_ledger.py`
+
+One-time (per ledger) tool: moves a ledger's `lines` from coordinates into a
+reflowed/"clean" working copy of an RFC (the format a ledger is drafted
+against — page furniture such as running headers/footers and `[Page N]`
+markers stripped, some blank runs collapsed) to coordinates into the
+verbatim, vendored raw file in `spec/rfc/`. Builds a clean->raw line map
+with `difflib.SequenceMatcher` over both files' lines, rewrites every
+entry's `lines:` value through that map (as a targeted text edit — it does
+not round-trip the YAML through a parser/serializer, which would lose
+comments and reformat flow-style entries), and — for every entry with a
+`quote` — verifies the quote occurs (whitespace-normalized) inside the
+relocated raw span with page furniture removed, exiting non-zero and
+listing every failing entry otherwise. Requires PyYAML (`pip install
+pyyaml`) to parse the ledger for validation; the working copy itself is
+never vendored or committed.
+
+```bash
+python3 tools/prototype/relocate_ledger.py \
+    spec/ledger/rfc7644-3.5.2.yaml /path/to/clean-7644.txt spec/rfc/rfc7644.txt
+```
+
+`spec/ledger/rfc7644-3.5.2.yaml`'s `lines` have already been relocated this
+way; running it again on that file is idempotent only if pointed at the same
+clean working copy that produced today's `spec/rfc/rfc7644.txt`-coordinate
+values (a `clean-7644.txt` regenerated with different reflow choices could
+map differently).
+
 ## `verify-quotes.rb`
 
 Given a ledger YAML file (see `spec/ledger/`) and a directory containing the
-RFC text it cites, checks that every entry's `quote` occurs verbatim
-(after whitespace normalization) inside the line range given by `lines`.
-This is the mechanical guarantee that a ledger's quotations are not
+**raw, vendored** RFC text it cites (`spec/rfc/`), checks that every entry's
+`quote` occurs verbatim (after whitespace normalization, and after removing
+page furniture lines from the cited span) inside the line range given by
+`lines`. This is the mechanical guarantee that a ledger's quotations are not
 paraphrased or hand-typo'd.
 
 ```bash
 ruby tools/prototype/verify-quotes.rb spec/ledger/rfc7644-3.5.2.yaml spec/rfc
 ```
 
-Note: as vendored, this script expects a `clean-<doc>.txt` file in the given
-directory (its historical working format). The `lines` in
-`spec/ledger/rfc7644-3.5.2.yaml` are, as documented at the top of that file,
-against that reflowed working copy, not against `spec/rfc/rfc7644.txt`
-directly — converting them and re-pointing this check at the vendored raw
-file is deferred to a later task.
+`spec/ledger/rfc7644-3.5.2.yaml`'s `lines` are raw-file coordinates (see the
+note at the top of that file and `relocate_ledger.py` above), so this reads
+`spec/rfc/rfc7644.txt` directly — no `clean-*.txt` working copy is involved
+or required at verification time.
 
 ## `proto-eval/`
 

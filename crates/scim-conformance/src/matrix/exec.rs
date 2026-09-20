@@ -19,8 +19,7 @@ use crate::schema::{AttrDecl, AttrType, Mutability, Resource, Returned};
 
 pub(crate) const USER_URN: &str = "urn:ietf:params:scim:schemas:core:2.0:User";
 pub(crate) const GROUP_URN: &str = "urn:ietf:params:scim:schemas:core:2.0:Group";
-pub(crate) const ENTERPRISE_URN: &str =
-    "urn:ietf:params:scim:schemas:extension:enterprise:2.0:User";
+pub const ENTERPRISE_URN: &str = "urn:ietf:params:scim:schemas:extension:enterprise:2.0:User";
 pub(crate) const PATCHOP_URN: &str = "urn:ietf:params:scim:api:messages:2.0:PatchOp";
 
 static COUNTER: AtomicU64 = AtomicU64::new(0);
@@ -104,7 +103,7 @@ fn ensure_enterprise(payload: &mut Value) -> &mut Value {
     obj.entry(ENTERPRISE_URN).or_insert_with(|| json!({}))
 }
 
-pub(crate) fn make_baseline(resource: Resource) -> Value {
+pub fn make_baseline(resource: Resource) -> Value {
     match resource {
         Resource::User | Resource::EnterpriseUser => json!({
             "schemas": [USER_URN],
@@ -117,7 +116,7 @@ pub(crate) fn make_baseline(resource: Resource) -> Value {
     }
 }
 
-fn path_segments(decl: &AttrDecl) -> Vec<&str> {
+pub fn path_segments(decl: &AttrDecl) -> Vec<&str> {
     decl.path.split('.').collect()
 }
 
@@ -128,7 +127,7 @@ fn path_segments(decl: &AttrDecl) -> Vec<&str> {
 /// complex attribute with a `value` sibling (`members`, `groups`,
 /// `manager`) — see RFC 7644 §3.3 basis notes on why a lone readOnly
 /// sub-attribute forge is not always a well-formed write.
-fn set_attr_with_companion(
+pub fn set_attr_with_companion(
     payload: &mut Value,
     decl: &AttrDecl,
     value: Value,
@@ -160,11 +159,11 @@ fn set_attr_with_companion(
     }
 }
 
-fn set_attr(payload: &mut Value, decl: &AttrDecl, value: Value) {
+pub fn set_attr(payload: &mut Value, decl: &AttrDecl, value: Value) {
     set_attr_with_companion(payload, decl, value, None);
 }
 
-fn get_attr(resource_json: &Value, decl: &AttrDecl) -> (bool, Value) {
+pub fn get_attr(resource_json: &Value, decl: &AttrDecl) -> (bool, Value) {
     let target: &Value = if decl.resource == Resource::EnterpriseUser {
         match resource_json.get(ENTERPRISE_URN) {
             Some(v) if !v.is_null() => v,
@@ -203,7 +202,7 @@ fn get_attr(resource_json: &Value, decl: &AttrDecl) -> (bool, Value) {
     }
 }
 
-fn dotted_path(decl: &AttrDecl) -> String {
+pub fn dotted_path(decl: &AttrDecl) -> String {
     if decl.resource == Resource::EnterpriseUser {
         format!("{}:{}", ENTERPRISE_URN, decl.path)
     } else {
@@ -211,10 +210,41 @@ fn dotted_path(decl: &AttrDecl) -> String {
     }
 }
 
+/// True when `decl.top()`'s own (depth-1) attribute declaration is itself
+/// `readOnly`. Distinguishes `User.groups.*` (the container `groups` is
+/// readOnly, so a coarse `path: "groups"` PATCH already exercises the
+/// *container's* mutability rule and is a sound probe) from
+/// `Group.members.display` (the container `members` is ReadWrite, so a
+/// coarse `path: "members"` replace is a legitimate write of a ReadWrite
+/// attribute and proves nothing about `display`'s mutability).
+pub fn container_is_readonly(decl: &AttrDecl, universe: &[&AttrDecl]) -> bool {
+    let top = decl.top();
+    universe.iter().any(|d| {
+        d.resource == decl.resource
+            && d.depth() == 1
+            && d.path == top
+            && d.mutability == Mutability::ReadOnly
+    })
+}
+
+/// Escapes `"` and `\` for embedding in a SCIM filter's quoted string
+/// literal (RFC 7644 §3.4.2.2).
+pub fn filter_escape(s: &str) -> String {
+    s.replace('\\', "\\\\").replace('"', "\\\"")
+}
+
 /// PATCH `path`: container-level when it's a sub-attribute of a
 /// multi-valued complex attribute (no per-element filter target exists
 /// during a forge probe), full dotted path otherwise.
-fn patch_path(decl: &AttrDecl) -> String {
+///
+/// A container-level `path` only *names* `decl.path` precisely (rather
+/// than naming a coarser ancestor that also covers sibling sub-attributes)
+/// when [`container_is_readonly`] holds — see
+/// [`patch_targets_decl_precisely`], which is the actual soundness gate
+/// every caller in this file goes through before using this function's
+/// output as a PATCH `path`. This function itself makes no soundness
+/// claim; it is purely "what path would a naive per-attribute PATCH use".
+pub fn patch_path(decl: &AttrDecl) -> String {
     let segs = path_segments(decl);
     if segs.len() > 1 && decl.top_multi_valued {
         let top = segs[0];
@@ -228,7 +258,7 @@ fn patch_path(decl: &AttrDecl) -> String {
     }
 }
 
-fn patch_value_for(decl: &AttrDecl, value: Value) -> Value {
+pub fn patch_value_for(decl: &AttrDecl, value: Value) -> Value {
     let segs = path_segments(decl);
     if segs.len() > 1 && decl.top_multi_valued {
         let sub = segs[1];
@@ -238,7 +268,7 @@ fn patch_value_for(decl: &AttrDecl, value: Value) -> Value {
     }
 }
 
-fn patch_body(decl: &AttrDecl, value: Value) -> Value {
+pub fn patch_body(decl: &AttrDecl, value: Value) -> Value {
     json!({
         "schemas": [PATCHOP_URN],
         "Operations": [
@@ -247,11 +277,111 @@ fn patch_body(decl: &AttrDecl, value: Value) -> Value {
     })
 }
 
+// --------------------------------------------- precise PATCH targeting
+//
+// The bug this whole module exists to prevent a repeat of: `patch_path`'s
+// container-level fallback (used for any sub-attribute of a multi-valued
+// complex attribute, since a bare forge probe has no existing element to
+// filter on) sends a PATCH `replace` on the *container* path
+// (`"members"`), not the sub-attribute (`"members.display"`). When the
+// container is itself ReadWrite, that's a legitimate write of a different,
+// permitted attribute — it proves nothing about the sub-attribute's own
+// characteristic, and judging the server's response as if it did produced
+// exactly one false FAIL (`Group.members.display` / `mutability_readOnly`
+// / PATCH) before this module's fix. `patch_targets_decl_precisely` is the
+// single predicate every PATCH-family builder in this file now consults;
+// `PatchRequestPlan` / `build_patch_request` is the single builder that
+// acts on it. See `tests::conformance_schema_matrix_targeting_invariant`
+// (in `tests/conformance_schema_matrix.rs`) for the automated check that
+// every PATCH-family cell the schema matrix generates actually goes
+// through this gate.
+
+/// Whether a PATCH `replace` naming [`patch_path`]'s output as its `path`
+/// actually isolates `decl.path`'s own characteristic — true unless `decl`
+/// is a sub-attribute of a multi-valued complex attribute whose container
+/// is itself ReadWrite (or Immutable): only then does `patch_path` fall
+/// back to a coarser container-level path that also legitimately covers
+/// sibling sub-attributes, so a plain container-level PATCH is not a sound
+/// probe of `decl.path` specifically and [`value_filtered_patch_request`]
+/// must be used instead.
+pub fn patch_targets_decl_precisely(decl: &AttrDecl, universe: &[&AttrDecl]) -> bool {
+    !(decl.depth() > 1 && decl.top_multi_valued) || container_is_readonly(decl, universe)
+}
+
+/// Builds a value-filtered PATCH `Operations[0].path` /
+/// `Operations[0].value` pair that targets exactly one sub-attribute of one
+/// element of a multi-valued complex attribute — e.g.
+/// `members[value eq "<id>"].display` — per RFC 7644 §3.5.2's valuePath
+/// grammar. `filter_value` must identify an existing element (normally the
+/// element's own `value` sibling); the caller is responsible for having a
+/// resolvable one (see [`build_patch_request`]'s `Unavailable` case when it
+/// doesn't).
+pub fn value_filtered_patch_request(
+    decl: &AttrDecl,
+    filter_value: &Value,
+    new_value: Value,
+) -> Value {
+    let segs = path_segments(decl);
+    let sub = segs[1];
+    let filter_str = match filter_value {
+        Value::String(s) => s.clone(),
+        other => other.to_string(),
+    };
+    let top_prefixed = if decl.resource == Resource::EnterpriseUser {
+        format!("{}:{}", ENTERPRISE_URN, segs[0])
+    } else {
+        segs[0].to_string()
+    };
+    let path = format!(
+        "{top_prefixed}[value eq \"{}\"].{sub}",
+        filter_escape(&filter_str)
+    );
+    json!({
+        "schemas": [PATCHOP_URN],
+        "Operations": [
+            { "op": "replace", "path": path, "value": new_value }
+        ],
+    })
+}
+
+/// The outcome of [`build_patch_request`]: either a concrete PATCH body to
+/// send, or a documented reason no sound PATCH request can be built (the
+/// caller must fall back to `Verdict::Skip` with this reason, never send
+/// the imprecise request anyway).
+pub enum PatchRequestPlan {
+    Body(Value),
+    Unavailable(&'static str),
+}
+
+/// The single builder every PATCH-family probe in this file goes through:
+/// a precise dotted-path PATCH when [`patch_targets_decl_precisely`] holds,
+/// otherwise a value-filtered PATCH keyed on `filter_value` (an existing
+/// element's identifying `value`) — or `Unavailable` when no such value was
+/// resolvable (e.g. the companion element couldn't be created).
+pub fn build_patch_request(
+    decl: &AttrDecl,
+    universe: &[&AttrDecl],
+    filter_value: Option<&Value>,
+    new_value: Value,
+) -> PatchRequestPlan {
+    if patch_targets_decl_precisely(decl, universe) {
+        PatchRequestPlan::Body(patch_body(decl, new_value))
+    } else {
+        match filter_value {
+            Some(fv) => PatchRequestPlan::Body(value_filtered_patch_request(decl, fv, new_value)),
+            None => PatchRequestPlan::Unavailable(
+                "cannot target a sub-attribute of a ReadWrite/Immutable multi-valued complex \
+                 attribute via PATCH without a resolvable identifying value to filter on",
+            ),
+        }
+    }
+}
+
 fn resource_endpoint(resource: Resource) -> &'static str {
     resource.endpoint()
 }
 
-fn values_match(decl: &AttrDecl, sent: &Value, got: &Value) -> bool {
+pub fn values_match(decl: &AttrDecl, sent: &Value, got: &Value) -> bool {
     if is_group_member_ref(decl) && decl.last() == "$ref" {
         if let (Some(g), Some(s)) = (got.as_str(), sent.as_str()) {
             return g.trim_end_matches('/').ends_with(s.trim_end_matches('/'));
@@ -261,7 +391,7 @@ fn values_match(decl: &AttrDecl, sent: &Value, got: &Value) -> bool {
     sent == got
 }
 
-fn valid_value_for(decl: &AttrDecl) -> Value {
+pub fn valid_value_for(decl: &AttrDecl) -> Value {
     match decl.path.as_str() {
         "emails.value" => return json!(format!("user-{}@example.com", short_uid())),
         "photos.value" => return json!("http://example.com/photo.jpg"),
@@ -292,7 +422,7 @@ fn valid_value_for(decl: &AttrDecl) -> Value {
 
 /// Wrong-typed value per declared type. Matches RFC 7643 §2.3's data-type
 /// list; one deliberately-mistyped literal per type (see plan T9b).
-fn wrong_value_for(decl: &AttrDecl) -> Value {
+pub fn wrong_value_for(decl: &AttrDecl) -> Value {
     match decl.r#type {
         AttrType::String => json!(123),
         AttrType::Boolean => json!("yes"),
@@ -304,7 +434,7 @@ fn wrong_value_for(decl: &AttrDecl) -> Value {
     }
 }
 
-fn forged_value_for(decl: &AttrDecl) -> Value {
+pub fn forged_value_for(decl: &AttrDecl) -> Value {
     match decl.r#type {
         AttrType::String => json!(format!("FORGED-{}", short_uid())),
         AttrType::Boolean => json!(true),
@@ -327,7 +457,7 @@ pub(crate) async fn fresh_user_id(client: &ScimClient, bk: &mut Bookkeeping) -> 
     }
 }
 
-async fn fresh_group_id(client: &ScimClient, bk: &mut Bookkeeping) -> Option<String> {
+pub(crate) async fn fresh_group_id(client: &ScimClient, bk: &mut Bookkeeping) -> Option<String> {
     let r = safe(client.post("/Groups", &make_baseline(Resource::Group))).await;
     if is_2xx(r.status) {
         let id = r.id()?;
@@ -384,6 +514,7 @@ fn outcome(
         basis: basis::basis_for(characteristic, method),
         detail: detail.into(),
         observed: None,
+        secondary: Vec::new(),
     }
 }
 
@@ -423,6 +554,34 @@ fn error(
     outcome(decl, characteristic, method, Verdict::Error, detail)
 }
 
+/// Builds a `mutability_readOnly` PATCH outcome. Unlike every other
+/// schema-matrix outcome (built via `outcome()` above, which always leaves
+/// `observed` unset and `secondary` empty), a PATCH readOnly judgement
+/// cites RFC 7644 §3.5.2 (L1886-1894) as its primary basis plus Table 9's
+/// `mutability` row (§3.12, `STATUS_TABLE9_MUTABILITY`) as a secondary
+/// citation naming the concrete `scimType` the rule requires, and records a
+/// short canonical `observed` string (e.g. `"status=400 scimType=mutability"`,
+/// `"status=200 ignored"`) alongside the free-text `detail`.
+fn readonly_patch_outcome(
+    decl: &AttrDecl,
+    verdict: Verdict,
+    detail: impl Into<String>,
+    observed: impl Into<String>,
+) -> Outcome {
+    Outcome {
+        attribute: decl.path.clone(),
+        schema: decl.schema.clone(),
+        resource: decl.resource,
+        characteristic: Characteristic::MutabilityReadOnly,
+        method: Method::Patch,
+        verdict,
+        basis: basis::MUTABILITY_READ_ONLY_PATCH,
+        detail: detail.into(),
+        observed: Some(observed.into()),
+        secondary: vec![basis::STATUS_TABLE9_MUTABILITY],
+    }
+}
+
 // -------------------------------------------------------------- readOnly
 
 async fn exec_readonly(
@@ -430,6 +589,7 @@ async fn exec_readonly(
     client: &ScimClient,
     bk: &mut Bookkeeping,
     patch_skip: Option<Outcome>,
+    universe: &[&AttrDecl],
 ) -> Vec<Outcome> {
     use Characteristic::MutabilityReadOnly as RO;
 
@@ -563,59 +723,101 @@ async fn exec_readonly(
     // 400 with `scimType: "mutability"`. So, unlike POST/PUT, silently
     // ignoring the forged value on PATCH is *not* conformant: only a 400
     // with the right `scimType` passes.
-    let r3 = safe(client.patch(
-        &format!("{endpoint}/{rid}"),
-        &patch_body(decl, forged.clone()),
-    ))
-    .await;
+    //
+    // For a readOnly sub-attribute of a top-level multi-valued complex
+    // attribute whose container is itself ReadWrite (currently only
+    // `Group.members.display` -- see `container_is_readonly`'s docs), the
+    // generic `patch_body(decl, ..)` used everywhere else in this file
+    // falls back to `path: "<top>"` with a forged, structurally-invalid
+    // element (e.g. `[{ "display": "FORGED" }]`, no `value`). That's not a
+    // probe of this sub-attribute's mutability at all: it's a legitimate
+    // replace of the whole ReadWrite `members` array with a malformed
+    // member, and the server rejecting or dropping it is not evidence
+    // either way about `display`'s mutability. `build_patch_request` (see
+    // its module doc above) routes this case to a value-filtered PATCH
+    // instead, keyed on the element this probe's own baseline POST above
+    // already created and is known to carry a resolvable `value`
+    // (`companion`, or -- if the readOnly sub-attribute *is* `value`
+    // itself -- `forged`, the value already in effect after that POST).
+    let precise = patch_targets_decl_precisely(decl, universe);
+    let patch_forged = if precise {
+        forged.clone()
+    } else {
+        forged_value_for(decl)
+    };
+    let filter_value: Option<Value> = if precise {
+        None
+    } else {
+        let segs = path_segments(decl);
+        if segs[1] == "value" {
+            Some(forged.clone())
+        } else {
+            companion.clone()
+        }
+    };
+    let patch_request =
+        match build_patch_request(decl, universe, filter_value.as_ref(), patch_forged.clone()) {
+            PatchRequestPlan::Body(req) => req,
+            PatchRequestPlan::Unavailable(reason) => {
+                rows.push(skip(decl, RO, Method::Patch, reason));
+                return rows;
+            }
+        };
+
+    let sent_path = patch_request["Operations"][0]["path"]
+        .as_str()
+        .unwrap_or("")
+        .to_string();
+    let r3 = safe(client.patch(&format!("{endpoint}/{rid}"), &patch_request)).await;
     let scim_type = r3.scim_type();
     if r3.status == 400 && scim_type.as_deref() == Some("mutability") {
-        rows.push(pass(
+        rows.push(readonly_patch_outcome(
             decl,
-            RO,
-            Method::Patch,
+            Verdict::Pass,
             format!(
-                "status=400 scimType=mutability; PATCH of readOnly attribute rejected per RFC \
-                 7644 §3.5.2 / Table 9's mutability row: {}",
+                "PATCH path={sent_path:?}: status=400 scimType=mutability; PATCH of readOnly \
+                 attribute rejected per RFC 7644 §3.5.2 / Table 9's mutability row: {}",
                 truncate(&r3.raw, 150)
             ),
+            "status=400 scimType=mutability",
         ));
     } else if r3.status == 400 {
         let st = scim_type.as_deref().unwrap_or("none");
-        rows.push(fail(
+        rows.push(readonly_patch_outcome(
             decl,
-            RO,
-            Method::Patch,
+            Verdict::Fail,
             format!(
-                "status=400 scimType={st}; rejected but with the wrong scimType -- RFC 7644 \
-                 §3.5.2 / Table 9 requires \"mutability\": {}",
+                "PATCH path={sent_path:?}: status=400 scimType={st}; rejected but with the \
+                 wrong scimType -- RFC 7644 §3.5.2 / Table 9 requires \"mutability\": {}",
                 truncate(&r3.raw, 150)
             ),
+            format!("status=400 scimType={st}"),
         ));
     } else if is_2xx(r3.status) {
         let (ok3, val3) = get_attr(&body_of(&r3), decl);
-        if !ok3 || val3 != forged {
-            rows.push(fail(
+        if !ok3 || val3 != patch_forged {
+            rows.push(readonly_patch_outcome(
                 decl,
-                RO,
-                Method::Patch,
+                Verdict::Fail,
                 format!(
-                    "status={} ignored; forged={forged:?} silently dropped (actual={val3:?} \
-                     present={ok3}) instead of being rejected with 400 scimType=mutability per \
-                     RFC 7644 §3.5.2",
+                    "PATCH path={sent_path:?}: status={} ignored; forged={patch_forged:?} \
+                     silently dropped (actual={val3:?} present={ok3}) instead of being rejected \
+                     with 400 scimType=mutability per RFC 7644 §3.5.2",
                     r3.status
                 ),
+                format!("status={} ignored", r3.status),
             ));
         } else {
-            rows.push(fail(
+            rows.push(readonly_patch_outcome(
                 decl,
-                RO,
-                Method::Patch,
+                Verdict::Fail,
                 format!(
-                    "status={} applied; forged value {forged:?} took effect on PATCH instead of \
-                     being rejected with 400 scimType=mutability per RFC 7644 §3.5.2",
+                    "PATCH path={sent_path:?}: status={} applied; forged value {patch_forged:?} \
+                     took effect on PATCH instead of being rejected with 400 scimType=mutability \
+                     per RFC 7644 §3.5.2",
                     r3.status
                 ),
+                format!("status={} applied", r3.status),
             ));
         }
     } else {
@@ -635,11 +837,66 @@ async fn exec_readonly(
 
 // ------------------------------------------------------------- immutable
 
+/// Builds the baseline creation payload `exec_immutable`'s `PostCreate` leg
+/// sends: `decl`'s own valid value everywhere except `Group.members.*`,
+/// where a single synthetic member element is built instead (so `.value`,
+/// `.$ref`, `.type` all get a structurally well-formed element to live in).
+/// Returns `(payload, value_actually_placed, member_filter_value)`:
+/// `value_actually_placed` is what a caller should compare the response
+/// against (it may differ from the `valid_val` passed in -- see the
+/// `$ref` case below); `member_filter_value` is the element's identifying
+/// `members.value`, if this created one, for a later PATCH to filter on
+/// (see `exec_immutable_patch_change` / `build_patch_request`).
+///
+/// `companion_id` stands in for the real user id a live run creates via
+/// `fresh_user_id`; `None` mirrors that creation failing, which (like the
+/// live code) produces a payload with no member `value` set at all.
+pub fn immutable_post_payload(
+    decl: &AttrDecl,
+    mut valid_val: Value,
+    companion_id: Option<&str>,
+) -> (Value, Value, Option<Value>) {
+    let mut payload = make_baseline(decl.resource);
+    let mut member_filter_value: Option<Value> = None;
+    if is_group_member_subattr(decl) && decl.last() != "value" {
+        let sub = path_segments(decl)[1];
+        // Resolve `valid_val` to its final form *before* it's written into
+        // `elem` below -- `$ref` must reference the real member we're
+        // about to mint, not the placeholder `valid_value_for` produced
+        // before a real id existed. Building `elem` from the stale value
+        // would send a `$ref` naming a nonexistent user while `value` (and
+        // the caller's subsequent `values_match` comparison against the
+        // returned `value_actually_placed`) referenced the real one -- a
+        // request/assertion mismatch this deliverable's targeting
+        // invariant is meant to catch (it was a real bug here before this
+        // extraction: `elem` used to be built from the stale value).
+        if decl.last() == "$ref" {
+            if let Some(id) = companion_id {
+                valid_val = json!(format!("/Users/{id}"));
+            }
+        }
+        let mut elem = serde_json::Map::new();
+        elem.insert(sub.to_string(), valid_val.clone());
+        if let Some(id) = companion_id {
+            elem.insert("value".to_string(), json!(id));
+            member_filter_value = Some(json!(id));
+        }
+        payload["members"] = json!([Value::Object(elem)]);
+    } else {
+        set_attr(&mut payload, decl, valid_val.clone());
+        if decl.last() == "value" {
+            member_filter_value = Some(valid_val.clone());
+        }
+    }
+    (payload, valid_val, member_filter_value)
+}
+
 async fn exec_immutable(
     decl: &AttrDecl,
     client: &ScimClient,
     bk: &mut Bookkeeping,
     patch_skip: Option<Outcome>,
+    universe: &[&AttrDecl],
 ) -> Vec<Outcome> {
     use Characteristic::MutabilityImmutable as IM;
 
@@ -651,24 +908,13 @@ async fn exec_immutable(
         }
     }
 
-    let mut payload = make_baseline(decl.resource);
-    if is_group_member_subattr(decl) && decl.last() != "value" {
-        let sub = path_segments(decl)[1];
-        let mut elem = serde_json::Map::new();
-        elem.insert(sub.to_string(), valid_val.clone());
-        let real_id = fresh_user_id(client, bk).await;
-        if let Some(id) = &real_id {
-            elem.insert("value".to_string(), json!(id));
-        }
-        payload["members"] = json!([Value::Object(elem)]);
-        if decl.last() == "$ref" {
-            if let Some(id) = &real_id {
-                valid_val = json!(format!("/Users/{id}"));
-            }
-        }
+    let real_id = if is_group_member_subattr(decl) && decl.last() != "value" {
+        fresh_user_id(client, bk).await
     } else {
-        set_attr(&mut payload, decl, valid_val.clone());
-    }
+        None
+    };
+    let (payload, valid_val, member_filter_value) =
+        immutable_post_payload(decl, valid_val, real_id.as_deref());
 
     let r = safe(client.post(endpoint, &payload)).await;
     if !is_2xx(r.status) {
@@ -711,7 +957,17 @@ async fn exec_immutable(
 
     match patch_skip {
         Some(gated) => rows.push(gated),
-        None => rows.push(exec_immutable_patch_change(decl, client, &rid, endpoint).await),
+        None => rows.push(
+            exec_immutable_patch_change(
+                decl,
+                client,
+                &rid,
+                endpoint,
+                universe,
+                member_filter_value.as_ref(),
+            )
+            .await,
+        ),
     }
     rows.push(exec_immutable_put_change(decl, client, &rid, endpoint).await);
     rows
@@ -722,15 +978,19 @@ async fn exec_immutable_patch_change(
     client: &ScimClient,
     rid: &str,
     endpoint: &str,
+    universe: &[&AttrDecl],
+    filter_value: Option<&Value>,
 ) -> Outcome {
     use Characteristic::MutabilityImmutable as IM;
 
     let changed = forged_value_for(decl);
-    let r2 = safe(client.patch(
-        &format!("{endpoint}/{rid}"),
-        &patch_body(decl, changed.clone()),
-    ))
-    .await;
+    let request = match build_patch_request(decl, universe, filter_value, changed.clone()) {
+        PatchRequestPlan::Body(req) => req,
+        PatchRequestPlan::Unavailable(reason) => {
+            return skip(decl, IM, Method::PatchChange, reason)
+        }
+    };
+    let r2 = safe(client.patch(&format!("{endpoint}/{rid}"), &request)).await;
     if r2.status == 400 || r2.status == 409 {
         pass(
             decl,
@@ -1232,7 +1492,7 @@ async fn exec_returned_never(
 /// The first writable sub-attribute of a top-level complex attribute (JSON
 /// declaration order), used to exercise `type_valid` for attributes whose
 /// own value is never a bare scalar (`checks.py`'s decomposition branch).
-fn first_writable_subattr<'a>(
+pub fn first_writable_subattr<'a>(
     universe: &[&'a AttrDecl],
     parent: &AttrDecl,
 ) -> Option<&'a AttrDecl> {
@@ -1657,16 +1917,21 @@ pub async fn run_cells(client: &mut ScimClient, cells: &[Cell]) -> Vec<Outcome> 
             Characteristic::CaseExact => 4,
             Characteristic::Uniqueness => 5,
             Characteristic::ReturnedNever => 6,
-            // `crate::probes` produces these directly, never via
-            // `cells_from_decls` -> `run_cells`.
+            // `crate::probes` / `crate::templates` produce these directly,
+            // never via `cells_from_decls` -> `run_cells`.
             Characteristic::ProbeMetaDatetime
             | Characteristic::ProbeEmptyMembersShape
             | Characteristic::ProbeUserGroupsPresence
             | Characteristic::ProbeGroupMembersFilter
             | Characteristic::ProbeGroupDisplaynameFilter
             | Characteristic::ProbePatchReplaceEmptyArray
-            | Characteristic::ProbePatchReplaceEmptyValue => {
-                unreachable!("probe characteristics never appear in cells_from_decls output")
+            | Characteristic::ProbePatchReplaceEmptyValue
+            | Characteristic::LedgerP27Projection
+            | Characteristic::LedgerP26Status
+            | Characteristic::LedgerP23Sequence
+            | Characteristic::LedgerP24Conditional
+            | Characteristic::LedgerP25Atomicity => {
+                unreachable!("probe/ledger characteristics never appear in cells_from_decls output")
             }
         }
     }
@@ -1707,10 +1972,10 @@ pub async fn run_cells(client: &mut ScimClient, cells: &[Cell]) -> Vec<Outcome> 
         });
         let rows: Vec<Outcome> = match characteristic {
             Characteristic::MutabilityReadOnly => {
-                exec_readonly(decl, client, &mut bk, patch_skip).await
+                exec_readonly(decl, client, &mut bk, patch_skip, &universe).await
             }
             Characteristic::MutabilityImmutable => {
-                exec_immutable(decl, client, &mut bk, patch_skip).await
+                exec_immutable(decl, client, &mut bk, patch_skip, &universe).await
             }
             Characteristic::Required => exec_required(decl, client, &mut bk).await,
             Characteristic::CaseExact => exec_caseexact(decl, client, &mut bk).await,
@@ -1727,8 +1992,13 @@ pub async fn run_cells(client: &mut ScimClient, cells: &[Cell]) -> Vec<Outcome> 
             | Characteristic::ProbeGroupMembersFilter
             | Characteristic::ProbeGroupDisplaynameFilter
             | Characteristic::ProbePatchReplaceEmptyArray
-            | Characteristic::ProbePatchReplaceEmptyValue => {
-                unreachable!("probe characteristics never appear in cells_from_decls output")
+            | Characteristic::ProbePatchReplaceEmptyValue
+            | Characteristic::LedgerP27Projection
+            | Characteristic::LedgerP26Status
+            | Characteristic::LedgerP23Sequence
+            | Characteristic::LedgerP24Conditional
+            | Characteristic::LedgerP25Atomicity => {
+                unreachable!("probe/ledger characteristics never appear in cells_from_decls output")
             }
         };
         debug_assert_eq!(

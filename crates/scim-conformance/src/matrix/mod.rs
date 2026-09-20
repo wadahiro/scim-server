@@ -6,6 +6,19 @@ pub use cells::{
     Characteristic, Method,
 };
 pub use exec::run_cells;
+// Pure request-construction helpers, exposed so
+// `tests/conformance_schema_matrix.rs`'s targeting invariant can build
+// exactly the same requests the executors above send, rather than
+// reimplementing (and risking drifting from) that logic. See
+// `exec`'s "precise PATCH targeting" section for the soundness contract
+// these are part of.
+pub use exec::{
+    build_patch_request, container_is_readonly, dotted_path, first_writable_subattr,
+    forged_value_for, get_attr, immutable_post_payload, make_baseline, patch_body, patch_path,
+    patch_targets_decl_precisely, patch_value_for, path_segments, set_attr,
+    set_attr_with_companion, valid_value_for, value_filtered_patch_request, values_match,
+    wrong_value_for, PatchRequestPlan, ENTERPRISE_URN,
+};
 
 use serde::Serialize;
 
@@ -47,10 +60,24 @@ pub struct Outcome {
     pub detail: String,
     /// A short canonical description of what was actually observed (e.g.
     /// `"rfc3339"`, `"epoch"`, `"status=400"`), set by the protocol probes
-    /// in [`crate::probes`]. `None` for schema-matrix cells (see
-    /// `crate::matrix::exec`), which describe everything in `detail`
+    /// in [`crate::probes`]. `None` for almost every schema-matrix cell
+    /// (see `crate::matrix::exec`), which describe everything in `detail`
     /// instead; skipped so the schema-matrix golden fixture (which predates
-    /// this field) still compares equal.
+    /// this field) still compares equal. The one schema-matrix exception is
+    /// `mutability_readOnly`'s PATCH judgement (RFC 7644 §3.5.2), which
+    /// also sets this -- the golden fixture excludes those rows from its
+    /// comparison entirely (see `tests/conformance_schema_matrix.rs`).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub observed: Option<String>,
+    /// Additional RFC citations beyond `basis` (T10's ledger-generated
+    /// checks: e.g. a projection cell exercised through POST/PUT cites its
+    /// own requirement's basis (§3.5.2) plus a secondary citation to
+    /// §3.9's general rule). Empty for almost every schema-matrix cell and
+    /// probe, which cite exactly one basis; skipped when empty so the
+    /// schema-matrix golden fixture (which predates this field) still
+    /// compares equal. The one schema-matrix exception is
+    /// `mutability_readOnly`'s PATCH judgement, which cites §3.5.2 as its
+    /// primary basis plus Table 9's `mutability` row (§3.12) here.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub secondary: Vec<Basis>,
 }

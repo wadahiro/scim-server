@@ -68,6 +68,7 @@ impl ProbeKey {
             basis: basis::for_characteristic(self.characteristic),
             detail: detail.into(),
             observed,
+            secondary: Vec::new(),
         }
     }
 }
@@ -254,6 +255,15 @@ async fn probe_user_groups_presence(client: &ScimClient, bk: &mut Bookkeeping) -
 /// `group_displayname_filter`: 200 with the expected Group present ->
 /// PASS; a 400 rejection -> FAIL (`status=400`); 200 without it -> FAIL
 /// (`missing`).
+///
+/// Filtering itself is OPTIONAL (RFC 7644 §3.4.2.2, L926: "Filtering is an
+/// OPTIONAL parameter for SCIM service providers"), discoverable via
+/// `ServiceProviderConfig`'s `filter.supported` (same section, L927-929).
+/// A provider that has explicitly declared `filter.supported: false` is
+/// not violating anything by rejecting *any* filter, this one included --
+/// callers gate on that (`Capability::Filter`) before calling this
+/// function, so a 400 that reaches here is judged against a provider that
+/// (at minimum) hasn't disclaimed filtering altogether.
 async fn run_group_filter_probe(
     client: &ScimClient,
     key: &ProbeKey,
@@ -307,7 +317,22 @@ async fn run_group_filter_probe(
 /// chooses not to support. This exact spelling,
 /// `members[value eq "<id>"]`, is this server's documented Group-members
 /// filter (`CLAUDE.md`, `support_group_members_filter`).
-async fn probe_group_members_filter(client: &ScimClient, bk: &mut Bookkeeping) -> Outcome {
+///
+/// Filtering as a whole is OPTIONAL (§3.4.2.2 L926) and its support is
+/// meant to be discovered via `ServiceProviderConfig.filter.supported`
+/// (§3.4.2.2 L927-929), so a provider that has explicitly advertised
+/// `filter.supported: false` is not violating this rule by rejecting this
+/// filter -- gated on `Capability::Filter` (`caps`) before this probe
+/// sends anything, the same pattern `matrix::capability::gate` uses for
+/// PATCH-family cells. Distinct from this server's own
+/// `support_group_members_filter` compatibility knob, which has no RFC
+/// discovery mechanism at all and so cannot be gated on generically by a
+/// conformance tool meant to run against any SCIM server.
+async fn probe_group_members_filter(
+    client: &ScimClient,
+    bk: &mut Bookkeeping,
+    caps: &Capabilities,
+) -> Outcome {
     let key = ProbeKey {
         resource: Resource::Group,
         attribute: "members",
@@ -315,6 +340,9 @@ async fn probe_group_members_filter(client: &ScimClient, bk: &mut Bookkeeping) -
         characteristic: Characteristic::ProbeGroupMembersFilter,
         method: Method::Get,
     };
+    if caps.get(Capability::Filter) == Some(false) {
+        return key.skip("filter.supported=false");
+    }
 
     let Some(uid) = fresh_user_id(client, bk).await else {
         return key.error("could not create fixture User");
@@ -338,10 +366,14 @@ async fn probe_group_members_filter(client: &ScimClient, bk: &mut Bookkeeping) -
     run_group_filter_probe(client, &key, &filter, &gid).await
 }
 
-/// RFC 7644 §3.4.2.2, same rule as [`probe_group_members_filter`], for a
-/// `displayName eq "<name>"` filter
+/// RFC 7644 §3.4.2.2, same rule (and same `filter.supported` gating) as
+/// [`probe_group_members_filter`], for a `displayName eq "<name>"` filter
 /// (`support_group_displayname_filter`).
-async fn probe_group_displayname_filter(client: &ScimClient, bk: &mut Bookkeeping) -> Outcome {
+async fn probe_group_displayname_filter(
+    client: &ScimClient,
+    bk: &mut Bookkeeping,
+    caps: &Capabilities,
+) -> Outcome {
     let key = ProbeKey {
         resource: Resource::Group,
         attribute: "displayName",
@@ -349,6 +381,9 @@ async fn probe_group_displayname_filter(client: &ScimClient, bk: &mut Bookkeepin
         characteristic: Characteristic::ProbeGroupDisplaynameFilter,
         method: Method::Get,
     };
+    if caps.get(Capability::Filter) == Some(false) {
+        return key.skip("filter.supported=false");
+    }
 
     let display_name = format!("g-{}", short_uid());
     let payload = json!({ "schemas": [GROUP_URN], "displayName": display_name });
@@ -581,8 +616,8 @@ pub async fn run_all(client: &mut ScimClient) -> Vec<Outcome> {
         probe_meta_datetime(client, &mut bk).await,
         probe_empty_members_shape(client, &mut bk).await,
         probe_user_groups_presence(client, &mut bk).await,
-        probe_group_members_filter(client, &mut bk).await,
-        probe_group_displayname_filter(client, &mut bk).await,
+        probe_group_members_filter(client, &mut bk, &caps).await,
+        probe_group_displayname_filter(client, &mut bk, &caps).await,
         probe_patch_replace_empty_array(client, &mut bk, &caps).await,
         probe_patch_replace_empty_value(client, &mut bk, &caps).await,
     ];

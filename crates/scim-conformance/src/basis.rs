@@ -158,6 +158,46 @@ pub const PROBE_PATCH_REPLACE: Basis = Basis {
     lines: "rfc7644.txt:2372-2373",
 };
 
+// ---------------------------------------------------------- T10 ledger checks
+//
+// Secondary citations attached by `crate::templates` alongside a
+// requirement's own (ledger-derived) basis. Unlike the ledger-derived
+// primary basis (`crate::requirement::basis_from_span`), these cite RFC
+// text with no corresponding ledger entry, so their line numbers are
+// hand-verified against `spec/rfc/rfc7644.txt` the same way every other
+// constant in this file is.
+
+/// RFC 7644 §3.9 "Additional Operation Response Parameters"
+/// (`rfc7644.txt:3571`): "Clients MAY request a partial resource
+/// representation on any operation that returns a resource within the
+/// response by specifying either of the mutually exclusive URL query
+/// parameters "attributes" or "excludedAttributes" ... attributes  When
+/// specified ... each resource returned MUST contain the minimum set of
+/// resource attributes and any attributes or sub-attributes explicitly
+/// requested by the "attributes" parameter." The general rule p27's PATCH-
+/// specific sentence ("subject to the 'attributes' query parameter (see
+/// Section 3.9)") generalizes to every operation that returns a resource,
+/// including POST and PUT -- attached as a secondary basis on the
+/// projection template's POST/PUT cells.
+pub const PROJECTION_SEC_3_9: Basis = Basis {
+    doc: "RFC 7644",
+    section: "3.9",
+    lines: "rfc7644.txt:3591-3600",
+};
+
+/// RFC 7644 §3.12 Table 9's `uniqueness` row (`rfc7644.txt:3911`, "Table 9:
+/// SCIM Detail Error Keyword Values"): "uniqueness | One or more of the
+/// attribute values are already in use or are reserved. | POST (Create -
+/// Section 3.3), PUT (Section 3.5.1), PATCH (Section 3.5.2)". Names the
+/// concrete `scimType` and the {POST, PUT, PATCH} applicability p26's
+/// "return ... a JSON detail error response as defined in Section 3.12"
+/// defers to -- attached as a secondary basis by the status template.
+pub const STATUS_TABLE9_UNIQUENESS: Basis = Basis {
+    doc: "RFC 7644",
+    section: "3.12",
+    lines: "rfc7644.txt:3839-3844",
+};
+
 /// RFC 7644 §3.12 Table 9's `mutability` row (`rfc7644.txt:3845`): "The
 /// attempted modification is not compatible with the target attribute's
 /// mutability or current state ... | PUT (Section 3.5.1), PATCH (Section
@@ -206,5 +246,10 @@ pub fn for_characteristic(c: crate::matrix::Characteristic) -> Basis {
         ProbeUserGroupsPresence => PROBE_USER_GROUPS_PRESENCE,
         ProbeGroupMembersFilter | ProbeGroupDisplaynameFilter => PROBE_GROUP_FILTER,
         ProbePatchReplaceEmptyArray | ProbePatchReplaceEmptyValue => PROBE_PATCH_REPLACE,
+        LedgerP27Projection | LedgerP26Status | LedgerP23Sequence | LedgerP24Conditional
+        | LedgerP25Atomicity => unreachable!(
+            "ledger characteristics carry their own per-instance basis (crate::requirement) \
+             and are never resolved through this fixed table"
+        ),
     }
 }

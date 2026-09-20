@@ -1,16 +1,24 @@
 #!/usr/bin/env ruby
 # 台帳の quote が lines の範囲から逐語で取れることを検証する。
 # 「逐語」を約束ではなく検査済みの性質にするための唯一の仕掛け。
+#
+# `lines` は生ファイル（spec/rfc/<doc>.txt、無改変で同梱されたもの）の行番号
+# (tools/prototype/relocate_ledger.py が clean-*.txt からの行範囲をここへ
+# 変換済み)。よってここではページ furniture（ヘッダ/フッタ行・フォームフィード
+# を含む行）を範囲から除いたうえで比較する — clean-*.txt は参照しない。
 require 'yaml'
 RFC_DIR = ARGV[1] or abort "usage: verify-quotes.rb <ledger.yaml> <rfc-dir>"
 led = YAML.load_file(ARGV[0])
-src = File.readlines(File.join(RFC_DIR, "clean-#{led['doc'].split.last}.txt"), chomp: true)
+FURNITURE = /^(RFC \d+\s|Hunt,|.*\[Page \d+\]\s*$)/
+src = File.readlines(File.join(RFC_DIR, "#{led['doc'].downcase.gsub(' ', '')}.txt"), chomp: true)
 norm = ->(s) { s.gsub(/\s+/, ' ').strip }
+furniture = ->(l) { l =~ FURNITURE || l.include?("\f") }
 fail_n = 0
 led['entries'].each do |e|
   q = e['quote'] or next
   a, b = e['lines']
-  body = norm.call(src[(a - 1)..(b - 1)].join(' '))
+  span = src[(a - 1)..(b - 1)].reject { |l| furniture.call(l) }
+  body = norm.call(span.join(' '))
   if body.include?(norm.call(q))
     puts "  ok   #{e['id']}  L#{a}-#{b}"
   else

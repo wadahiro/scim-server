@@ -1,23 +1,32 @@
-# NOTE (added when vendoring into spec/ledger/): the `lines` values below were
-# recorded against a reflowed/"clean" working copy of RFC 7644 (clean-7644.txt),
-# not against spec/rfc/rfc7644.txt (the verbatim vendored copy this repository
-# ships). They are NOT yet valid line numbers into spec/rfc/rfc7644.txt.
-# Converting them to raw-file line numbers and validating every `quote` against
-# spec/rfc/rfc7644.txt is future work, not yet done; do not consume `lines`
-# from this file as raw-file coordinates until that conversion lands.
+# NOTE: the `lines` values below are raw-file coordinates into the
+# verbatim, vendored spec/rfc/rfc7644.txt (never into a reflowed/"clean"
+# working copy). They were relocated from a working copy recorded against a
+# reflowed clean-7644.txt (page furniture -- lines matching
+# `^(RFC \d+\s|Hunt,|.*\[Page \d+\]\s*$)` or containing form-feed, plus some
+# collapsed blank runs -- stripped out) by
+# tools/prototype/relocate_ledger.py, which builds a clean->raw line map
+# with `difflib.SequenceMatcher` over both files' lines and rewrites every
+# `lines:` value through that map. Every entry's `quote` was then checked to
+# occur, whitespace-normalized, inside its relocated raw span with page
+# furniture removed; see that run's output for the full per-entry mapping.
 #
 # RFC 7644 §3.5.2 "Modifying with PATCH" — 網羅台帳（試作）
 #
-# 単位 = 段落。lines は scratchpad/rfc/clean-7644.txt の行範囲（一次識別子）。
-# §3.5.2 本文 L1377-L1508。全 27 段落（生の分割では 28 だが p22 は
+# 単位 = 段落。lines は spec/rfc/rfc7644.txt（生ファイル）の行範囲（一次識別子）。
+# §3.5.2 本文 L1780-L1966。全 27 段落（生の分割では 28 だが p22 は
 # ページ境界由来の偽の空行で割れていたため結合した。§「既知の前処理欠陥」参照）。
 #
 # class:    definitional | explanatory | example | meta
-# coverage: verified-ok | verified-violation | unverified | n/a
+# coverage: verified-ok | verified-violation | verified-fixed | unverified | n/a
+#   verified-fixed: was verified-violation when this entry's finding was
+#   discovered; the server has since been fixed (see the finding's
+#   `fixed_in`) and re-verified conformant. Kept distinct from
+#   verified-ok so the history (this generator found a real, then-present
+#   violation) isn't silently erased by flipping the status back.
 
 section: "3.5.2"
 doc: RFC 7644
-lines: [1377, 1508]
+lines: [1780, 1966]
 paragraphs_total: 27
 
 tally:
@@ -27,10 +36,10 @@ tally:
   meta: 7
 
 entries:
-  - {id: p01, lines: [1377, 1377], class: meta, note: 節見出し}
+  - {id: p01, lines: [1780, 1780], class: meta, note: 節見出し}
 
   - id: p02
-    lines: [1379, 1383]
+    lines: [1782, 1786]
     keywords: [OPTIONAL]          # ← 7語の正規表現では取りこぼす
     class: definitional
     quote: "HTTP PATCH is an OPTIONAL server function"
@@ -38,10 +47,10 @@ entries:
     checks: [spc.patch_supported_matches_behaviour]
     coverage: unverified
 
-  - {id: p03, lines: [1385, 1389], class: explanatory, note: "JSON Patch (RFC 6902) を踏まえた一般形の説明"}
+  - {id: p03, lines: [1799, 1803], class: explanatory, note: "JSON Patch (RFC 6902) を踏まえた一般形の説明"}
 
   - id: p04
-    lines: [1391, 1392]
+    lines: [1805, 1806]
     keywords: [MUST]
     class: definitional
     quote: |
@@ -52,7 +61,7 @@ entries:
     coverage: unverified
 
   - id: p05
-    lines: [1394, 1399]
+    lines: [1808, 1813]
     keywords: [MUST, MAY]
     class: definitional
     quote: |
@@ -65,12 +74,12 @@ entries:
     checks: [patch.operations_required, patch.exactly_one_op, patch.op_vocabulary]
     coverage: unverified
 
-  - {id: p06, lines: [1401, 1402], class: meta}
-  - {id: p07, lines: [1404, 1421], class: example, note: "Figure 6 — PATCH リクエスト本文の JSON 例。golden fixture 候補"}
-  - {id: p08, lines: [1423, 1423], class: meta, note: Figure 6 キャプション}
+  - {id: p06, lines: [1815, 1816], class: meta}
+  - {id: p07, lines: [1818, 1835], class: example, note: "Figure 6 — PATCH リクエスト本文の JSON 例。golden fixture 候補"}
+  - {id: p08, lines: [1837, 1837], class: meta, note: Figure 6 キャプション}
 
   - id: p09
-    lines: [1425, 1428]
+    lines: [1855, 1858]
     keywords: [REQUIRED, OPTIONAL]  # ← 7語では取りこぼす
     class: definitional
     quote: 'The "path" attribute value is a String containing an attribute path'
@@ -78,12 +87,12 @@ entries:
     checks: [patch.path_required_for_remove, patch.path_optional_for_add_replace]
     coverage: unverified
 
-  - {id: p10, lines: [1430, 1430], class: meta}
-  - {id: p11, lines: [1432, 1432], class: example, note: "ABNF: PATH = attrPath / valuePath [subAttr] — パーサのテストベクタ源"}
-  - {id: p12, lines: [1434, 1434], class: meta, note: Figure 7 キャプション}
+  - {id: p10, lines: [1860, 1860], class: meta}
+  - {id: p11, lines: [1862, 1862], class: example, note: "ABNF: PATH = attrPath / valuePath [subAttr] — パーサのテストベクタ源"}
+  - {id: p12, lines: [1864, 1864], class: meta, note: Figure 7 キャプション}
 
   - id: p13
-    lines: [1436, 1438]
+    lines: [1866, 1868]
     class: explanatory
     quote: |
       The ABNF rules "attrPath", "valuePath", and "subAttr" are defined in
@@ -97,16 +106,16 @@ entries:
       Section 3.10 apply"）にある。
     refs: ["3.4.2.2"]
 
-  - {id: p14, lines: [1440, 1440], class: meta}
-  - {id: p15, lines: [1442, 1442], class: example, note: '"path":"members"'}
-  - {id: p16, lines: [1444, 1444], class: example, note: '"path":"name.familyName"'}
-  - {id: p17, lines: [1446, 1446], class: example, note: '"path":"addresses[type eq \"work\"]"'}
-  - {id: p18, lines: [1448, 1449], class: example, note: valuePath + value}
-  - {id: p19, lines: [1451, 1452], class: example, note: valuePath + subAttr}
-  - {id: p20, lines: [1454, 1454], class: meta, note: Figure 8 キャプション}
+  - {id: p14, lines: [1870, 1870], class: meta}
+  - {id: p15, lines: [1872, 1872], class: example, note: '"path":"members"'}
+  - {id: p16, lines: [1874, 1874], class: example, note: '"path":"name.familyName"'}
+  - {id: p17, lines: [1876, 1876], class: example, note: '"path":"addresses[type eq \"work\"]"'}
+  - {id: p18, lines: [1878, 1879], class: example, note: valuePath + value}
+  - {id: p19, lines: [1881, 1882], class: example, note: valuePath + subAttr}
+  - {id: p20, lines: [1884, 1884], class: meta, note: Figure 8 キャプション}
 
   - id: p21
-    lines: [1456, 1464]
+    lines: [1886, 1894]
     keywords: [MUST, MUST NOT, MAY, SHALL]
     class: definitional
     quote: |
@@ -122,7 +131,7 @@ entries:
     refs: ["RFC7643 2.2", "RFC7643 2.3", "3.12"]
 
   - id: p22
-    lines: [1466, 1479]              # 生の分割では 1466-1472 と 1474-1479 に割れる
+    lines: [1896, 1916]              # 生の分割では 1896-1902 と 1911-1916 に割れる
     keywords: [MUST, SHALL, MAY]
     class: definitional
     quote: |
@@ -141,7 +150,7 @@ entries:
     refs: ["3.10"]
 
   - id: p23
-    lines: [1481, 1487]
+    lines: [1918, 1924]
     keywords: []                    # ★ 平文。語彙抽出では要件として現れない
     class: definitional
     quote: |
@@ -157,7 +166,7 @@ entries:
       p24 と併せて「複数 primary は last-wins・エラーにしない」の根拠。
 
   - id: p24
-    lines: [1489, 1492]
+    lines: [1926, 1929]
     keywords: [SHALL]
     class: definitional
     quote: |
@@ -171,7 +180,7 @@ entries:
     note: "「PATCH の複数 primary はどちらが勝つか」に対する仕様の明示的な答え"
 
   - id: p25
-    lines: [1494, 1497]
+    lines: [1931, 1934]
     keywords: [SHALL, MUST]
     class: definitional
     quote: |
@@ -184,7 +193,7 @@ entries:
     coverage: unverified
 
   - id: p26
-    lines: [1499, 1500]
+    lines: [1936, 1937]
     keywords: [SHALL]
     class: definitional
     quote: |
@@ -196,7 +205,7 @@ entries:
     refs: ["3.12"]
 
   - id: p27
-    lines: [1502, 1507]
+    lines: [1939, 1944]
     keywords: [MUST, MAY]
     class: definitional
     quote: |
@@ -208,15 +217,20 @@ entries:
       OK if the "attributes" parameter is specified in the request.
     testable: yes
     checks: [patch.returns_200_with_body, patch.honours_attributes_param]
-    coverage: verified-violation
+    coverage: verified-fixed
     refs: ["3.9"]
     finding:
       id: V-18
+      status: fixed
+      fixed_in: "#72"
       summary: >-
         リソースを返す POST / PUT / PATCH が attributes / excludedAttributes
-        クエリパラメータを完全に無視する。
+        クエリパラメータを完全に無視する。PR #72 で修正済み；
+        tests/conformance_ledger_matrix.rs の
+        projection_is_honoured_on_every_resource_returning_method が
+        リグレッションガードとして残す。
       basis: |
-        RFC 7644 §3.9 (clean-7644.txt L2668-2675):
+        RFC 7644 §3.9 (rfc7644.txt L3591-3600):
           "Clients MAY request a partial resource representation on any
            operation that returns a resource within the response by specifying
            either of the mutually exclusive URL query parameters "attributes" or

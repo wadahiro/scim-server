@@ -139,6 +139,7 @@ fn skip_outcome(cell: &Cell, cap: Capability) -> Outcome {
         basis: cell.basis,
         detail: format!("{}.supported=false", cap.name()),
         observed: None,
+        secondary: Vec::new(),
     }
 }
 

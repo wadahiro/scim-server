@@ -44,6 +44,20 @@ pub enum Characteristic {
     ProbePatchReplaceEmptyArray,
     #[serde(rename = "probe_patch_replace_empty_value")]
     ProbePatchReplaceEmptyValue,
+    // -- T10 ledger-generated checks (`crate::templates`), produced
+    // directly from a `Requirement` -- like the probes above, these never
+    // appear in `cells_from_decls`'s output. Named `ledger_<id>_<shape>`
+    // per entry id in `spec/ledger/rfc7644-3.5.2.yaml`.
+    #[serde(rename = "ledger_p27_projection")]
+    LedgerP27Projection,
+    #[serde(rename = "ledger_p26_status")]
+    LedgerP26Status,
+    #[serde(rename = "ledger_p23_sequence")]
+    LedgerP23Sequence,
+    #[serde(rename = "ledger_p24_conditional")]
+    LedgerP24Conditional,
+    #[serde(rename = "ledger_p25_atomicity")]
+    LedgerP25Atomicity,
 }
 
 /// The "method" column. Most values are literal HTTP methods, but several

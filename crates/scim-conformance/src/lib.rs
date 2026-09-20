@@ -14,9 +14,13 @@
 pub mod basis;
 pub mod capability;
 pub mod client;
+pub mod ledger;
 pub mod matrix;
 pub mod probes;
+pub mod requirement;
 pub mod schema;
+pub mod scim_plugin;
+pub mod templates;
 
 pub use basis::Basis;
 pub use capability::{Capabilities, Capability, Gated};
@@ -35,13 +39,47 @@ pub async fn schema_matrix(client: &mut ScimClient) -> Result<Vec<Outcome>, clie
     Ok(matrix::run_cells(client, &cells).await)
 }
 
+/// Generates and runs every check this crate can derive from the RFC 7644
+/// §3.5.2 requirement ledger (T10): loads `spec/ledger/rfc7644-3.5.2.yaml`
+/// ([`ledger::load_rfc7644_3_5_2`]), maps it to [`requirement::Requirement`]s
+/// ([`requirement::requirements_from_ledger`]), and dispatches each one to
+/// its shape's template (`templates::{projection,status,sequence,atomicity,
+/// conditional}`) to expand into cells and execute them. Deterministic
+/// order: the same order `requirements_from_ledger` returns requirements in
+/// (ledger entry order -- p23, p24, p25, p26, p27).
+pub async fn ledger_suite(client: &mut ScimClient) -> Vec<Outcome> {
+    let ledger = ledger::load_rfc7644_3_5_2();
+    let reqs = requirement::requirements_from_ledger(&ledger);
+    let mut outcomes = Vec::new();
+    for req in &reqs {
+        let rows = match req.id.as_str() {
+            "p23" => templates::sequence::run(&templates::sequence::expand(req), client).await,
+            "p24" => {
+                templates::conditional::run(&templates::conditional::expand(req), client).await
+            }
+            "p25" => templates::atomicity::run(&templates::atomicity::expand(req), client).await,
+            "p26" => templates::status::run(&templates::status::expand(req), client).await,
+            "p27" => templates::projection::run(&templates::projection::expand(req), client).await,
+            other => unreachable!(
+                "requirements_from_ledger produced a requirement ({other}) with no template \
+                 dispatch here -- scim_plugin::authored_meta and this match have drifted apart"
+            ),
+        };
+        outcomes.extend(rows);
+    }
+    outcomes
+}
+
 /// Everything this crate can check against a live provider: the
 /// schema-driven matrix ([`schema_matrix`]) plus the protocol probes
-/// ([`probes::run_all`]) that catch what a schema alone can't see (T10c).
-/// Deterministic order: the matrix first (in `decls_from_schemas` order),
-/// then the probes (in the fixed order `probes::run_all` runs them).
+/// ([`probes::run_all`]) that catch what a schema alone can't see (T10c),
+/// plus the ledger-generated checks ([`ledger_suite`], T10). Deterministic
+/// order: the matrix first (in `decls_from_schemas` order), then the
+/// probes (in the fixed order `probes::run_all` runs them), then the
+/// ledger-generated checks (in ledger entry order).
 pub async fn full_suite(client: &mut ScimClient) -> Result<Vec<Outcome>, client::Error> {
     let mut outcomes = schema_matrix(client).await?;
     outcomes.extend(probes::run_all(client).await);
+    outcomes.extend(ledger_suite(client).await);
     Ok(outcomes)
 }

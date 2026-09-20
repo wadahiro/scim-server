@@ -2740,10 +2740,12 @@ name = "scim-conformance"
 version = "0.0.0"
 dependencies = [
  "chrono",
+ "regex",
  "reqwest",
  "rustls",
  "serde",
  "serde_json",
+ "serde_yaml",
  "tokio",
 ]
 
