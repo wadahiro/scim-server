@@ -59,6 +59,18 @@ impl UserInsertProcessor {
         // Clear any client-forged readOnly enterprise-manager sub-attributes.
         Self::strip_readonly_manager_subattributes(&mut user);
 
+        // `groups` is entirely server-computed from the group_memberships
+        // table (RFC 7643 §4.1.2: mutability "readOnly") and a brand-new
+        // user cannot already belong to any group, so a client-submitted
+        // `groups` array in the POST body must never be echoed back.
+        // `find_user_by_id` (used by GET and by the read-back that follows
+        // an update/patch) always recomputes this field from the
+        // membership table rather than trusting stored/submitted JSON, but
+        // nothing re-reads this brand-new user before the create response
+        // is built, so it must be cleared here to match that same
+        // never-trust-client-input behavior.
+        *user.groups_mut() = None;
+
         // RFC 7643 §2.4: de-duplicate (type, value) pairs in multi-valued
         // complex attributes before they are ever stored or echoed back.
         let mut deduped_json = serde_json::to_value(&user).map_err(AppError::Serialization)?;
