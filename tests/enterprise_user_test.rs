@@ -73,7 +73,12 @@ async fn test_enterprise_user_extension_crud() {
         enterprise_data["manager"]["value"],
         "550e8400-e29b-41d4-a716-446655440000"
     );
-    assert_eq!(enterprise_data["manager"]["displayName"], "Jane Smith");
+    // `manager.displayName` is declared `mutability: readOnly` in
+    // `/Schemas` (only `manager.value` is client-settable). RFC 7644 §3.3
+    // requires readOnly attributes in the request body to be ignored, and
+    // this server has no manager-resolution feature to compute a
+    // legitimate value, so the client-forged value must never be echoed.
+    assert!(enterprise_data["manager"]["displayName"].is_null());
 
     // Test retrieving user with Enterprise User extension
     let response = server
@@ -137,7 +142,8 @@ async fn test_enterprise_user_extension_crud() {
         enterprise_data["manager"]["value"],
         "660e8400-e29b-41d4-a716-446655440001"
     );
-    assert_eq!(enterprise_data["manager"]["displayName"], "Bob Johnson");
+    // readOnly per `/Schemas` -- see the POST assertion above.
+    assert!(enterprise_data["manager"]["displayName"].is_null());
 
     // Test PATCH operations on Enterprise User extension
     let patch_data = json!({
@@ -175,7 +181,8 @@ async fn test_enterprise_user_extension_crud() {
         enterprise_data["manager"]["value"],
         "770e8400-e29b-41d4-a716-446655440002"
     );
-    assert_eq!(enterprise_data["manager"]["displayName"], "Alice Williams");
+    // readOnly per `/Schemas` -- see the POST assertion above.
+    assert!(enterprise_data["manager"]["displayName"].is_null());
 }
 
 #[tokio::test]
