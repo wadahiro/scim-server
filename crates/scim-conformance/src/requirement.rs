@@ -132,8 +132,9 @@ fn build_requirement(
 /// throughout this crate as compile-time constants for the schema-driven
 /// matrix and probes). Ledger data isn't known until the embedded YAML is
 /// parsed at runtime, so this leaks a small one-time allocation per
-/// distinct requirement to get a `'static` lifetime -- there are only ever
-/// as many of these as there are requirements (five, today).
+/// distinct requirement to get a `'static` lifetime -- called once per
+/// requirement here (five, today) and again, the same way, for every
+/// `TARGETS`-matched entry in `crate::gen::attrdefs` (38, today).
 pub fn basis_from_span(doc: &str, section: &str, span: (u32, u32)) -> Basis {
     // "RFC 7644" -> "rfc7644.txt", matching the vendored filename in
     // `spec/rfc/` and the existing `basis.rs` constants' convention

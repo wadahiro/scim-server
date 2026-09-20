@@ -10,10 +10,19 @@
 //! against the server ([`matrix::run_cells`]), and returns one
 //! [`matrix::Outcome`] per cell with a verdict and an RFC citation
 //! ([`basis::Basis`]).
+//!
+//! [`checks_from_attrdefs`] ([`gen::attrdefs`]) is a separate, smaller
+//! family: presence checks for RFC 7643's required-member tables
+//! (`ServiceProviderConfig`, `ResourceType`, `Schema`) and RFC 7644
+//! §3.4.2's list-response envelope, against four fixed discovery
+//! endpoints. It doesn't fit the attribute x method matrix shape, so it
+//! returns its own [`gen::attrdefs::AttrdefCheck`] rather than
+//! [`matrix::Outcome`], and isn't part of [`full_suite`].
 
 pub mod basis;
 pub mod capability;
 pub mod client;
+pub mod gen;
 pub mod ledger;
 pub mod matrix;
 pub mod probes;
@@ -25,6 +34,7 @@ pub mod templates;
 pub use basis::Basis;
 pub use capability::{Capabilities, Capability, Gated};
 pub use client::{Auth, ClientConfig, ScimClient};
+pub use gen::attrdefs::{checks_from_attrdefs, AttrdefCheck};
 pub use matrix::{Cell, Characteristic, Method, Outcome, Verdict};
 pub use schema::{decls_from_schemas, AttrDecl};
 
