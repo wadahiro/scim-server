@@ -54,6 +54,7 @@ features = [
 
 
 [dev-dependencies]
+scim-conformance = { path = "crates/scim-conformance" }
 axum-test = "17.3.0"
 tower = { version = "0.5", features = ["util"] }
 http = "1.0"
