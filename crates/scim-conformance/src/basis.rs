@@ -104,6 +104,60 @@ pub const TYPE: Basis = Basis {
     lines: "rfc7643.txt:438",
 };
 
+// ------------------------------------------------------- T10c protocol probes
+//
+// These back `crate::probes`, not the schema-driven matrix above: each cites
+// the RFC text a single non-schema-driven probe checks compliance with.
+
+/// RFC 7643 §2.3.5: "A DateTime value ... MUST be encoded as a valid
+/// xsd:dateTime ... and MUST include both a date and a time." Also see
+/// §3.1's `meta.created`/`lastModified` definitions (`rfc7643.txt:919-925`),
+/// which require those two fields to be a `DateTime`.
+pub const PROBE_META_DATETIME: Basis = Basis {
+    doc: "RFC 7643",
+    section: "2.3.5",
+    lines: "rfc7643.txt:526-529",
+};
+
+/// RFC 7643 §2.5: "Unassigned attributes, the null value, or an empty array
+/// (in the case of a multi-valued attribute) SHALL be considered to be
+/// equivalent in 'state'."
+pub const PROBE_EMPTY_MEMBERS_SHAPE: Basis = Basis {
+    doc: "RFC 7643",
+    section: "2.5",
+    lines: "rfc7643.txt:681-683",
+};
+
+/// RFC 7643 §4.1.2: "groups ... A list of groups to which the user
+/// belongs...". Combined with §7's `returned: default` definition
+/// (`rfc7643.txt:1799-1803`): a `default`-returned attribute with a real
+/// value is expected in the response, not omitted.
+pub const PROBE_USER_GROUPS_PRESENCE: Basis = Basis {
+    doc: "RFC 7643",
+    section: "4.1.2",
+    lines: "rfc7643.txt:1325-1327",
+};
+
+/// RFC 7644 §3.4.2.2: "Clients MAY request a subset of resources by
+/// specifying the 'filter' query parameter ... When specified, only those
+/// resources matching the filter expression SHALL be returned." A
+/// well-formed filter (Table 9's `invalidFilter`, `rfc7644.txt:3821-3826`,
+/// is for syntax the server can't parse) must be processed, not rejected.
+pub const PROBE_GROUP_FILTER: Basis = Basis {
+    doc: "RFC 7644",
+    section: "3.4.2.2",
+    lines: "rfc7644.txt:931-932",
+};
+
+/// RFC 7644 §3.5.2.3 "Replace Operation": "If the target location is a
+/// multi-valued attribute and no filter is specified, the attribute and all
+/// values are replaced."
+pub const PROBE_PATCH_REPLACE: Basis = Basis {
+    doc: "RFC 7644",
+    section: "3.5.2.3",
+    lines: "rfc7644.txt:2372-2373",
+};
+
 /// RFC 7644 §3.12 Table 9's `mutability` row (`rfc7644.txt:3845`): "The
 /// attempted modification is not compatible with the target attribute's
 /// mutability or current state ... | PUT (Section 3.5.1), PATCH (Section
@@ -147,5 +201,10 @@ pub fn for_characteristic(c: crate::matrix::Characteristic) -> Basis {
         Uniqueness => UNIQUENESS,
         ReturnedNever => RETURNED_NEVER,
         TypeWrong | TypeValid => TYPE,
+        ProbeMetaDatetime => PROBE_META_DATETIME,
+        ProbeEmptyMembersShape => PROBE_EMPTY_MEMBERS_SHAPE,
+        ProbeUserGroupsPresence => PROBE_USER_GROUPS_PRESENCE,
+        ProbeGroupMembersFilter | ProbeGroupDisplaynameFilter => PROBE_GROUP_FILTER,
+        ProbePatchReplaceEmptyArray | ProbePatchReplaceEmptyValue => PROBE_PATCH_REPLACE,
     }
 }

@@ -138,6 +138,7 @@ fn skip_outcome(cell: &Cell, cap: Capability) -> Outcome {
         verdict: Verdict::Skip,
         basis: cell.basis,
         detail: format!("{}.supported=false", cap.name()),
+        observed: None,
     }
 }
 

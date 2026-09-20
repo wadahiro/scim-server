@@ -383,6 +383,7 @@ fn outcome(
         verdict,
         basis: basis::basis_for(characteristic, method),
         detail: detail.into(),
+        observed: None,
     }
 }
 
@@ -1134,6 +1135,25 @@ async fn exec_returned_never(
 ) -> Vec<Outcome> {
     use Characteristic::ReturnedNever as RN;
 
+    // A complex container with declared sub-attributes (e.g. `groups` when
+    // a tenant's `include_user_groups: false` makes `/Schemas` advertise it
+    // as `returned: never` -- see `src/resource/schema.rs`) can't be probed
+    // by forging a bare scalar into it the way a leaf attribute can:
+    // `set_attr` assigns the container's own key directly (`payload["groups"]
+    // = <scalar>`), which is not a well-formed value for a multi-valued
+    // complex attribute, and the meaningful "does this leak" question is
+    // already answered per sub-attribute by `mutability_readOnly`'s own
+    // decomposition (`is_container_skip`, `cells::cells_from_decls`).
+    if is_container_skip(decl) {
+        let msg = "complex container with declared sub-attributes; forging a bare scalar into it is not a well-formed probe -- see mutability_readOnly's per-subattribute decomposition instead";
+        return vec![
+            skip(decl, RN, Method::Post, msg),
+            skip(decl, RN, Method::Get, msg),
+            skip(decl, RN, Method::Put, msg),
+            skip(decl, RN, Method::Patch, msg),
+        ];
+    }
+
     let endpoint = resource_endpoint(decl.resource);
     let mut rows = Vec::new();
     let val = json!(format!("S3cr3t-{}!", short_uid()));
@@ -1637,6 +1657,17 @@ pub async fn run_cells(client: &mut ScimClient, cells: &[Cell]) -> Vec<Outcome> 
             Characteristic::CaseExact => 4,
             Characteristic::Uniqueness => 5,
             Characteristic::ReturnedNever => 6,
+            // `crate::probes` produces these directly, never via
+            // `cells_from_decls` -> `run_cells`.
+            Characteristic::ProbeMetaDatetime
+            | Characteristic::ProbeEmptyMembersShape
+            | Characteristic::ProbeUserGroupsPresence
+            | Characteristic::ProbeGroupMembersFilter
+            | Characteristic::ProbeGroupDisplaynameFilter
+            | Characteristic::ProbePatchReplaceEmptyArray
+            | Characteristic::ProbePatchReplaceEmptyValue => {
+                unreachable!("probe characteristics never appear in cells_from_decls output")
+            }
         }
     }
 
@@ -1689,6 +1720,15 @@ pub async fn run_cells(client: &mut ScimClient, cells: &[Cell]) -> Vec<Outcome> 
             }
             Characteristic::TypeWrong | Characteristic::TypeValid => {
                 exec_type(decl, client, &mut bk, &universe).await
+            }
+            Characteristic::ProbeMetaDatetime
+            | Characteristic::ProbeEmptyMembersShape
+            | Characteristic::ProbeUserGroupsPresence
+            | Characteristic::ProbeGroupMembersFilter
+            | Characteristic::ProbeGroupDisplaynameFilter
+            | Characteristic::ProbePatchReplaceEmptyArray
+            | Characteristic::ProbePatchReplaceEmptyValue => {
+                unreachable!("probe characteristics never appear in cells_from_decls output")
             }
         };
         debug_assert_eq!(

@@ -2739,6 +2739,7 @@ dependencies = [
 name = "scim-conformance"
 version = "0.0.0"
 dependencies = [
+ "chrono",
  "reqwest",
  "rustls",
  "serde",

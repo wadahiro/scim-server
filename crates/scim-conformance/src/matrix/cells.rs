@@ -27,6 +27,23 @@ pub enum Characteristic {
     TypeWrong,
     #[serde(rename = "type_valid")]
     TypeValid,
+    // -- T10c protocol probes (`crate::probes`), not schema-matrix cells --
+    // these never appear in `cells_from_decls`'s output, only in `Outcome`s
+    // produced directly by a probe function.
+    #[serde(rename = "probe_meta_datetime")]
+    ProbeMetaDatetime,
+    #[serde(rename = "probe_empty_members_shape")]
+    ProbeEmptyMembersShape,
+    #[serde(rename = "probe_user_groups_presence")]
+    ProbeUserGroupsPresence,
+    #[serde(rename = "probe_group_members_filter")]
+    ProbeGroupMembersFilter,
+    #[serde(rename = "probe_group_displayname_filter")]
+    ProbeGroupDisplaynameFilter,
+    #[serde(rename = "probe_patch_replace_empty_array")]
+    ProbePatchReplaceEmptyArray,
+    #[serde(rename = "probe_patch_replace_empty_value")]
+    ProbePatchReplaceEmptyValue,
 }
 
 /// The "method" column. Most values are literal HTTP methods, but several

@@ -15,6 +15,7 @@ pub mod basis;
 pub mod capability;
 pub mod client;
 pub mod matrix;
+pub mod probes;
 pub mod schema;
 
 pub use basis::Basis;
@@ -32,4 +33,15 @@ pub async fn schema_matrix(client: &mut ScimClient) -> Result<Vec<Outcome>, clie
     let decls = decls_from_schemas(&schemas);
     let cells = matrix::cells_from_decls(&decls);
     Ok(matrix::run_cells(client, &cells).await)
+}
+
+/// Everything this crate can check against a live provider: the
+/// schema-driven matrix ([`schema_matrix`]) plus the protocol probes
+/// ([`probes::run_all`]) that catch what a schema alone can't see (T10c).
+/// Deterministic order: the matrix first (in `decls_from_schemas` order),
+/// then the probes (in the fixed order `probes::run_all` runs them).
+pub async fn full_suite(client: &mut ScimClient) -> Result<Vec<Outcome>, client::Error> {
+    let mut outcomes = schema_matrix(client).await?;
+    outcomes.extend(probes::run_all(client).await);
+    Ok(outcomes)
 }
