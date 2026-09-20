@@ -22,29 +22,48 @@ mod utils;
 use backend::database::DatabaseBackendConfig;
 use backend::{BackendFactory, ScimBackend};
 use config::AppConfig;
+use scim_server::cli::{Args, Command, DiagnoseArgs};
 
-#[derive(Parser, Debug)]
-#[command(name = "scim-server")]
-#[command(about = "A SCIM 2.0 server implementation")]
-#[command(version = env!("CARGO_PKG_VERSION"))]
-struct Args {
-    /// Configuration file path
-    #[arg(short, long)]
-    config: Option<String>,
+/// Runs `scim-conformance`'s diagnose suite and prints its report. Exits
+/// the process directly (rather than returning a value `main` would have
+/// to translate) since the exit code diagnose needs -- 0 clean, 1 findings
+/// failed/errored, 2 bad CLI usage or an unreachable target -- doesn't fit
+/// `main`'s existing `Result<(), Box<dyn Error>>` return, and changing
+/// that signature would ripple into the serve path for no benefit to it.
+async fn run_diagnose(args: DiagnoseArgs) -> ! {
+    let opts = match args.to_diag_options() {
+        Ok(opts) => opts,
+        Err(msg) => {
+            eprintln!("error: {msg}");
+            std::process::exit(2);
+        }
+    };
 
-    /// Port to listen on (overrides config file)
-    #[arg(short, long)]
-    port: Option<u16>,
+    let report = match scim_conformance::run(&opts).await {
+        Ok(report) => report,
+        Err(e) => {
+            eprintln!("error: {e}");
+            std::process::exit(2);
+        }
+    };
 
-    /// Host to bind to (overrides config file)
-    #[arg(long)]
-    host: Option<String>,
+    let text = scim_conformance::render_text(&report, args.verbose > 0);
+    let failed = report.counts.fail > 0 || report.counts.error > 0;
 
-    /// Validate the configuration and exit without starting the server (no
-    /// database file or tables are created, no port is bound). With no -c,
-    /// validates the built-in zero-config defaults.
-    #[arg(long)]
-    validate: bool,
+    match &args.output {
+        Some(path) => {
+            if let Err(e) = std::fs::write(path, &text) {
+                eprintln!("error: could not write {}: {e}", path.display());
+                std::process::exit(2);
+            }
+            if !args.quiet {
+                println!("report written to {}", path.display());
+            }
+        }
+        None => print!("{text}"),
+    }
+
+    std::process::exit(if failed { 1 } else { 0 });
 }
 
 async fn setup_backend(
@@ -99,6 +118,10 @@ async fn setup_backend(
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Parse command line arguments
     let args = Args::parse();
+
+    if let Some(Command::Diagnose(diagnose_args)) = args.command {
+        run_diagnose(diagnose_args).await;
+    }
 
     // Initialize tracing for better debugging
     tracing_subscriber::fmt::init();

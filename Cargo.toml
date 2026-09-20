@@ -32,6 +32,7 @@ tracing-subscriber = "0.3"
 json-patch = "4.0.0"
 regex = "1.0"
 clap = { version = "4.0", features = ["derive"] }
+scim-conformance = { path = "crates/scim-conformance" }
 bcrypt = "0.19.3"
 argon2 = "0.5"
 sha1 = "0.10"
@@ -54,7 +55,6 @@ features = [
 
 
 [dev-dependencies]
-scim-conformance = { path = "crates/scim-conformance" }
 axum-test = "17.3.0"
 tower = { version = "0.5", features = ["util"] }
 http = "1.0"

@@ -25,6 +25,27 @@ pub struct ClientConfig {
     pub timeout: Duration,
 }
 
+/// TLS/header knobs `T11`'s `diagnose` CLI needs that a bare [`ClientConfig`]
+/// doesn't carry (every existing caller of [`ScimClient::new`] wants none of
+/// this, so it lives in a separate, all-`Default` struct rather than adding
+/// required fields to `ClientConfig` and breaking those call sites).
+#[derive(Debug, Clone, Default)]
+pub struct ClientExtra {
+    /// `--insecure`: skip TLS certificate verification entirely.
+    pub insecure: bool,
+    /// `--ca-cert`: additional PEM files to trust, on top of the built-in
+    /// webpki roots.
+    pub ca_certs: Vec<std::path::PathBuf>,
+    /// `--native-roots`: also trust the OS's native certificate store.
+    /// Off by default -- [`ScimClient::new`] (no `ClientExtra`) only trusts
+    /// the bundled webpki roots, matching a hermetic default for a CLI
+    /// that may run in minimal containers with no OS trust store.
+    pub native_roots: bool,
+    /// `--header "Name: Value"`, repeatable: extra headers sent on every
+    /// request (e.g. a reverse proxy's shared-secret header).
+    pub headers: Vec<(String, String)>,
+}
+
 #[derive(Debug)]
 pub enum Error {
     Tls(String),
@@ -117,26 +138,58 @@ pub struct ScimClient {
 
 impl ScimClient {
     pub fn new(cfg: ClientConfig) -> Result<Self, Error> {
+        Self::with_extra(cfg, ClientExtra::default())
+    }
+
+    /// Like [`Self::new`], plus the TLS/header knobs `diagnose` exposes on
+    /// the CLI (see [`ClientExtra`]).
+    pub fn with_extra(cfg: ClientConfig, extra: ClientExtra) -> Result<Self, Error> {
         // Installs the `ring` crypto provider so rustls has exactly one
         // registered (the `-no-provider` reqwest features leave this to the
         // caller); avoids pulling in `aws-lc-rs` as a second provider.
         let _ = rustls::crypto::ring::default_provider().install_default();
 
-        let inner = reqwest::Client::builder()
+        let mut builder = reqwest::Client::builder()
             .timeout(cfg.timeout)
             .connect_timeout(Duration::from_secs(10))
             .user_agent(concat!("scim-conformance/", env!("CARGO_PKG_VERSION")))
             .redirect(reqwest::redirect::Policy::limited(5))
             .tls_built_in_webpki_certs(true)
-            .tls_built_in_native_certs(true)
-            .build()
-            .map_err(|e| Error::Tls(e.to_string()))?;
+            .tls_built_in_native_certs(extra.native_roots)
+            .danger_accept_invalid_certs(extra.insecure);
+
+        for path in &extra.ca_certs {
+            let pem = std::fs::read(path)
+                .map_err(|e| Error::Tls(format!("reading CA cert {}: {e}", path.display())))?;
+            let cert = reqwest::Certificate::from_pem(&pem)
+                .map_err(|e| Error::Tls(format!("parsing CA cert {}: {e}", path.display())))?;
+            builder = builder.add_root_certificate(cert);
+        }
+
+        if !extra.headers.is_empty() {
+            let mut header_map = reqwest::header::HeaderMap::new();
+            for (name, value) in &extra.headers {
+                let hn = reqwest::header::HeaderName::from_bytes(name.as_bytes())
+                    .map_err(|e| Error::BadUrl(format!("bad header name {name:?}: {e}")))?;
+                let hv = reqwest::header::HeaderValue::from_str(value)
+                    .map_err(|e| Error::BadUrl(format!("bad header value for {name:?}: {e}")))?;
+                header_map.insert(hn, hv);
+            }
+            builder = builder.default_headers(header_map);
+        }
+
+        let inner = builder.build().map_err(|e| Error::Tls(e.to_string()))?;
 
         Ok(Self {
             inner,
             base: cfg.base_url.trim_end_matches('/').to_string(),
             auth: cfg.auth,
         })
+    }
+
+    /// The base URL this client was constructed with (no trailing slash).
+    pub fn base_url(&self) -> &str {
+        &self.base
     }
 
     pub async fn get(&self, path: &str) -> Result<ScimResponse, Error> {

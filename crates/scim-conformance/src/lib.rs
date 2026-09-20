@@ -22,10 +22,13 @@
 pub mod basis;
 pub mod capability;
 pub mod client;
+pub mod diag;
 pub mod gen;
 pub mod ledger;
 pub mod matrix;
 pub mod probes;
+pub mod render;
+pub mod report;
 pub mod requirement;
 pub mod schema;
 pub mod scim_plugin;
@@ -34,8 +37,11 @@ pub mod templates;
 pub use basis::Basis;
 pub use capability::{Capabilities, Capability, Gated};
 pub use client::{Auth, ClientConfig, ScimClient};
+pub use diag::{run, DiagError, DiagOptions};
 pub use gen::attrdefs::{checks_from_attrdefs, AttrdefCheck};
 pub use matrix::{Cell, Characteristic, Method, Outcome, Verdict};
+pub use render::render_text;
+pub use report::{Counts, DiagnosticReport, Finding};
 pub use schema::{decls_from_schemas, AttrDecl};
 
 /// Convenience entry point: reads `GET /Schemas`, derives and runs the full
@@ -92,4 +98,48 @@ pub async fn full_suite(client: &mut ScimClient) -> Result<Vec<Outcome>, client:
     outcomes.extend(probes::run_all(client).await);
     outcomes.extend(ledger_suite(client).await);
     Ok(outcomes)
+}
+
+/// T11: everything [`full_suite`] can generate (schema matrix + probes +
+/// ledger), plus [`checks_from_attrdefs`] (T9's discovery presence
+/// checks, which don't fit `full_suite`'s attribute x method shape --
+/// see that function's own doc comment), folded into one
+/// [`report::DiagnosticReport`].
+///
+/// If `full_suite` itself fails (its only fallible step is the initial
+/// `GET /Schemas`), that failure becomes a single `Verdict::Error` finding
+/// rather than aborting the whole report -- `checks_from_attrdefs` still
+/// runs and is still reported, since it doesn't depend on `/Schemas`.
+pub async fn diagnose(client: &mut ScimClient) -> report::DiagnosticReport {
+    use matrix::Verdict;
+    use report::{Counts, DiagnosticReport, Finding};
+
+    let mut findings: Vec<Finding> = Vec::new();
+
+    match full_suite(client).await {
+        Ok(outcomes) => findings.extend(outcomes.into_iter().map(Finding::from)),
+        Err(e) => findings.push(Finding {
+            family: "schema",
+            key: "schema_matrix/GET /Schemas".to_string(),
+            verdict: Verdict::Error,
+            basis: basis::DISCOVERY_SCHEMAS_UNREACHABLE,
+            secondary: Vec::new(),
+            detail: format!("could not generate the schema-driven matrix: {e}"),
+            observed: None,
+        }),
+    }
+
+    findings.extend(
+        checks_from_attrdefs(client)
+            .await
+            .into_iter()
+            .map(Finding::from),
+    );
+
+    let counts = Counts::tally(&findings);
+    DiagnosticReport {
+        target: client.base_url().to_string(),
+        findings,
+        counts,
+    }
 }

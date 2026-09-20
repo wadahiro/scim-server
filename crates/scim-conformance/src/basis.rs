@@ -211,6 +211,24 @@ pub const STATUS_TABLE9_MUTABILITY: Basis = Basis {
     lines: "rfc7644.txt:3845-3849",
 };
 
+// --------------------------------------------------------- T11 diagnose CLI
+//
+// Used by `crate::diagnose` only, for the one path a schema-driven finding
+// can't otherwise reach: `GET /Schemas` itself failing before the matrix
+// can even be generated. Cites the same section T9's `TARGETS` table
+// points `(7643, "7")` at ("/Schemas").
+
+/// RFC 7643 §7 "Schema Definition" (`rfc7643.txt:1660`): "This section
+/// defines a way to specify the schema in use by resources available and
+/// accepted by a SCIM service provider" -- the attribute characteristics
+/// this crate reads back from a live `GET /Schemas` response to derive the
+/// whole schema-driven matrix (`schema_matrix`).
+pub const DISCOVERY_SCHEMAS_UNREACHABLE: Basis = Basis {
+    doc: "RFC 7643",
+    section: "7",
+    lines: "rfc7643.txt:1660",
+};
+
 /// Method-aware basis lookup. Every characteristic's citation is fixed
 /// regardless of method (`for_characteristic` below) except
 /// `MutabilityReadOnly`: POST is governed by §3.3, PUT by §3.5.1, and PATCH
