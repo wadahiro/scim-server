@@ -342,6 +342,143 @@ impl ScimPath {
         })
     }
 
+    /// Looks up the schema-declared mutability of `parts` (already
+    /// case-resolved by `resolve_case_and_validate`) against either the
+    /// resource's own core schema, or -- when `parts[0]` is a registered
+    /// schema URN -- that extension's schema. Returns `None` when no
+    /// schema this server knows about declares the attribute (e.g. an
+    /// unregistered extension, or a custom top-level User attribute),
+    /// since there is then no mutability rule to enforce.
+    fn mutability_for_path(
+        parts: &[String],
+        resource_type: ResourceType,
+    ) -> Option<crate::schema::Mutability> {
+        let first = parts.first()?;
+        if first.starts_with("urn:ietf:params:scim:schemas:") {
+            if parts.len() == 1 {
+                // A bare extension URN names the whole container, not a
+                // single attribute with one mutability.
+                return None;
+            }
+            let schema = crate::schema::SCHEMA_REGISTRY.get(first.as_str())?;
+            let rest = parts[1..].join(".");
+            return crate::schema::find_attribute(schema, &rest)
+                .map(|attr| attr.mutability.clone());
+        }
+
+        let schema = match resource_type {
+            ResourceType::User => &*crate::schema::USER_SCHEMA,
+            ResourceType::Group => &*crate::schema::GROUP_SCHEMA,
+        };
+        crate::schema::find_attribute(schema, &parts.join(".")).map(|attr| attr.mutability.clone())
+    }
+
+    /// Walks `parts` as a chain of JSON object keys, returning the value at
+    /// the end of the chain if every segment exists.
+    fn navigate_get<'a>(value: &'a Value, parts: &[String]) -> Option<&'a Value> {
+        let mut current = value;
+        for part in parts {
+            current = current.get(part)?;
+        }
+        Some(current)
+    }
+
+    /// RFC 7644 §3.5.2 (raw `rfc7644.txt:1886-1894`): "Each operation
+    /// against an attribute MUST be compatible with the attribute's
+    /// mutability ... a client MUST NOT modify an attribute that has
+    /// mutability 'readOnly' or 'immutable'. However, a client MAY 'add' a
+    /// value to an 'immutable' attribute if the attribute had no previous
+    /// value. An operation that is not compatible with an attribute's
+    /// mutability ... SHALL return the appropriate HTTP response status
+    /// code" -- 400 with `scimType: "mutability"` per Table 9 (§3.12).
+    ///
+    /// This is a PATCH-specific rule distinct from POST/PUT, where a
+    /// readOnly value in the request body is silently ignored rather than
+    /// rejected (§3.3, §3.5.1 raw `rfc7644.txt:1665`); callers apply this
+    /// check only to PATCH.
+    ///
+    /// `current_resource_json` supplies the "already has a value" test the
+    /// immutable half of the rule needs (RFC 7644 §3.5.1 raw
+    /// `rfc7644.txt:1659-1663`, incorporated into §3.5.2 by reference): a
+    /// `replace`/`add` that resubmits the attribute's current value is not
+    /// a modification and is allowed, matching the PUT-context wording
+    /// this shares mutability semantics with ("the input value(s) MUST
+    /// match, or HTTP status code 400 ... 'mutability'").
+    ///
+    /// Returns `Ok(())` -- deferring to whatever `apply_operation_*` does
+    /// -- when this path names no attribute a known schema declares
+    /// readOnly or immutable, or when a `ValuePath` has no trailing
+    /// sub-attribute (e.g. `members[value eq "x"]`): such a path targets a
+    /// whole array element mixing sub-attributes of different mutability,
+    /// which this per-attribute check does not attempt to arbitrate.
+    pub fn check_patch_mutability(
+        &self,
+        resource_type: ResourceType,
+        current_resource_json: &Value,
+        new_value: &Value,
+    ) -> AppResult<()> {
+        let (full_path, mutability, current_value): (
+            Vec<String>,
+            crate::schema::Mutability,
+            Option<&Value>,
+        ) = match self {
+            ScimPath::AttrPath(parts) => {
+                let Some(mutability) = Self::mutability_for_path(parts, resource_type) else {
+                    return Ok(());
+                };
+                let current_value = Self::navigate_get(current_resource_json, parts);
+                (parts.clone(), mutability, current_value)
+            }
+            ScimPath::ValuePath {
+                attr_path,
+                filter,
+                sub_attr,
+            } => {
+                let Some(sub_attr) = sub_attr else {
+                    return Ok(());
+                };
+                let mut full_path = attr_path.clone();
+                full_path.push(sub_attr.clone());
+                let Some(mutability) = Self::mutability_for_path(&full_path, resource_type) else {
+                    return Ok(());
+                };
+                let current_value = Self::navigate_get(current_resource_json, attr_path)
+                    .and_then(|v| v.as_array())
+                    .and_then(|arr| {
+                        arr.iter().find_map(|item| {
+                            let obj = item.as_object()?;
+                            if filter.matches(obj) {
+                                obj.get(sub_attr)
+                            } else {
+                                None
+                            }
+                        })
+                    });
+                (full_path, mutability, current_value)
+            }
+        };
+
+        match mutability {
+            crate::schema::Mutability::ReadOnly => Err(AppError::Mutability(format!(
+                "'{}' has mutability \"readOnly\" and cannot be modified by PATCH",
+                full_path.join(".")
+            ))),
+            crate::schema::Mutability::Immutable => {
+                let has_existing_value = matches!(current_value, Some(v) if !v.is_null());
+                let resubmits_same_value = current_value == Some(new_value);
+                if has_existing_value && !resubmits_same_value {
+                    Err(AppError::Mutability(format!(
+                        "'{}' has mutability \"immutable\" and already has a value",
+                        full_path.join(".")
+                    )))
+                } else {
+                    Ok(())
+                }
+            }
+            crate::schema::Mutability::ReadWrite | crate::schema::Mutability::WriteOnly => Ok(()),
+        }
+    }
+
     /// Apply SCIM PATCH operation to JSON object
     ///
     /// Every in-tree caller now goes through

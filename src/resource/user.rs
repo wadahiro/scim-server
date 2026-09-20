@@ -924,6 +924,44 @@ pub async fn patch_user(
         }
     }
 
+    // RFC 7644 §3.5.2: reject any operation whose `path` targets a readOnly
+    // attribute, or an immutable attribute that already holds a different
+    // value, before applying it -- PATCH must reject such an operation
+    // rather than silently ignore it, unlike POST/PUT (where a readOnly
+    // value in the request body is ignored per §3.3/§3.5.1). Checked
+    // against a prospective JSON that folds in each prior operation in
+    // this request, so a later operation's check reflects an earlier
+    // one's effect; the backend re-applies the operations for the actual
+    // write.
+    if let Ok(Some(current_user)) = backend.find_user_by_id(tenant_id, &id, false).await {
+        let mut prospective_json = serde_json::to_value(&current_user).map_err(|_| {
+            scim_error_response(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                None,
+                "Serialization error",
+            )
+        })?;
+        for operation in &patch_ops.operations {
+            let scim_path = crate::parser::patch_parser::ScimPath::parse(
+                &operation.path.clone().unwrap_or_default(),
+                ResourceType::User,
+            )
+            .map_err(|e| e.to_response())?;
+            let op_value = operation.value.as_ref().unwrap_or(&Value::Null);
+            scim_path
+                .check_patch_mutability(ResourceType::User, &prospective_json, op_value)
+                .map_err(|e| e.to_response())?;
+            scim_path
+                .apply_operation_with_compatibility(
+                    &mut prospective_json,
+                    &operation.op,
+                    op_value,
+                    compatibility,
+                )
+                .map_err(|e| e.to_response())?;
+        }
+    }
+
     match backend
         .patch_user(tenant_id, &id, &patch_ops, compatibility)
         .await

@@ -1104,11 +1104,19 @@ pub async fn patch_group(
                     "Serialization error",
                 )
             })?;
+            let op_value = operation.value.as_ref().unwrap_or(&serde_json::Value::Null);
+            // RFC 7644 §3.5.2: reject an operation targeting a readOnly
+            // attribute, or an immutable attribute that already holds a
+            // different value, rather than silently ignoring it (contrast
+            // POST/PUT, where a readOnly value is ignored per §3.3/§3.5.1).
+            scim_path
+                .check_patch_mutability(crate::parser::ResourceType::Group, &group_json, op_value)
+                .map_err(|e| e.to_response())?;
             scim_path
                 .apply_operation_with_compatibility(
                     &mut group_json,
                     &operation.op,
-                    operation.value.as_ref().unwrap_or(&serde_json::Value::Null),
+                    op_value,
                     compatibility,
                 )
                 .map_err(|e| e.to_response())?;
