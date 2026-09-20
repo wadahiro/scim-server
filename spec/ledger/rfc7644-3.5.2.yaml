@@ -1,0 +1,278 @@
+# NOTE (added when vendoring into spec/ledger/): the `lines` values below were
+# recorded against a reflowed/"clean" working copy of RFC 7644 (clean-7644.txt),
+# not against spec/rfc/rfc7644.txt (the verbatim vendored copy this repository
+# ships). They are NOT yet valid line numbers into spec/rfc/rfc7644.txt.
+# Converting them to raw-file line numbers and validating every `quote` against
+# spec/rfc/rfc7644.txt is future work, not yet done; do not consume `lines`
+# from this file as raw-file coordinates until that conversion lands.
+#
+# RFC 7644 §3.5.2 "Modifying with PATCH" — 網羅台帳（試作）
+#
+# 単位 = 段落。lines は scratchpad/rfc/clean-7644.txt の行範囲（一次識別子）。
+# §3.5.2 本文 L1377-L1508。全 27 段落（生の分割では 28 だが p22 は
+# ページ境界由来の偽の空行で割れていたため結合した。§「既知の前処理欠陥」参照）。
+#
+# class:    definitional | explanatory | example | meta
+# coverage: verified-ok | verified-violation | unverified | n/a
+
+section: "3.5.2"
+doc: RFC 7644
+lines: [1377, 1508]
+paragraphs_total: 27
+
+tally:
+  definitional: 11
+  explanatory: 2
+  example: 7
+  meta: 7
+
+entries:
+  - {id: p01, lines: [1377, 1377], class: meta, note: 節見出し}
+
+  - id: p02
+    lines: [1379, 1383]
+    keywords: [OPTIONAL]          # ← 7語の正規表現では取りこぼす
+    class: definitional
+    quote: "HTTP PATCH is an OPTIONAL server function"
+    testable: yes
+    checks: [spc.patch_supported_matches_behaviour]
+    coverage: unverified
+
+  - {id: p03, lines: [1385, 1389], class: explanatory, note: "JSON Patch (RFC 6902) を踏まえた一般形の説明"}
+
+  - id: p04
+    lines: [1391, 1392]
+    keywords: [MUST]
+    class: definitional
+    quote: |
+      The body of each request MUST contain the "schemas" attribute with
+      the URI value of "urn:ietf:params:scim:api:messages:2.0:PatchOp".
+    testable: yes
+    checks: [patch.body_schemas_is_patchop]
+    coverage: unverified
+
+  - id: p05
+    lines: [1394, 1399]
+    keywords: [MUST, MAY]
+    class: definitional
+    quote: |
+      The body of an HTTP PATCH request MUST contain the attribute
+      "Operations", whose value is an array of one or more PATCH
+      operations.  Each PATCH operation object MUST have exactly one "op"
+      member, whose value indicates the operation to perform and MAY be one
+      of "add", "remove", or "replace".
+    testable: yes
+    checks: [patch.operations_required, patch.exactly_one_op, patch.op_vocabulary]
+    coverage: unverified
+
+  - {id: p06, lines: [1401, 1402], class: meta}
+  - {id: p07, lines: [1404, 1421], class: example, note: "Figure 6 — PATCH リクエスト本文の JSON 例。golden fixture 候補"}
+  - {id: p08, lines: [1423, 1423], class: meta, note: Figure 6 キャプション}
+
+  - id: p09
+    lines: [1425, 1428]
+    keywords: [REQUIRED, OPTIONAL]  # ← 7語では取りこぼす
+    class: definitional
+    quote: 'The "path" attribute value is a String containing an attribute path'
+    testable: yes
+    checks: [patch.path_required_for_remove, patch.path_optional_for_add_replace]
+    coverage: unverified
+
+  - {id: p10, lines: [1430, 1430], class: meta}
+  - {id: p11, lines: [1432, 1432], class: example, note: "ABNF: PATH = attrPath / valuePath [subAttr] — パーサのテストベクタ源"}
+  - {id: p12, lines: [1434, 1434], class: meta, note: Figure 7 キャプション}
+
+  - id: p13
+    lines: [1436, 1438]
+    class: explanatory
+    quote: |
+      The ABNF rules "attrPath", "valuePath", and "subAttr" are defined in
+      Section 3.4.2.2.  The "valuePath" rule allows specific values of a
+      complex multi-valued attribute to be selected.
+    note: >-
+      §3.4.2.2（フィルタ文法）への相互参照。PATCH の path 文法がフィルタ文法と
+      同一の ABNF を共有していることの根拠であり、§3.5.2 だけを読んでいると
+      valuePath の意味に辿り着けない。属性名の大小無視を規定するのは §3.10 で、
+      その参照は p22 の 1 行目（"The attribute notation rules described in
+      Section 3.10 apply"）にある。
+    refs: ["3.4.2.2"]
+
+  - {id: p14, lines: [1440, 1440], class: meta}
+  - {id: p15, lines: [1442, 1442], class: example, note: '"path":"members"'}
+  - {id: p16, lines: [1444, 1444], class: example, note: '"path":"name.familyName"'}
+  - {id: p17, lines: [1446, 1446], class: example, note: '"path":"addresses[type eq \"work\"]"'}
+  - {id: p18, lines: [1448, 1449], class: example, note: valuePath + value}
+  - {id: p19, lines: [1451, 1452], class: example, note: valuePath + subAttr}
+  - {id: p20, lines: [1454, 1454], class: meta, note: Figure 8 キャプション}
+
+  - id: p21
+    lines: [1456, 1464]
+    keywords: [MUST, MUST NOT, MAY, SHALL]
+    class: definitional
+    quote: |
+      Each operation against an attribute MUST be compatible with the
+      attribute's mutability and schema as defined in Sections 2.2 and 2.3
+      of [RFC7643].  For example, a client MUST NOT modify an attribute
+      that has mutability "readOnly" or "immutable".  However, a client MAY
+      "add" a value to an "immutable" attribute if the attribute had no
+      previous value.
+    testable: yes
+    checks: [patch.mutability_readonly_rejected, patch.mutability_immutable_add_when_unset]
+    coverage: unverified
+    refs: ["RFC7643 2.2", "RFC7643 2.3", "3.12"]
+
+  - id: p22
+    lines: [1466, 1479]              # 生の分割では 1466-1472 と 1474-1479 に割れる
+    keywords: [MUST, SHALL, MAY]
+    class: definitional
+    quote: |
+      The attribute notation rules described in Section 3.10 apply for
+      describing attribute paths.  For all operations, the value of the
+      "schemas" attribute on the SCIM service provider's representation of
+      the resource SHALL be assumed by default.  If one of the PATCH
+      operations modifies the "schemas" attribute, subsequent operations
+      SHALL assume the modified state of the "schemas" attribute.
+    testable: yes
+    checks: [patch.path_case_insensitive, patch.implicit_schemas_extension]
+    coverage: partial
+    coverage_detail:
+      patch.path_case_insensitive: verified-ok    # PR #71。1 行目の "Section 3.10 apply" が根拠
+      patch.implicit_schemas_extension: unverified # schemas の暗黙変更を追う SHALL。テスト未確認
+    refs: ["3.10"]
+
+  - id: p23
+    lines: [1481, 1487]
+    keywords: []                    # ★ 平文。語彙抽出では要件として現れない
+    class: definitional
+    quote: |
+      Operations are applied sequentially in the order they appear in the array.
+      Each operation in the sequence is applied to the target resource; the
+      resulting resource becomes the target of the next operation.
+    testable: yes
+    checks: [patch.sequential_last_wins]
+    coverage: verified-ok
+    note: >-
+      キーワードが 1 つも無いため語彙抽出では要件として現れない。
+      段落単位＋結果動詞（"are applied"）で機械的に候補化できた。
+      p24 と併せて「複数 primary は last-wins・エラーにしない」の根拠。
+
+  - id: p24
+    lines: [1489, 1492]
+    keywords: [SHALL]
+    class: definitional
+    quote: |
+      For multi-valued attributes, a PATCH operation that sets a value's
+      "primary" sub-attribute to "true" SHALL cause the server to
+      automatically set "primary" to "false" for any other values in the
+      array.
+    testable: yes
+    checks: [patch.primary_auto_demote_others]
+    coverage: verified-ok
+    note: "「PATCH の複数 primary はどちらが勝つか」に対する仕様の明示的な答え"
+
+  - id: p25
+    lines: [1494, 1497]
+    keywords: [SHALL, MUST]
+    class: definitional
+    quote: |
+      A PATCH request, regardless of the number of operations, SHALL be
+      treated as atomic.  If a single operation encounters an error
+      condition, the original SCIM resource MUST be restored, and a failure
+      status SHALL be returned.
+    testable: yes
+    checks: [patch.atomic_rollback]
+    coverage: unverified
+
+  - id: p26
+    lines: [1499, 1500]
+    keywords: [SHALL]
+    class: definitional
+    quote: |
+      If a request fails, the server SHALL return an HTTP response status
+      code and a JSON detail error response as defined in Section 3.12.
+    testable: yes
+    checks: [error.body_is_scim_error_schema, error.scimType_from_table9]
+    coverage: unverified
+    refs: ["3.12"]
+
+  - id: p27
+    lines: [1502, 1507]
+    keywords: [MUST, MAY]
+    class: definitional
+    quote: |
+      On successful completion, the server either MUST return a 200 OK
+      response code and the entire resource within the response body,
+      subject to the "attributes" query parameter (see Section 3.9), or MAY
+      return HTTP status code 204 (No Content) and the appropriate response
+      headers for a successful PATCH request.  The server MUST return a 200
+      OK if the "attributes" parameter is specified in the request.
+    testable: yes
+    checks: [patch.returns_200_with_body, patch.honours_attributes_param]
+    coverage: verified-violation
+    refs: ["3.9"]
+    finding:
+      id: V-18
+      summary: >-
+        リソースを返す POST / PUT / PATCH が attributes / excludedAttributes
+        クエリパラメータを完全に無視する。
+      basis: |
+        RFC 7644 §3.9 (clean-7644.txt L2668-2675):
+          "Clients MAY request a partial resource representation on any
+           operation that returns a resource within the response by specifying
+           either of the mutually exclusive URL query parameters "attributes" or
+           "excludedAttributes""
+          "attributes  When specified, the default list of attributes SHALL be
+           overridden, and each resource returned MUST contain the minimum set
+           of resource attributes and any attributes or sub-attributes
+           explicitly requested by the "attributes" parameter."
+        RFC 7644 §3.5.2 (L1502-1507): PATCH の 200 応答本文は
+          "subject to the "attributes" query parameter (see Section 3.9)"
+      evidence: |
+        POST  /Users?attributes=userName        → displayName, name を含む全量が返る
+        PUT   /Users/{id}?attributes=userName   → displayName を含む全量が返る
+        PATCH /Users/{id}?attributes=userName   → displayName, name を含む全量が返る
+        GET   /Users/{id}?attributes=userName   → 正しく id/schemas/meta/userName のみ
+      cause: |
+        src/resource/user.rs / group.rs で Query<HashMap<String,String>> 抽出器を
+        持つのは get_user(:267) / search_users(:392) / get_group(:357) /
+        search_groups(:469) の 4 つだけ。create_user(:147) / update_user(:617) /
+        patch_user(:829) / create_group(:223) / update_group(:687) /
+        patch_group(:917) の 6 handler はクエリを受け取ってさえいない。
+      discovered_by: この台帳（最初に処分した 1 セクションから）
+
+known_preprocessing_defects:
+  - id: PP-1
+    summary: ページ境界のヘッダ／フッタ除去跡の空行で 1 段落が 2 つに割れる
+    instances:
+      clean-7643.txt: [[141, 143], [467, 469]]
+      clean-7644.txt: [[369, 371], [1472, 1474], [2079, 2081], [2649, 2651]]
+    fix: >-
+      直前の非空行が文末記号で終わらず、直後の非空行が同じ字下げで
+      小文字または閉じ括弧から始まる場合、空行を畳んで段落を結合する。
+  - id: PP-2
+    summary: clean-7642.txt にページフッタ "[Page N]" が 19 行残っている
+    fix: 7643/7644 と同じ除去処理を 7642 にも適用する
+  - id: PP-3
+    summary: >-
+      抽出スクリプトのキーワード集合が 7 語（MUST/SHALL/SHOULD/MAY 系）だったため
+      REQUIRED / OPTIONAL / RECOMMENDED を取りこぼしていた。7643 で 34 段落、
+      7644 で 19 段落、合計 53 段落。取りこぼしの正体は ListResponse / Error /
+      ServiceProviderConfig / ResourceType の必須メンバ定義であり、準拠チェックと
+      して最も価値が高い層。
+    fix: >-
+      RFC 7644 §1（L144-146）が逐語で宣言する 10 語すべてで抽出する
+      — MUST, MUST NOT, REQUIRED, SHALL, SHALL NOT, SHOULD, SHOULD NOT,
+      RECOMMENDED, MAY, OPTIONAL。大文字のみを規範とみなす（7643/7644 は
+      RFC 2119 のみを引用し RFC 8174 への言及は 0 件なので、8174 を根拠に
+      引かない。8174 を引くのは RFC 9865）。
+  - id: PP-4
+    summary: ASCII 表の行が段落として分割され断片化する（§3.4.2.2 の演算子表など）
+    fix: 表領域を先に検出して段落分割の対象外にし、表専用の抽出にまわす
+  - id: PP-5
+    summary: >-
+      quote を手打ちすると逐語性が壊れる。bin/verify-quotes.rb は初回実行で
+      当方の誤り 2 件を検出した — p21 の quote から文中の or "immutable" が
+      脱落、p13 の参照先を §3.10 と誤記（原文は §3.4.2.2）。
+    fix: >-
+      quote は必ず lines の範囲から導出する。bin/verify-quotes.rb を CI に入れ、
+      抜粋は文境界でのみ許す。これにより「逐語」が約束ではなく検査済みの性質になる。

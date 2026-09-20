@@ -1,0 +1,3148 @@
+[
+ {
+  "attribute": "employeeNumber",
+  "basis": {
+   "lines": "rfc7643.txt:438",
+   "rfc": "RFC 7643",
+   "section": "2.3"
+  },
+  "characteristic": "type_wrong",
+  "method": "POST",
+  "resource": "EnterpriseUser",
+  "schema": "urn:ietf:params:scim:schemas:extension:enterprise:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "employeeNumber",
+  "basis": {
+   "lines": "rfc7643.txt:438",
+   "rfc": "RFC 7643",
+   "section": "2.3"
+  },
+  "characteristic": "type_valid",
+  "method": "POST",
+  "resource": "EnterpriseUser",
+  "schema": "urn:ietf:params:scim:schemas:extension:enterprise:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "costCenter",
+  "basis": {
+   "lines": "rfc7643.txt:438",
+   "rfc": "RFC 7643",
+   "section": "2.3"
+  },
+  "characteristic": "type_wrong",
+  "method": "POST",
+  "resource": "EnterpriseUser",
+  "schema": "urn:ietf:params:scim:schemas:extension:enterprise:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "costCenter",
+  "basis": {
+   "lines": "rfc7643.txt:438",
+   "rfc": "RFC 7643",
+   "section": "2.3"
+  },
+  "characteristic": "type_valid",
+  "method": "POST",
+  "resource": "EnterpriseUser",
+  "schema": "urn:ietf:params:scim:schemas:extension:enterprise:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "organization",
+  "basis": {
+   "lines": "rfc7643.txt:438",
+   "rfc": "RFC 7643",
+   "section": "2.3"
+  },
+  "characteristic": "type_wrong",
+  "method": "POST",
+  "resource": "EnterpriseUser",
+  "schema": "urn:ietf:params:scim:schemas:extension:enterprise:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "organization",
+  "basis": {
+   "lines": "rfc7643.txt:438",
+   "rfc": "RFC 7643",
+   "section": "2.3"
+  },
+  "characteristic": "type_valid",
+  "method": "POST",
+  "resource": "EnterpriseUser",
+  "schema": "urn:ietf:params:scim:schemas:extension:enterprise:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "division",
+  "basis": {
+   "lines": "rfc7643.txt:438",
+   "rfc": "RFC 7643",
+   "section": "2.3"
+  },
+  "characteristic": "type_wrong",
+  "method": "POST",
+  "resource": "EnterpriseUser",
+  "schema": "urn:ietf:params:scim:schemas:extension:enterprise:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "division",
+  "basis": {
+   "lines": "rfc7643.txt:438",
+   "rfc": "RFC 7643",
+   "section": "2.3"
+  },
+  "characteristic": "type_valid",
+  "method": "POST",
+  "resource": "EnterpriseUser",
+  "schema": "urn:ietf:params:scim:schemas:extension:enterprise:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "department",
+  "basis": {
+   "lines": "rfc7643.txt:438",
+   "rfc": "RFC 7643",
+   "section": "2.3"
+  },
+  "characteristic": "type_wrong",
+  "method": "POST",
+  "resource": "EnterpriseUser",
+  "schema": "urn:ietf:params:scim:schemas:extension:enterprise:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "department",
+  "basis": {
+   "lines": "rfc7643.txt:438",
+   "rfc": "RFC 7643",
+   "section": "2.3"
+  },
+  "characteristic": "type_valid",
+  "method": "POST",
+  "resource": "EnterpriseUser",
+  "schema": "urn:ietf:params:scim:schemas:extension:enterprise:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "manager",
+  "basis": {
+   "lines": "rfc7643.txt:438",
+   "rfc": "RFC 7643",
+   "section": "2.3"
+  },
+  "characteristic": "type_wrong",
+  "method": "POST",
+  "resource": "EnterpriseUser",
+  "schema": "urn:ietf:params:scim:schemas:extension:enterprise:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "manager",
+  "basis": {
+   "lines": "rfc7643.txt:438",
+   "rfc": "RFC 7643",
+   "section": "2.3"
+  },
+  "characteristic": "type_valid",
+  "method": "POST",
+  "resource": "EnterpriseUser",
+  "schema": "urn:ietf:params:scim:schemas:extension:enterprise:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "manager.value",
+  "basis": {
+   "lines": "rfc7643.txt:1747-1753",
+   "rfc": "RFC 7643",
+   "section": "7"
+  },
+  "characteristic": "caseExact",
+  "method": "POST",
+  "resource": "EnterpriseUser",
+  "schema": "urn:ietf:params:scim:schemas:extension:enterprise:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "manager.value",
+  "basis": {
+   "lines": "rfc7643.txt:438",
+   "rfc": "RFC 7643",
+   "section": "2.3"
+  },
+  "characteristic": "type_wrong",
+  "method": "POST",
+  "resource": "EnterpriseUser",
+  "schema": "urn:ietf:params:scim:schemas:extension:enterprise:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "manager.value",
+  "basis": {
+   "lines": "rfc7643.txt:438",
+   "rfc": "RFC 7643",
+   "section": "2.3"
+  },
+  "characteristic": "type_valid",
+  "method": "POST",
+  "resource": "EnterpriseUser",
+  "schema": "urn:ietf:params:scim:schemas:extension:enterprise:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "manager.$ref",
+  "basis": {
+   "lines": "rfc7644.txt:583-584",
+   "rfc": "RFC 7644",
+   "section": "3.3"
+  },
+  "characteristic": "mutability_readOnly",
+  "method": "POST",
+  "resource": "EnterpriseUser",
+  "schema": "urn:ietf:params:scim:schemas:extension:enterprise:2.0:User",
+  "verdict": "FAIL"
+ },
+ {
+  "attribute": "manager.$ref",
+  "basis": {
+   "lines": "rfc7644.txt:583-584",
+   "rfc": "RFC 7644",
+   "section": "3.3"
+  },
+  "characteristic": "mutability_readOnly",
+  "method": "PUT",
+  "resource": "EnterpriseUser",
+  "schema": "urn:ietf:params:scim:schemas:extension:enterprise:2.0:User",
+  "verdict": "FAIL"
+ },
+ {
+  "attribute": "manager.$ref",
+  "basis": {
+   "lines": "rfc7644.txt:583-584",
+   "rfc": "RFC 7644",
+   "section": "3.3"
+  },
+  "characteristic": "mutability_readOnly",
+  "method": "PATCH",
+  "resource": "EnterpriseUser",
+  "schema": "urn:ietf:params:scim:schemas:extension:enterprise:2.0:User",
+  "verdict": "FAIL"
+ },
+ {
+  "attribute": "manager.$ref",
+  "basis": {
+   "lines": "rfc7643.txt:1747-1753",
+   "rfc": "RFC 7643",
+   "section": "7"
+  },
+  "characteristic": "caseExact",
+  "method": "N/A",
+  "resource": "EnterpriseUser",
+  "schema": "urn:ietf:params:scim:schemas:extension:enterprise:2.0:User",
+  "verdict": "SKIP"
+ },
+ {
+  "attribute": "manager.displayName",
+  "basis": {
+   "lines": "rfc7644.txt:583-584",
+   "rfc": "RFC 7644",
+   "section": "3.3"
+  },
+  "characteristic": "mutability_readOnly",
+  "method": "POST",
+  "resource": "EnterpriseUser",
+  "schema": "urn:ietf:params:scim:schemas:extension:enterprise:2.0:User",
+  "verdict": "FAIL"
+ },
+ {
+  "attribute": "manager.displayName",
+  "basis": {
+   "lines": "rfc7644.txt:583-584",
+   "rfc": "RFC 7644",
+   "section": "3.3"
+  },
+  "characteristic": "mutability_readOnly",
+  "method": "PUT",
+  "resource": "EnterpriseUser",
+  "schema": "urn:ietf:params:scim:schemas:extension:enterprise:2.0:User",
+  "verdict": "FAIL"
+ },
+ {
+  "attribute": "manager.displayName",
+  "basis": {
+   "lines": "rfc7644.txt:583-584",
+   "rfc": "RFC 7644",
+   "section": "3.3"
+  },
+  "characteristic": "mutability_readOnly",
+  "method": "PATCH",
+  "resource": "EnterpriseUser",
+  "schema": "urn:ietf:params:scim:schemas:extension:enterprise:2.0:User",
+  "verdict": "FAIL"
+ },
+ {
+  "attribute": "id",
+  "basis": {
+   "lines": "rfc7644.txt:583-584",
+   "rfc": "RFC 7644",
+   "section": "3.3"
+  },
+  "characteristic": "mutability_readOnly",
+  "method": "POST",
+  "resource": "Group",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:Group",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "id",
+  "basis": {
+   "lines": "rfc7644.txt:583-584",
+   "rfc": "RFC 7644",
+   "section": "3.3"
+  },
+  "characteristic": "mutability_readOnly",
+  "method": "PUT",
+  "resource": "Group",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:Group",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "id",
+  "basis": {
+   "lines": "rfc7644.txt:583-584",
+   "rfc": "RFC 7644",
+   "section": "3.3"
+  },
+  "characteristic": "mutability_readOnly",
+  "method": "PATCH",
+  "resource": "Group",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:Group",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "id",
+  "basis": {
+   "lines": "rfc7643.txt:1731-1732",
+   "rfc": "RFC 7643",
+   "section": "7"
+  },
+  "characteristic": "required",
+  "method": "N/A",
+  "resource": "Group",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:Group",
+  "verdict": "SKIP"
+ },
+ {
+  "attribute": "id",
+  "basis": {
+   "lines": "rfc7643.txt:1747-1753",
+   "rfc": "RFC 7643",
+   "section": "7"
+  },
+  "characteristic": "caseExact",
+  "method": "N/A",
+  "resource": "Group",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:Group",
+  "verdict": "SKIP"
+ },
+ {
+  "attribute": "id",
+  "basis": {
+   "lines": "rfc7643.txt:1811-1815",
+   "rfc": "RFC 7643",
+   "section": "7"
+  },
+  "characteristic": "uniqueness",
+  "method": "N/A",
+  "resource": "Group",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:Group",
+  "verdict": "SKIP"
+ },
+ {
+  "attribute": "externalId",
+  "basis": {
+   "lines": "rfc7643.txt:1747-1753",
+   "rfc": "RFC 7643",
+   "section": "7"
+  },
+  "characteristic": "caseExact",
+  "method": "POST",
+  "resource": "Group",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:Group",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "externalId",
+  "basis": {
+   "lines": "rfc7643.txt:438",
+   "rfc": "RFC 7643",
+   "section": "2.3"
+  },
+  "characteristic": "type_wrong",
+  "method": "POST",
+  "resource": "Group",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:Group",
+  "verdict": "FAIL"
+ },
+ {
+  "attribute": "externalId",
+  "basis": {
+   "lines": "rfc7643.txt:438",
+   "rfc": "RFC 7643",
+   "section": "2.3"
+  },
+  "characteristic": "type_valid",
+  "method": "POST",
+  "resource": "Group",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:Group",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "displayName",
+  "basis": {
+   "lines": "rfc7643.txt:1731-1732",
+   "rfc": "RFC 7643",
+   "section": "7"
+  },
+  "characteristic": "required",
+  "method": "POST-omit",
+  "resource": "Group",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:Group",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "displayName",
+  "basis": {
+   "lines": "rfc7643.txt:1731-1732",
+   "rfc": "RFC 7643",
+   "section": "7"
+  },
+  "characteristic": "required",
+  "method": "PUT-omit",
+  "resource": "Group",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:Group",
+  "verdict": "FAIL"
+ },
+ {
+  "attribute": "displayName",
+  "basis": {
+   "lines": "rfc7643.txt:1811-1815",
+   "rfc": "RFC 7643",
+   "section": "7"
+  },
+  "characteristic": "uniqueness",
+  "method": "POST-duplicate",
+  "resource": "Group",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:Group",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "displayName",
+  "basis": {
+   "lines": "rfc7643.txt:1811-1815",
+   "rfc": "RFC 7643",
+   "section": "7"
+  },
+  "characteristic": "uniqueness",
+  "method": "PUT-duplicate",
+  "resource": "Group",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:Group",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "displayName",
+  "basis": {
+   "lines": "rfc7643.txt:1811-1815",
+   "rfc": "RFC 7643",
+   "section": "7"
+  },
+  "characteristic": "uniqueness",
+  "method": "PATCH-duplicate",
+  "resource": "Group",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:Group",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "displayName",
+  "basis": {
+   "lines": "rfc7643.txt:438",
+   "rfc": "RFC 7643",
+   "section": "2.3"
+  },
+  "characteristic": "type_wrong",
+  "method": "POST",
+  "resource": "Group",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:Group",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "displayName",
+  "basis": {
+   "lines": "rfc7643.txt:438",
+   "rfc": "RFC 7643",
+   "section": "2.3"
+  },
+  "characteristic": "type_valid",
+  "method": "POST",
+  "resource": "Group",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:Group",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "members",
+  "basis": {
+   "lines": "rfc7643.txt:438",
+   "rfc": "RFC 7643",
+   "section": "2.3"
+  },
+  "characteristic": "type_wrong",
+  "method": "POST",
+  "resource": "Group",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:Group",
+  "verdict": "FAIL"
+ },
+ {
+  "attribute": "members",
+  "basis": {
+   "lines": "rfc7643.txt:438",
+   "rfc": "RFC 7643",
+   "section": "2.3"
+  },
+  "characteristic": "type_valid",
+  "method": "POST",
+  "resource": "Group",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:Group",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "members.value",
+  "basis": {
+   "lines": "rfc7643.txt:1764-1766",
+   "rfc": "RFC 7643",
+   "section": "7"
+  },
+  "characteristic": "mutability_immutable",
+  "method": "POST-create",
+  "resource": "Group",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:Group",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "members.value",
+  "basis": {
+   "lines": "rfc7643.txt:1764-1766",
+   "rfc": "RFC 7643",
+   "section": "7"
+  },
+  "characteristic": "mutability_immutable",
+  "method": "PATCH-change",
+  "resource": "Group",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:Group",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "members.value",
+  "basis": {
+   "lines": "rfc7643.txt:1747-1753",
+   "rfc": "RFC 7643",
+   "section": "7"
+  },
+  "characteristic": "caseExact",
+  "method": "N/A",
+  "resource": "Group",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:Group",
+  "verdict": "SKIP"
+ },
+ {
+  "attribute": "members.value",
+  "basis": {
+   "lines": "rfc7643.txt:438",
+   "rfc": "RFC 7643",
+   "section": "2.3"
+  },
+  "characteristic": "type_wrong",
+  "method": "POST",
+  "resource": "Group",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:Group",
+  "verdict": "FAIL"
+ },
+ {
+  "attribute": "members.value",
+  "basis": {
+   "lines": "rfc7643.txt:438",
+   "rfc": "RFC 7643",
+   "section": "2.3"
+  },
+  "characteristic": "type_valid",
+  "method": "POST",
+  "resource": "Group",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:Group",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "members.$ref",
+  "basis": {
+   "lines": "rfc7643.txt:1764-1766",
+   "rfc": "RFC 7643",
+   "section": "7"
+  },
+  "characteristic": "mutability_immutable",
+  "method": "POST-create",
+  "resource": "Group",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:Group",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "members.$ref",
+  "basis": {
+   "lines": "rfc7643.txt:1764-1766",
+   "rfc": "RFC 7643",
+   "section": "7"
+  },
+  "characteristic": "mutability_immutable",
+  "method": "PATCH-change",
+  "resource": "Group",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:Group",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "members.$ref",
+  "basis": {
+   "lines": "rfc7643.txt:1747-1753",
+   "rfc": "RFC 7643",
+   "section": "7"
+  },
+  "characteristic": "caseExact",
+  "method": "N/A",
+  "resource": "Group",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:Group",
+  "verdict": "SKIP"
+ },
+ {
+  "attribute": "members.$ref",
+  "basis": {
+   "lines": "rfc7643.txt:438",
+   "rfc": "RFC 7643",
+   "section": "2.3"
+  },
+  "characteristic": "type_wrong",
+  "method": "POST",
+  "resource": "Group",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:Group",
+  "verdict": "FAIL"
+ },
+ {
+  "attribute": "members.$ref",
+  "basis": {
+   "lines": "rfc7643.txt:438",
+   "rfc": "RFC 7643",
+   "section": "2.3"
+  },
+  "characteristic": "type_valid",
+  "method": "POST",
+  "resource": "Group",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:Group",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "members.type",
+  "basis": {
+   "lines": "rfc7643.txt:1764-1766",
+   "rfc": "RFC 7643",
+   "section": "7"
+  },
+  "characteristic": "mutability_immutable",
+  "method": "POST-create",
+  "resource": "Group",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:Group",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "members.type",
+  "basis": {
+   "lines": "rfc7643.txt:1764-1766",
+   "rfc": "RFC 7643",
+   "section": "7"
+  },
+  "characteristic": "mutability_immutable",
+  "method": "PATCH-change",
+  "resource": "Group",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:Group",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "members.type",
+  "basis": {
+   "lines": "rfc7643.txt:438",
+   "rfc": "RFC 7643",
+   "section": "2.3"
+  },
+  "characteristic": "type_wrong",
+  "method": "POST",
+  "resource": "Group",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:Group",
+  "verdict": "FAIL"
+ },
+ {
+  "attribute": "members.type",
+  "basis": {
+   "lines": "rfc7643.txt:438",
+   "rfc": "RFC 7643",
+   "section": "2.3"
+  },
+  "characteristic": "type_valid",
+  "method": "POST",
+  "resource": "Group",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:Group",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "members.display",
+  "basis": {
+   "lines": "rfc7644.txt:583-584",
+   "rfc": "RFC 7644",
+   "section": "3.3"
+  },
+  "characteristic": "mutability_readOnly",
+  "method": "POST",
+  "resource": "Group",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:Group",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "members.display",
+  "basis": {
+   "lines": "rfc7644.txt:583-584",
+   "rfc": "RFC 7644",
+   "section": "3.3"
+  },
+  "characteristic": "mutability_readOnly",
+  "method": "PUT",
+  "resource": "Group",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:Group",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "members.display",
+  "basis": {
+   "lines": "rfc7644.txt:583-584",
+   "rfc": "RFC 7644",
+   "section": "3.3"
+  },
+  "characteristic": "mutability_readOnly",
+  "method": "PATCH",
+  "resource": "Group",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:Group",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "meta",
+  "basis": {
+   "lines": "rfc7644.txt:583-584",
+   "rfc": "RFC 7644",
+   "section": "3.3"
+  },
+  "characteristic": "mutability_readOnly",
+  "method": "N/A",
+  "resource": "Group",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:Group",
+  "verdict": "SKIP"
+ },
+ {
+  "attribute": "meta.resourceType",
+  "basis": {
+   "lines": "rfc7644.txt:583-584",
+   "rfc": "RFC 7644",
+   "section": "3.3"
+  },
+  "characteristic": "mutability_readOnly",
+  "method": "POST",
+  "resource": "Group",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:Group",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "meta.resourceType",
+  "basis": {
+   "lines": "rfc7644.txt:583-584",
+   "rfc": "RFC 7644",
+   "section": "3.3"
+  },
+  "characteristic": "mutability_readOnly",
+  "method": "PUT",
+  "resource": "Group",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:Group",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "meta.resourceType",
+  "basis": {
+   "lines": "rfc7644.txt:583-584",
+   "rfc": "RFC 7644",
+   "section": "3.3"
+  },
+  "characteristic": "mutability_readOnly",
+  "method": "PATCH",
+  "resource": "Group",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:Group",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "meta.resourceType",
+  "basis": {
+   "lines": "rfc7643.txt:1747-1753",
+   "rfc": "RFC 7643",
+   "section": "7"
+  },
+  "characteristic": "caseExact",
+  "method": "N/A",
+  "resource": "Group",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:Group",
+  "verdict": "SKIP"
+ },
+ {
+  "attribute": "meta.created",
+  "basis": {
+   "lines": "rfc7644.txt:583-584",
+   "rfc": "RFC 7644",
+   "section": "3.3"
+  },
+  "characteristic": "mutability_readOnly",
+  "method": "POST",
+  "resource": "Group",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:Group",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "meta.created",
+  "basis": {
+   "lines": "rfc7644.txt:583-584",
+   "rfc": "RFC 7644",
+   "section": "3.3"
+  },
+  "characteristic": "mutability_readOnly",
+  "method": "PUT",
+  "resource": "Group",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:Group",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "meta.created",
+  "basis": {
+   "lines": "rfc7644.txt:583-584",
+   "rfc": "RFC 7644",
+   "section": "3.3"
+  },
+  "characteristic": "mutability_readOnly",
+  "method": "PATCH",
+  "resource": "Group",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:Group",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "meta.lastModified",
+  "basis": {
+   "lines": "rfc7644.txt:583-584",
+   "rfc": "RFC 7644",
+   "section": "3.3"
+  },
+  "characteristic": "mutability_readOnly",
+  "method": "POST",
+  "resource": "Group",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:Group",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "meta.lastModified",
+  "basis": {
+   "lines": "rfc7644.txt:583-584",
+   "rfc": "RFC 7644",
+   "section": "3.3"
+  },
+  "characteristic": "mutability_readOnly",
+  "method": "PUT",
+  "resource": "Group",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:Group",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "meta.lastModified",
+  "basis": {
+   "lines": "rfc7644.txt:583-584",
+   "rfc": "RFC 7644",
+   "section": "3.3"
+  },
+  "characteristic": "mutability_readOnly",
+  "method": "PATCH",
+  "resource": "Group",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:Group",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "meta.location",
+  "basis": {
+   "lines": "rfc7644.txt:583-584",
+   "rfc": "RFC 7644",
+   "section": "3.3"
+  },
+  "characteristic": "mutability_readOnly",
+  "method": "POST",
+  "resource": "Group",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:Group",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "meta.location",
+  "basis": {
+   "lines": "rfc7644.txt:583-584",
+   "rfc": "RFC 7644",
+   "section": "3.3"
+  },
+  "characteristic": "mutability_readOnly",
+  "method": "PUT",
+  "resource": "Group",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:Group",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "meta.location",
+  "basis": {
+   "lines": "rfc7644.txt:583-584",
+   "rfc": "RFC 7644",
+   "section": "3.3"
+  },
+  "characteristic": "mutability_readOnly",
+  "method": "PATCH",
+  "resource": "Group",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:Group",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "meta.location",
+  "basis": {
+   "lines": "rfc7643.txt:1747-1753",
+   "rfc": "RFC 7643",
+   "section": "7"
+  },
+  "characteristic": "caseExact",
+  "method": "N/A",
+  "resource": "Group",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:Group",
+  "verdict": "SKIP"
+ },
+ {
+  "attribute": "meta.version",
+  "basis": {
+   "lines": "rfc7644.txt:583-584",
+   "rfc": "RFC 7644",
+   "section": "3.3"
+  },
+  "characteristic": "mutability_readOnly",
+  "method": "POST",
+  "resource": "Group",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:Group",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "meta.version",
+  "basis": {
+   "lines": "rfc7644.txt:583-584",
+   "rfc": "RFC 7644",
+   "section": "3.3"
+  },
+  "characteristic": "mutability_readOnly",
+  "method": "PUT",
+  "resource": "Group",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:Group",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "meta.version",
+  "basis": {
+   "lines": "rfc7644.txt:583-584",
+   "rfc": "RFC 7644",
+   "section": "3.3"
+  },
+  "characteristic": "mutability_readOnly",
+  "method": "PATCH",
+  "resource": "Group",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:Group",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "meta.version",
+  "basis": {
+   "lines": "rfc7643.txt:1747-1753",
+   "rfc": "RFC 7643",
+   "section": "7"
+  },
+  "characteristic": "caseExact",
+  "method": "N/A",
+  "resource": "Group",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:Group",
+  "verdict": "SKIP"
+ },
+ {
+  "attribute": "id",
+  "basis": {
+   "lines": "rfc7644.txt:583-584",
+   "rfc": "RFC 7644",
+   "section": "3.3"
+  },
+  "characteristic": "mutability_readOnly",
+  "method": "POST",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "id",
+  "basis": {
+   "lines": "rfc7644.txt:583-584",
+   "rfc": "RFC 7644",
+   "section": "3.3"
+  },
+  "characteristic": "mutability_readOnly",
+  "method": "PUT",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "id",
+  "basis": {
+   "lines": "rfc7644.txt:583-584",
+   "rfc": "RFC 7644",
+   "section": "3.3"
+  },
+  "characteristic": "mutability_readOnly",
+  "method": "PATCH",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "id",
+  "basis": {
+   "lines": "rfc7643.txt:1731-1732",
+   "rfc": "RFC 7643",
+   "section": "7"
+  },
+  "characteristic": "required",
+  "method": "N/A",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "SKIP"
+ },
+ {
+  "attribute": "id",
+  "basis": {
+   "lines": "rfc7643.txt:1747-1753",
+   "rfc": "RFC 7643",
+   "section": "7"
+  },
+  "characteristic": "caseExact",
+  "method": "N/A",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "SKIP"
+ },
+ {
+  "attribute": "id",
+  "basis": {
+   "lines": "rfc7643.txt:1811-1815",
+   "rfc": "RFC 7643",
+   "section": "7"
+  },
+  "characteristic": "uniqueness",
+  "method": "N/A",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "SKIP"
+ },
+ {
+  "attribute": "externalId",
+  "basis": {
+   "lines": "rfc7643.txt:1747-1753",
+   "rfc": "RFC 7643",
+   "section": "7"
+  },
+  "characteristic": "caseExact",
+  "method": "POST",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "externalId",
+  "basis": {
+   "lines": "rfc7643.txt:438",
+   "rfc": "RFC 7643",
+   "section": "2.3"
+  },
+  "characteristic": "type_wrong",
+  "method": "POST",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "externalId",
+  "basis": {
+   "lines": "rfc7643.txt:438",
+   "rfc": "RFC 7643",
+   "section": "2.3"
+  },
+  "characteristic": "type_valid",
+  "method": "POST",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "userName",
+  "basis": {
+   "lines": "rfc7643.txt:1731-1732",
+   "rfc": "RFC 7643",
+   "section": "7"
+  },
+  "characteristic": "required",
+  "method": "POST-omit",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "userName",
+  "basis": {
+   "lines": "rfc7643.txt:1731-1732",
+   "rfc": "RFC 7643",
+   "section": "7"
+  },
+  "characteristic": "required",
+  "method": "PUT-omit",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "userName",
+  "basis": {
+   "lines": "rfc7643.txt:1811-1815",
+   "rfc": "RFC 7643",
+   "section": "7"
+  },
+  "characteristic": "uniqueness",
+  "method": "POST-duplicate",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "userName",
+  "basis": {
+   "lines": "rfc7643.txt:1811-1815",
+   "rfc": "RFC 7643",
+   "section": "7"
+  },
+  "characteristic": "uniqueness",
+  "method": "PUT-duplicate",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "userName",
+  "basis": {
+   "lines": "rfc7643.txt:1811-1815",
+   "rfc": "RFC 7643",
+   "section": "7"
+  },
+  "characteristic": "uniqueness",
+  "method": "PATCH-duplicate",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "userName",
+  "basis": {
+   "lines": "rfc7643.txt:438",
+   "rfc": "RFC 7643",
+   "section": "2.3"
+  },
+  "characteristic": "type_wrong",
+  "method": "POST",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "userName",
+  "basis": {
+   "lines": "rfc7643.txt:438",
+   "rfc": "RFC 7643",
+   "section": "2.3"
+  },
+  "characteristic": "type_valid",
+  "method": "POST",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "name",
+  "basis": {
+   "lines": "rfc7643.txt:438",
+   "rfc": "RFC 7643",
+   "section": "2.3"
+  },
+  "characteristic": "type_wrong",
+  "method": "POST",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "name",
+  "basis": {
+   "lines": "rfc7643.txt:438",
+   "rfc": "RFC 7643",
+   "section": "2.3"
+  },
+  "characteristic": "type_valid",
+  "method": "POST",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "name.formatted",
+  "basis": {
+   "lines": "rfc7643.txt:438",
+   "rfc": "RFC 7643",
+   "section": "2.3"
+  },
+  "characteristic": "type_wrong",
+  "method": "POST",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "name.formatted",
+  "basis": {
+   "lines": "rfc7643.txt:438",
+   "rfc": "RFC 7643",
+   "section": "2.3"
+  },
+  "characteristic": "type_valid",
+  "method": "POST",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "name.familyName",
+  "basis": {
+   "lines": "rfc7643.txt:438",
+   "rfc": "RFC 7643",
+   "section": "2.3"
+  },
+  "characteristic": "type_wrong",
+  "method": "POST",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "name.familyName",
+  "basis": {
+   "lines": "rfc7643.txt:438",
+   "rfc": "RFC 7643",
+   "section": "2.3"
+  },
+  "characteristic": "type_valid",
+  "method": "POST",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "name.givenName",
+  "basis": {
+   "lines": "rfc7643.txt:438",
+   "rfc": "RFC 7643",
+   "section": "2.3"
+  },
+  "characteristic": "type_wrong",
+  "method": "POST",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "name.givenName",
+  "basis": {
+   "lines": "rfc7643.txt:438",
+   "rfc": "RFC 7643",
+   "section": "2.3"
+  },
+  "characteristic": "type_valid",
+  "method": "POST",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "name.middleName",
+  "basis": {
+   "lines": "rfc7643.txt:438",
+   "rfc": "RFC 7643",
+   "section": "2.3"
+  },
+  "characteristic": "type_wrong",
+  "method": "POST",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "name.middleName",
+  "basis": {
+   "lines": "rfc7643.txt:438",
+   "rfc": "RFC 7643",
+   "section": "2.3"
+  },
+  "characteristic": "type_valid",
+  "method": "POST",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "name.honorificPrefix",
+  "basis": {
+   "lines": "rfc7643.txt:438",
+   "rfc": "RFC 7643",
+   "section": "2.3"
+  },
+  "characteristic": "type_wrong",
+  "method": "POST",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "name.honorificPrefix",
+  "basis": {
+   "lines": "rfc7643.txt:438",
+   "rfc": "RFC 7643",
+   "section": "2.3"
+  },
+  "characteristic": "type_valid",
+  "method": "POST",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "name.honorificSuffix",
+  "basis": {
+   "lines": "rfc7643.txt:438",
+   "rfc": "RFC 7643",
+   "section": "2.3"
+  },
+  "characteristic": "type_wrong",
+  "method": "POST",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "name.honorificSuffix",
+  "basis": {
+   "lines": "rfc7643.txt:438",
+   "rfc": "RFC 7643",
+   "section": "2.3"
+  },
+  "characteristic": "type_valid",
+  "method": "POST",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "displayName",
+  "basis": {
+   "lines": "rfc7643.txt:438",
+   "rfc": "RFC 7643",
+   "section": "2.3"
+  },
+  "characteristic": "type_wrong",
+  "method": "POST",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "displayName",
+  "basis": {
+   "lines": "rfc7643.txt:438",
+   "rfc": "RFC 7643",
+   "section": "2.3"
+  },
+  "characteristic": "type_valid",
+  "method": "POST",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "nickName",
+  "basis": {
+   "lines": "rfc7643.txt:438",
+   "rfc": "RFC 7643",
+   "section": "2.3"
+  },
+  "characteristic": "type_wrong",
+  "method": "POST",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "nickName",
+  "basis": {
+   "lines": "rfc7643.txt:438",
+   "rfc": "RFC 7643",
+   "section": "2.3"
+  },
+  "characteristic": "type_valid",
+  "method": "POST",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "profileUrl",
+  "basis": {
+   "lines": "rfc7643.txt:438",
+   "rfc": "RFC 7643",
+   "section": "2.3"
+  },
+  "characteristic": "type_wrong",
+  "method": "POST",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "profileUrl",
+  "basis": {
+   "lines": "rfc7643.txt:438",
+   "rfc": "RFC 7643",
+   "section": "2.3"
+  },
+  "characteristic": "type_valid",
+  "method": "POST",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "title",
+  "basis": {
+   "lines": "rfc7643.txt:438",
+   "rfc": "RFC 7643",
+   "section": "2.3"
+  },
+  "characteristic": "type_wrong",
+  "method": "POST",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "title",
+  "basis": {
+   "lines": "rfc7643.txt:438",
+   "rfc": "RFC 7643",
+   "section": "2.3"
+  },
+  "characteristic": "type_valid",
+  "method": "POST",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "userType",
+  "basis": {
+   "lines": "rfc7643.txt:438",
+   "rfc": "RFC 7643",
+   "section": "2.3"
+  },
+  "characteristic": "type_wrong",
+  "method": "POST",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "userType",
+  "basis": {
+   "lines": "rfc7643.txt:438",
+   "rfc": "RFC 7643",
+   "section": "2.3"
+  },
+  "characteristic": "type_valid",
+  "method": "POST",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "preferredLanguage",
+  "basis": {
+   "lines": "rfc7643.txt:438",
+   "rfc": "RFC 7643",
+   "section": "2.3"
+  },
+  "characteristic": "type_wrong",
+  "method": "POST",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "preferredLanguage",
+  "basis": {
+   "lines": "rfc7643.txt:438",
+   "rfc": "RFC 7643",
+   "section": "2.3"
+  },
+  "characteristic": "type_valid",
+  "method": "POST",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "locale",
+  "basis": {
+   "lines": "rfc7643.txt:438",
+   "rfc": "RFC 7643",
+   "section": "2.3"
+  },
+  "characteristic": "type_wrong",
+  "method": "POST",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "locale",
+  "basis": {
+   "lines": "rfc7643.txt:438",
+   "rfc": "RFC 7643",
+   "section": "2.3"
+  },
+  "characteristic": "type_valid",
+  "method": "POST",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "timezone",
+  "basis": {
+   "lines": "rfc7643.txt:438",
+   "rfc": "RFC 7643",
+   "section": "2.3"
+  },
+  "characteristic": "type_wrong",
+  "method": "POST",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "timezone",
+  "basis": {
+   "lines": "rfc7643.txt:438",
+   "rfc": "RFC 7643",
+   "section": "2.3"
+  },
+  "characteristic": "type_valid",
+  "method": "POST",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "emails",
+  "basis": {
+   "lines": "rfc7643.txt:438",
+   "rfc": "RFC 7643",
+   "section": "2.3"
+  },
+  "characteristic": "type_wrong",
+  "method": "POST",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "emails",
+  "basis": {
+   "lines": "rfc7643.txt:438",
+   "rfc": "RFC 7643",
+   "section": "2.3"
+  },
+  "characteristic": "type_valid",
+  "method": "POST",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "emails.value",
+  "basis": {
+   "lines": "rfc7643.txt:438",
+   "rfc": "RFC 7643",
+   "section": "2.3"
+  },
+  "characteristic": "type_wrong",
+  "method": "POST",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "emails.value",
+  "basis": {
+   "lines": "rfc7643.txt:438",
+   "rfc": "RFC 7643",
+   "section": "2.3"
+  },
+  "characteristic": "type_valid",
+  "method": "POST",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "emails.type",
+  "basis": {
+   "lines": "rfc7643.txt:438",
+   "rfc": "RFC 7643",
+   "section": "2.3"
+  },
+  "characteristic": "type_wrong",
+  "method": "POST",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "emails.type",
+  "basis": {
+   "lines": "rfc7643.txt:438",
+   "rfc": "RFC 7643",
+   "section": "2.3"
+  },
+  "characteristic": "type_valid",
+  "method": "POST",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "emails.primary",
+  "basis": {
+   "lines": "rfc7643.txt:438",
+   "rfc": "RFC 7643",
+   "section": "2.3"
+  },
+  "characteristic": "type_wrong",
+  "method": "POST",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "emails.primary",
+  "basis": {
+   "lines": "rfc7643.txt:438",
+   "rfc": "RFC 7643",
+   "section": "2.3"
+  },
+  "characteristic": "type_valid",
+  "method": "POST",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "phoneNumbers",
+  "basis": {
+   "lines": "rfc7643.txt:438",
+   "rfc": "RFC 7643",
+   "section": "2.3"
+  },
+  "characteristic": "type_wrong",
+  "method": "POST",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "phoneNumbers",
+  "basis": {
+   "lines": "rfc7643.txt:438",
+   "rfc": "RFC 7643",
+   "section": "2.3"
+  },
+  "characteristic": "type_valid",
+  "method": "POST",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "phoneNumbers.value",
+  "basis": {
+   "lines": "rfc7643.txt:438",
+   "rfc": "RFC 7643",
+   "section": "2.3"
+  },
+  "characteristic": "type_wrong",
+  "method": "POST",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "phoneNumbers.value",
+  "basis": {
+   "lines": "rfc7643.txt:438",
+   "rfc": "RFC 7643",
+   "section": "2.3"
+  },
+  "characteristic": "type_valid",
+  "method": "POST",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "phoneNumbers.type",
+  "basis": {
+   "lines": "rfc7643.txt:438",
+   "rfc": "RFC 7643",
+   "section": "2.3"
+  },
+  "characteristic": "type_wrong",
+  "method": "POST",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "phoneNumbers.type",
+  "basis": {
+   "lines": "rfc7643.txt:438",
+   "rfc": "RFC 7643",
+   "section": "2.3"
+  },
+  "characteristic": "type_valid",
+  "method": "POST",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "phoneNumbers.primary",
+  "basis": {
+   "lines": "rfc7643.txt:438",
+   "rfc": "RFC 7643",
+   "section": "2.3"
+  },
+  "characteristic": "type_wrong",
+  "method": "POST",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "phoneNumbers.primary",
+  "basis": {
+   "lines": "rfc7643.txt:438",
+   "rfc": "RFC 7643",
+   "section": "2.3"
+  },
+  "characteristic": "type_valid",
+  "method": "POST",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "ims",
+  "basis": {
+   "lines": "rfc7643.txt:438",
+   "rfc": "RFC 7643",
+   "section": "2.3"
+  },
+  "characteristic": "type_wrong",
+  "method": "POST",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "ims",
+  "basis": {
+   "lines": "rfc7643.txt:438",
+   "rfc": "RFC 7643",
+   "section": "2.3"
+  },
+  "characteristic": "type_valid",
+  "method": "POST",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "ims.value",
+  "basis": {
+   "lines": "rfc7643.txt:438",
+   "rfc": "RFC 7643",
+   "section": "2.3"
+  },
+  "characteristic": "type_wrong",
+  "method": "POST",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "ims.value",
+  "basis": {
+   "lines": "rfc7643.txt:438",
+   "rfc": "RFC 7643",
+   "section": "2.3"
+  },
+  "characteristic": "type_valid",
+  "method": "POST",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "ims.type",
+  "basis": {
+   "lines": "rfc7643.txt:438",
+   "rfc": "RFC 7643",
+   "section": "2.3"
+  },
+  "characteristic": "type_wrong",
+  "method": "POST",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "ims.type",
+  "basis": {
+   "lines": "rfc7643.txt:438",
+   "rfc": "RFC 7643",
+   "section": "2.3"
+  },
+  "characteristic": "type_valid",
+  "method": "POST",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "ims.primary",
+  "basis": {
+   "lines": "rfc7643.txt:438",
+   "rfc": "RFC 7643",
+   "section": "2.3"
+  },
+  "characteristic": "type_wrong",
+  "method": "POST",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "ims.primary",
+  "basis": {
+   "lines": "rfc7643.txt:438",
+   "rfc": "RFC 7643",
+   "section": "2.3"
+  },
+  "characteristic": "type_valid",
+  "method": "POST",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "photos",
+  "basis": {
+   "lines": "rfc7643.txt:438",
+   "rfc": "RFC 7643",
+   "section": "2.3"
+  },
+  "characteristic": "type_wrong",
+  "method": "POST",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "photos",
+  "basis": {
+   "lines": "rfc7643.txt:438",
+   "rfc": "RFC 7643",
+   "section": "2.3"
+  },
+  "characteristic": "type_valid",
+  "method": "POST",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "photos.value",
+  "basis": {
+   "lines": "rfc7643.txt:438",
+   "rfc": "RFC 7643",
+   "section": "2.3"
+  },
+  "characteristic": "type_wrong",
+  "method": "POST",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "photos.value",
+  "basis": {
+   "lines": "rfc7643.txt:438",
+   "rfc": "RFC 7643",
+   "section": "2.3"
+  },
+  "characteristic": "type_valid",
+  "method": "POST",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "photos.type",
+  "basis": {
+   "lines": "rfc7643.txt:438",
+   "rfc": "RFC 7643",
+   "section": "2.3"
+  },
+  "characteristic": "type_wrong",
+  "method": "POST",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "photos.type",
+  "basis": {
+   "lines": "rfc7643.txt:438",
+   "rfc": "RFC 7643",
+   "section": "2.3"
+  },
+  "characteristic": "type_valid",
+  "method": "POST",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "photos.primary",
+  "basis": {
+   "lines": "rfc7643.txt:438",
+   "rfc": "RFC 7643",
+   "section": "2.3"
+  },
+  "characteristic": "type_wrong",
+  "method": "POST",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "photos.primary",
+  "basis": {
+   "lines": "rfc7643.txt:438",
+   "rfc": "RFC 7643",
+   "section": "2.3"
+  },
+  "characteristic": "type_valid",
+  "method": "POST",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "addresses",
+  "basis": {
+   "lines": "rfc7643.txt:438",
+   "rfc": "RFC 7643",
+   "section": "2.3"
+  },
+  "characteristic": "type_wrong",
+  "method": "POST",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "addresses",
+  "basis": {
+   "lines": "rfc7643.txt:438",
+   "rfc": "RFC 7643",
+   "section": "2.3"
+  },
+  "characteristic": "type_valid",
+  "method": "POST",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "addresses.formatted",
+  "basis": {
+   "lines": "rfc7643.txt:438",
+   "rfc": "RFC 7643",
+   "section": "2.3"
+  },
+  "characteristic": "type_wrong",
+  "method": "POST",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "FAIL"
+ },
+ {
+  "attribute": "addresses.formatted",
+  "basis": {
+   "lines": "rfc7643.txt:438",
+   "rfc": "RFC 7643",
+   "section": "2.3"
+  },
+  "characteristic": "type_valid",
+  "method": "POST",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "addresses.streetAddress",
+  "basis": {
+   "lines": "rfc7643.txt:438",
+   "rfc": "RFC 7643",
+   "section": "2.3"
+  },
+  "characteristic": "type_wrong",
+  "method": "POST",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "FAIL"
+ },
+ {
+  "attribute": "addresses.streetAddress",
+  "basis": {
+   "lines": "rfc7643.txt:438",
+   "rfc": "RFC 7643",
+   "section": "2.3"
+  },
+  "characteristic": "type_valid",
+  "method": "POST",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "addresses.locality",
+  "basis": {
+   "lines": "rfc7643.txt:438",
+   "rfc": "RFC 7643",
+   "section": "2.3"
+  },
+  "characteristic": "type_wrong",
+  "method": "POST",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "FAIL"
+ },
+ {
+  "attribute": "addresses.locality",
+  "basis": {
+   "lines": "rfc7643.txt:438",
+   "rfc": "RFC 7643",
+   "section": "2.3"
+  },
+  "characteristic": "type_valid",
+  "method": "POST",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "addresses.region",
+  "basis": {
+   "lines": "rfc7643.txt:438",
+   "rfc": "RFC 7643",
+   "section": "2.3"
+  },
+  "characteristic": "type_wrong",
+  "method": "POST",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "FAIL"
+ },
+ {
+  "attribute": "addresses.region",
+  "basis": {
+   "lines": "rfc7643.txt:438",
+   "rfc": "RFC 7643",
+   "section": "2.3"
+  },
+  "characteristic": "type_valid",
+  "method": "POST",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "addresses.postalCode",
+  "basis": {
+   "lines": "rfc7643.txt:438",
+   "rfc": "RFC 7643",
+   "section": "2.3"
+  },
+  "characteristic": "type_wrong",
+  "method": "POST",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "FAIL"
+ },
+ {
+  "attribute": "addresses.postalCode",
+  "basis": {
+   "lines": "rfc7643.txt:438",
+   "rfc": "RFC 7643",
+   "section": "2.3"
+  },
+  "characteristic": "type_valid",
+  "method": "POST",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "addresses.country",
+  "basis": {
+   "lines": "rfc7643.txt:438",
+   "rfc": "RFC 7643",
+   "section": "2.3"
+  },
+  "characteristic": "type_wrong",
+  "method": "POST",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "FAIL"
+ },
+ {
+  "attribute": "addresses.country",
+  "basis": {
+   "lines": "rfc7643.txt:438",
+   "rfc": "RFC 7643",
+   "section": "2.3"
+  },
+  "characteristic": "type_valid",
+  "method": "POST",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "addresses.type",
+  "basis": {
+   "lines": "rfc7643.txt:438",
+   "rfc": "RFC 7643",
+   "section": "2.3"
+  },
+  "characteristic": "type_wrong",
+  "method": "POST",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "FAIL"
+ },
+ {
+  "attribute": "addresses.type",
+  "basis": {
+   "lines": "rfc7643.txt:438",
+   "rfc": "RFC 7643",
+   "section": "2.3"
+  },
+  "characteristic": "type_valid",
+  "method": "POST",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "addresses.primary",
+  "basis": {
+   "lines": "rfc7643.txt:438",
+   "rfc": "RFC 7643",
+   "section": "2.3"
+  },
+  "characteristic": "type_wrong",
+  "method": "POST",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "FAIL"
+ },
+ {
+  "attribute": "addresses.primary",
+  "basis": {
+   "lines": "rfc7643.txt:438",
+   "rfc": "RFC 7643",
+   "section": "2.3"
+  },
+  "characteristic": "type_valid",
+  "method": "POST",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "active",
+  "basis": {
+   "lines": "rfc7643.txt:438",
+   "rfc": "RFC 7643",
+   "section": "2.3"
+  },
+  "characteristic": "type_wrong",
+  "method": "POST",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "active",
+  "basis": {
+   "lines": "rfc7643.txt:438",
+   "rfc": "RFC 7643",
+   "section": "2.3"
+  },
+  "characteristic": "type_valid",
+  "method": "POST",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "password",
+  "basis": {
+   "lines": "rfc7643.txt:1747-1753",
+   "rfc": "RFC 7643",
+   "section": "7"
+  },
+  "characteristic": "caseExact",
+  "method": "N/A",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "SKIP"
+ },
+ {
+  "attribute": "password",
+  "basis": {
+   "lines": "rfc7643.txt:1782-1784",
+   "rfc": "RFC 7643",
+   "section": "7"
+  },
+  "characteristic": "returned_never",
+  "method": "POST",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "password",
+  "basis": {
+   "lines": "rfc7643.txt:1782-1784",
+   "rfc": "RFC 7643",
+   "section": "7"
+  },
+  "characteristic": "returned_never",
+  "method": "GET",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "password",
+  "basis": {
+   "lines": "rfc7643.txt:1782-1784",
+   "rfc": "RFC 7643",
+   "section": "7"
+  },
+  "characteristic": "returned_never",
+  "method": "PUT",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "password",
+  "basis": {
+   "lines": "rfc7643.txt:1782-1784",
+   "rfc": "RFC 7643",
+   "section": "7"
+  },
+  "characteristic": "returned_never",
+  "method": "PATCH",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "password",
+  "basis": {
+   "lines": "rfc7643.txt:438",
+   "rfc": "RFC 7643",
+   "section": "2.3"
+  },
+  "characteristic": "type_wrong",
+  "method": "POST",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "password",
+  "basis": {
+   "lines": "rfc7643.txt:438",
+   "rfc": "RFC 7643",
+   "section": "2.3"
+  },
+  "characteristic": "type_valid",
+  "method": "POST",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "SKIP"
+ },
+ {
+  "attribute": "entitlements",
+  "basis": {
+   "lines": "rfc7643.txt:438",
+   "rfc": "RFC 7643",
+   "section": "2.3"
+  },
+  "characteristic": "type_wrong",
+  "method": "POST",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "entitlements",
+  "basis": {
+   "lines": "rfc7643.txt:438",
+   "rfc": "RFC 7643",
+   "section": "2.3"
+  },
+  "characteristic": "type_valid",
+  "method": "POST",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "entitlements.value",
+  "basis": {
+   "lines": "rfc7643.txt:438",
+   "rfc": "RFC 7643",
+   "section": "2.3"
+  },
+  "characteristic": "type_wrong",
+  "method": "POST",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "entitlements.value",
+  "basis": {
+   "lines": "rfc7643.txt:438",
+   "rfc": "RFC 7643",
+   "section": "2.3"
+  },
+  "characteristic": "type_valid",
+  "method": "POST",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "entitlements.display",
+  "basis": {
+   "lines": "rfc7643.txt:438",
+   "rfc": "RFC 7643",
+   "section": "2.3"
+  },
+  "characteristic": "type_wrong",
+  "method": "POST",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "entitlements.display",
+  "basis": {
+   "lines": "rfc7643.txt:438",
+   "rfc": "RFC 7643",
+   "section": "2.3"
+  },
+  "characteristic": "type_valid",
+  "method": "POST",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "entitlements.type",
+  "basis": {
+   "lines": "rfc7643.txt:438",
+   "rfc": "RFC 7643",
+   "section": "2.3"
+  },
+  "characteristic": "type_wrong",
+  "method": "POST",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "entitlements.type",
+  "basis": {
+   "lines": "rfc7643.txt:438",
+   "rfc": "RFC 7643",
+   "section": "2.3"
+  },
+  "characteristic": "type_valid",
+  "method": "POST",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "entitlements.primary",
+  "basis": {
+   "lines": "rfc7643.txt:438",
+   "rfc": "RFC 7643",
+   "section": "2.3"
+  },
+  "characteristic": "type_wrong",
+  "method": "POST",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "entitlements.primary",
+  "basis": {
+   "lines": "rfc7643.txt:438",
+   "rfc": "RFC 7643",
+   "section": "2.3"
+  },
+  "characteristic": "type_valid",
+  "method": "POST",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "roles",
+  "basis": {
+   "lines": "rfc7643.txt:438",
+   "rfc": "RFC 7643",
+   "section": "2.3"
+  },
+  "characteristic": "type_wrong",
+  "method": "POST",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "roles",
+  "basis": {
+   "lines": "rfc7643.txt:438",
+   "rfc": "RFC 7643",
+   "section": "2.3"
+  },
+  "characteristic": "type_valid",
+  "method": "POST",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "roles.value",
+  "basis": {
+   "lines": "rfc7643.txt:438",
+   "rfc": "RFC 7643",
+   "section": "2.3"
+  },
+  "characteristic": "type_wrong",
+  "method": "POST",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "roles.value",
+  "basis": {
+   "lines": "rfc7643.txt:438",
+   "rfc": "RFC 7643",
+   "section": "2.3"
+  },
+  "characteristic": "type_valid",
+  "method": "POST",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "roles.display",
+  "basis": {
+   "lines": "rfc7643.txt:438",
+   "rfc": "RFC 7643",
+   "section": "2.3"
+  },
+  "characteristic": "type_wrong",
+  "method": "POST",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "roles.display",
+  "basis": {
+   "lines": "rfc7643.txt:438",
+   "rfc": "RFC 7643",
+   "section": "2.3"
+  },
+  "characteristic": "type_valid",
+  "method": "POST",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "roles.type",
+  "basis": {
+   "lines": "rfc7643.txt:438",
+   "rfc": "RFC 7643",
+   "section": "2.3"
+  },
+  "characteristic": "type_wrong",
+  "method": "POST",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "roles.type",
+  "basis": {
+   "lines": "rfc7643.txt:438",
+   "rfc": "RFC 7643",
+   "section": "2.3"
+  },
+  "characteristic": "type_valid",
+  "method": "POST",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "roles.primary",
+  "basis": {
+   "lines": "rfc7643.txt:438",
+   "rfc": "RFC 7643",
+   "section": "2.3"
+  },
+  "characteristic": "type_wrong",
+  "method": "POST",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "roles.primary",
+  "basis": {
+   "lines": "rfc7643.txt:438",
+   "rfc": "RFC 7643",
+   "section": "2.3"
+  },
+  "characteristic": "type_valid",
+  "method": "POST",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "x509Certificates",
+  "basis": {
+   "lines": "rfc7643.txt:438",
+   "rfc": "RFC 7643",
+   "section": "2.3"
+  },
+  "characteristic": "type_wrong",
+  "method": "POST",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "x509Certificates",
+  "basis": {
+   "lines": "rfc7643.txt:438",
+   "rfc": "RFC 7643",
+   "section": "2.3"
+  },
+  "characteristic": "type_valid",
+  "method": "POST",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "x509Certificates.value",
+  "basis": {
+   "lines": "rfc7643.txt:438",
+   "rfc": "RFC 7643",
+   "section": "2.3"
+  },
+  "characteristic": "type_wrong",
+  "method": "POST",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "x509Certificates.value",
+  "basis": {
+   "lines": "rfc7643.txt:438",
+   "rfc": "RFC 7643",
+   "section": "2.3"
+  },
+  "characteristic": "type_valid",
+  "method": "POST",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "x509Certificates.display",
+  "basis": {
+   "lines": "rfc7643.txt:438",
+   "rfc": "RFC 7643",
+   "section": "2.3"
+  },
+  "characteristic": "type_wrong",
+  "method": "POST",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "x509Certificates.display",
+  "basis": {
+   "lines": "rfc7643.txt:438",
+   "rfc": "RFC 7643",
+   "section": "2.3"
+  },
+  "characteristic": "type_valid",
+  "method": "POST",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "x509Certificates.type",
+  "basis": {
+   "lines": "rfc7643.txt:438",
+   "rfc": "RFC 7643",
+   "section": "2.3"
+  },
+  "characteristic": "type_wrong",
+  "method": "POST",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "x509Certificates.type",
+  "basis": {
+   "lines": "rfc7643.txt:438",
+   "rfc": "RFC 7643",
+   "section": "2.3"
+  },
+  "characteristic": "type_valid",
+  "method": "POST",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "x509Certificates.primary",
+  "basis": {
+   "lines": "rfc7643.txt:438",
+   "rfc": "RFC 7643",
+   "section": "2.3"
+  },
+  "characteristic": "type_wrong",
+  "method": "POST",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "x509Certificates.primary",
+  "basis": {
+   "lines": "rfc7643.txt:438",
+   "rfc": "RFC 7643",
+   "section": "2.3"
+  },
+  "characteristic": "type_valid",
+  "method": "POST",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "groups",
+  "basis": {
+   "lines": "rfc7644.txt:583-584",
+   "rfc": "RFC 7644",
+   "section": "3.3"
+  },
+  "characteristic": "mutability_readOnly",
+  "method": "N/A",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "SKIP"
+ },
+ {
+  "attribute": "groups.value",
+  "basis": {
+   "lines": "rfc7644.txt:583-584",
+   "rfc": "RFC 7644",
+   "section": "3.3"
+  },
+  "characteristic": "mutability_readOnly",
+  "method": "POST",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "FAIL"
+ },
+ {
+  "attribute": "groups.value",
+  "basis": {
+   "lines": "rfc7644.txt:583-584",
+   "rfc": "RFC 7644",
+   "section": "3.3"
+  },
+  "characteristic": "mutability_readOnly",
+  "method": "PUT",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "groups.value",
+  "basis": {
+   "lines": "rfc7644.txt:583-584",
+   "rfc": "RFC 7644",
+   "section": "3.3"
+  },
+  "characteristic": "mutability_readOnly",
+  "method": "PATCH",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "groups.value",
+  "basis": {
+   "lines": "rfc7643.txt:1747-1753",
+   "rfc": "RFC 7643",
+   "section": "7"
+  },
+  "characteristic": "caseExact",
+  "method": "N/A",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "SKIP"
+ },
+ {
+  "attribute": "groups.$ref",
+  "basis": {
+   "lines": "rfc7644.txt:583-584",
+   "rfc": "RFC 7644",
+   "section": "3.3"
+  },
+  "characteristic": "mutability_readOnly",
+  "method": "POST",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "FAIL"
+ },
+ {
+  "attribute": "groups.$ref",
+  "basis": {
+   "lines": "rfc7644.txt:583-584",
+   "rfc": "RFC 7644",
+   "section": "3.3"
+  },
+  "characteristic": "mutability_readOnly",
+  "method": "PUT",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "groups.$ref",
+  "basis": {
+   "lines": "rfc7644.txt:583-584",
+   "rfc": "RFC 7644",
+   "section": "3.3"
+  },
+  "characteristic": "mutability_readOnly",
+  "method": "PATCH",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "groups.$ref",
+  "basis": {
+   "lines": "rfc7643.txt:1747-1753",
+   "rfc": "RFC 7643",
+   "section": "7"
+  },
+  "characteristic": "caseExact",
+  "method": "N/A",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "SKIP"
+ },
+ {
+  "attribute": "groups.display",
+  "basis": {
+   "lines": "rfc7644.txt:583-584",
+   "rfc": "RFC 7644",
+   "section": "3.3"
+  },
+  "characteristic": "mutability_readOnly",
+  "method": "POST",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "FAIL"
+ },
+ {
+  "attribute": "groups.display",
+  "basis": {
+   "lines": "rfc7644.txt:583-584",
+   "rfc": "RFC 7644",
+   "section": "3.3"
+  },
+  "characteristic": "mutability_readOnly",
+  "method": "PUT",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "groups.display",
+  "basis": {
+   "lines": "rfc7644.txt:583-584",
+   "rfc": "RFC 7644",
+   "section": "3.3"
+  },
+  "characteristic": "mutability_readOnly",
+  "method": "PATCH",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "meta",
+  "basis": {
+   "lines": "rfc7644.txt:583-584",
+   "rfc": "RFC 7644",
+   "section": "3.3"
+  },
+  "characteristic": "mutability_readOnly",
+  "method": "N/A",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "SKIP"
+ },
+ {
+  "attribute": "meta.resourceType",
+  "basis": {
+   "lines": "rfc7644.txt:583-584",
+   "rfc": "RFC 7644",
+   "section": "3.3"
+  },
+  "characteristic": "mutability_readOnly",
+  "method": "POST",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "meta.resourceType",
+  "basis": {
+   "lines": "rfc7644.txt:583-584",
+   "rfc": "RFC 7644",
+   "section": "3.3"
+  },
+  "characteristic": "mutability_readOnly",
+  "method": "PUT",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "meta.resourceType",
+  "basis": {
+   "lines": "rfc7644.txt:583-584",
+   "rfc": "RFC 7644",
+   "section": "3.3"
+  },
+  "characteristic": "mutability_readOnly",
+  "method": "PATCH",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "meta.resourceType",
+  "basis": {
+   "lines": "rfc7643.txt:1747-1753",
+   "rfc": "RFC 7643",
+   "section": "7"
+  },
+  "characteristic": "caseExact",
+  "method": "N/A",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "SKIP"
+ },
+ {
+  "attribute": "meta.created",
+  "basis": {
+   "lines": "rfc7644.txt:583-584",
+   "rfc": "RFC 7644",
+   "section": "3.3"
+  },
+  "characteristic": "mutability_readOnly",
+  "method": "POST",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "meta.created",
+  "basis": {
+   "lines": "rfc7644.txt:583-584",
+   "rfc": "RFC 7644",
+   "section": "3.3"
+  },
+  "characteristic": "mutability_readOnly",
+  "method": "PUT",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "meta.created",
+  "basis": {
+   "lines": "rfc7644.txt:583-584",
+   "rfc": "RFC 7644",
+   "section": "3.3"
+  },
+  "characteristic": "mutability_readOnly",
+  "method": "PATCH",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "meta.lastModified",
+  "basis": {
+   "lines": "rfc7644.txt:583-584",
+   "rfc": "RFC 7644",
+   "section": "3.3"
+  },
+  "characteristic": "mutability_readOnly",
+  "method": "POST",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "meta.lastModified",
+  "basis": {
+   "lines": "rfc7644.txt:583-584",
+   "rfc": "RFC 7644",
+   "section": "3.3"
+  },
+  "characteristic": "mutability_readOnly",
+  "method": "PUT",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "meta.lastModified",
+  "basis": {
+   "lines": "rfc7644.txt:583-584",
+   "rfc": "RFC 7644",
+   "section": "3.3"
+  },
+  "characteristic": "mutability_readOnly",
+  "method": "PATCH",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "meta.location",
+  "basis": {
+   "lines": "rfc7644.txt:583-584",
+   "rfc": "RFC 7644",
+   "section": "3.3"
+  },
+  "characteristic": "mutability_readOnly",
+  "method": "POST",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "meta.location",
+  "basis": {
+   "lines": "rfc7644.txt:583-584",
+   "rfc": "RFC 7644",
+   "section": "3.3"
+  },
+  "characteristic": "mutability_readOnly",
+  "method": "PUT",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "meta.location",
+  "basis": {
+   "lines": "rfc7644.txt:583-584",
+   "rfc": "RFC 7644",
+   "section": "3.3"
+  },
+  "characteristic": "mutability_readOnly",
+  "method": "PATCH",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "meta.location",
+  "basis": {
+   "lines": "rfc7643.txt:1747-1753",
+   "rfc": "RFC 7643",
+   "section": "7"
+  },
+  "characteristic": "caseExact",
+  "method": "N/A",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "SKIP"
+ },
+ {
+  "attribute": "meta.version",
+  "basis": {
+   "lines": "rfc7644.txt:583-584",
+   "rfc": "RFC 7644",
+   "section": "3.3"
+  },
+  "characteristic": "mutability_readOnly",
+  "method": "POST",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "meta.version",
+  "basis": {
+   "lines": "rfc7644.txt:583-584",
+   "rfc": "RFC 7644",
+   "section": "3.3"
+  },
+  "characteristic": "mutability_readOnly",
+  "method": "PUT",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "meta.version",
+  "basis": {
+   "lines": "rfc7644.txt:583-584",
+   "rfc": "RFC 7644",
+   "section": "3.3"
+  },
+  "characteristic": "mutability_readOnly",
+  "method": "PATCH",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "PASS"
+ },
+ {
+  "attribute": "meta.version",
+  "basis": {
+   "lines": "rfc7643.txt:1747-1753",
+   "rfc": "RFC 7643",
+   "section": "7"
+  },
+  "characteristic": "caseExact",
+  "method": "N/A",
+  "resource": "User",
+  "schema": "urn:ietf:params:scim:schemas:core:2.0:User",
+  "verdict": "SKIP"
+ }
+]
