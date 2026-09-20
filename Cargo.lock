@@ -2642,6 +2642,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "scim-conformance"
+version = "0.0.0"
+
+[[package]]
 name = "scim-server"
 version = "0.4.2"
 dependencies = [
