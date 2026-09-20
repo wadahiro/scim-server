@@ -190,6 +190,108 @@ async fn validate_group_members(
     Ok(())
 }
 
+/// Parses `externalId` from a Group create/update request body.
+///
+/// RFC 7643 §3.1 declares `externalId` "A String that is an identifier for
+/// the resource". `create_group`/`update_group` previously read it with
+/// `payload.get("externalId").and_then(|v| v.as_str())`, which silently
+/// treats a wrong-typed value (e.g. a JSON number) the same as an absent
+/// one -- the client's value is dropped instead of the request being
+/// rejected. This distinguishes "absent" (`Ok(None)`) from "present but not
+/// a string" (rejected with `invalidSyntax`).
+fn parse_group_external_id(
+    payload: &serde_json::Value,
+) -> Result<Option<String>, (StatusCode, Json<serde_json::Value>)> {
+    match payload.get("externalId") {
+        None | Some(serde_json::Value::Null) => Ok(None),
+        Some(serde_json::Value::String(s)) => Ok(Some(s.clone())),
+        Some(_) => Err(scim_error_response(
+            StatusCode::BAD_REQUEST,
+            Some("invalidSyntax"),
+            "'externalId' must be a string",
+        )),
+    }
+}
+
+/// Reads one optional `String` sub-attribute of a `members[]` element,
+/// rejecting a present-but-wrong-typed value instead of silently treating
+/// it as absent.
+fn optional_member_string_field(
+    member: &serde_json::Map<String, serde_json::Value>,
+    field: &str,
+) -> Result<Option<String>, (StatusCode, Json<serde_json::Value>)> {
+    match member.get(field) {
+        None | Some(serde_json::Value::Null) => Ok(None),
+        Some(serde_json::Value::String(s)) => Ok(Some(s.clone())),
+        Some(_) => Err(scim_error_response(
+            StatusCode::BAD_REQUEST,
+            Some("invalidSyntax"),
+            &format!("'members[].{}' must be a string", field),
+        )),
+    }
+}
+
+/// Parses the `members` array of a Group create/update request body.
+///
+/// RFC 7643 §4.2 declares `members.value`, `members.$ref`,
+/// `members.display`, and `members.type` all `String` (§2.3: Attribute
+/// Data Types). `create_group`/`update_group` previously built each
+/// `Member` with `.and_then(|v| v.as_str())` inside a `filter_map`, which
+/// silently dropped a whole element when `value` was present but
+/// wrong-typed, and silently dropped `$ref`/`display`/`type` individually
+/// when they were wrong-typed -- accepting the request (201/200) instead of
+/// rejecting the malformed input. This rejects any such type mismatch with
+/// `invalidSyntax`. An element with no `value` at all is still skipped,
+/// matching the server's prior behavior for that (distinct) case.
+fn parse_group_members(
+    payload: &serde_json::Value,
+) -> Result<Option<Vec<scim_v2::models::group::Member>>, (StatusCode, Json<serde_json::Value>)> {
+    let members_array = match payload.get("members") {
+        None | Some(serde_json::Value::Null) => return Ok(None),
+        Some(serde_json::Value::Array(arr)) => arr,
+        Some(_) => {
+            return Err(scim_error_response(
+                StatusCode::BAD_REQUEST,
+                Some("invalidSyntax"),
+                "'members' must be an array",
+            ))
+        }
+    };
+
+    let mut members = Vec::with_capacity(members_array.len());
+    for member_value in members_array {
+        let member_obj = member_value.as_object().ok_or_else(|| {
+            scim_error_response(
+                StatusCode::BAD_REQUEST,
+                Some("invalidSyntax"),
+                "Each element of 'members' must be a JSON object",
+            )
+        })?;
+
+        let value = optional_member_string_field(member_obj, "value")?;
+        let ref_ = optional_member_string_field(member_obj, "$ref")?;
+        let display = optional_member_string_field(member_obj, "display")?;
+        let type_ = optional_member_string_field(member_obj, "type")?;
+
+        if value.is_none() {
+            continue;
+        }
+
+        members.push(scim_v2::models::group::Member {
+            value,
+            ref_,
+            display,
+            type_,
+        });
+    }
+
+    Ok(if members.is_empty() {
+        None
+    } else {
+        Some(members)
+    })
+}
+
 // Helper function to apply attribute filtering to groups and create list response
 fn create_filtered_group_list_response(
     groups: Vec<Group>,
@@ -249,30 +351,10 @@ pub async fn create_group(
             .collect();
     }
 
-    if let Some(external_id) = payload.get("externalId").and_then(|v| v.as_str()) {
-        group.external_id = Some(external_id.to_string());
-    }
+    group.external_id = parse_group_external_id(&payload)?;
 
     // Extract members with proper structure
-    if let Some(members_array) = payload.get("members").and_then(|v| v.as_array()) {
-        let members: Vec<scim_v2::models::group::Member> = members_array
-            .iter()
-            .filter_map(|m| {
-                m.get("value").and_then(|v| v.as_str()).map(|value| {
-                    scim_v2::models::group::Member {
-                        value: Some(value.to_string()),
-                        ref_: m.get("$ref").and_then(|v| v.as_str()).map(String::from),
-                        display: m.get("display").and_then(|v| v.as_str()).map(String::from),
-                        type_: m.get("type").and_then(|v| v.as_str()).map(String::from),
-                    }
-                })
-            })
-            .collect();
-
-        if !members.is_empty() {
-            group.base.members = Some(members);
-        }
-    }
+    group.base.members = parse_group_members(&payload)?;
 
     // Validate that all group members exist before creating the group
     validate_group_members(&backend, tenant_id, &group.base.members).await?;
@@ -732,30 +814,10 @@ pub async fn update_group(
             .collect();
     }
 
-    if let Some(external_id) = payload.get("externalId").and_then(|v| v.as_str()) {
-        group.external_id = Some(external_id.to_string());
-    }
+    group.external_id = parse_group_external_id(&payload)?;
 
     // Extract members
-    if let Some(members_array) = payload.get("members").and_then(|v| v.as_array()) {
-        let members: Vec<scim_v2::models::group::Member> = members_array
-            .iter()
-            .filter_map(|m| {
-                m.get("value").and_then(|v| v.as_str()).map(|value| {
-                    scim_v2::models::group::Member {
-                        value: Some(value.to_string()),
-                        ref_: m.get("$ref").and_then(|v| v.as_str()).map(String::from),
-                        display: m.get("display").and_then(|v| v.as_str()).map(String::from),
-                        type_: m.get("type").and_then(|v| v.as_str()).map(String::from),
-                    }
-                })
-            })
-            .collect();
-
-        if !members.is_empty() {
-            group.base.members = Some(members);
-        }
-    }
+    group.base.members = parse_group_members(&payload)?;
 
     // Validate that all group members exist before updating the group
     validate_group_members(&backend, tenant_id, &group.base.members).await?;

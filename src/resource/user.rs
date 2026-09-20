@@ -18,7 +18,8 @@ use crate::models::{ScimListResponse, ScimPatchOp, User};
 use crate::parser::filter_parser::{parse_filter, validate_filter_attribute_types};
 use crate::parser::{ResourceType, SortSpec};
 use crate::schema::{
-    should_fetch_external_attributes, validate_addresses_primary_constraint, validate_user,
+    should_fetch_external_attributes, validate_addresses_primary_constraint,
+    validate_addresses_types, validate_user,
 };
 
 type AppState = (Arc<dyn ScimBackend>, Arc<AppConfig>);
@@ -170,10 +171,12 @@ pub async fn create_user(
 
     // `addresses` is deserialized into `User::addresses` (raw JSON) rather
     // than `User::base.addresses`, so `validate_user` above never sees it.
-    // Enforce the RFC 7643 §2.4 primary constraint for it separately.
+    // Enforce the RFC 7643 §2.4 primary constraint, and RFC 7643 §2.3/§4.1.2
+    // per-sub-attribute types, for it separately.
     if let Err(e) = validate_addresses_primary_constraint(user.addresses.as_ref()) {
         return Err(e.to_response());
     }
+    validate_addresses_types(user.addresses.as_ref())?;
 
     match backend.create_user(tenant_id, &user).await {
         Ok(mut created_user) => {
@@ -654,10 +657,12 @@ pub async fn update_user(
 
     // `addresses` is deserialized into `User::addresses` (raw JSON) rather
     // than `User::base.addresses`, so `validate_user` above never sees it.
-    // Enforce the RFC 7643 §2.4 primary constraint for it separately.
+    // Enforce the RFC 7643 §2.4 primary constraint, and RFC 7643 §2.3/§4.1.2
+    // per-sub-attribute types, for it separately.
     if let Err(e) = validate_addresses_primary_constraint(user.addresses.as_ref()) {
         return Err(e.to_response());
     }
+    validate_addresses_types(user.addresses.as_ref())?;
 
     // Phase 3: Handle conditional requests (If-Match) - Optimistic Concurrency Control
     if let Some(if_match) = headers.get("if-match") {
