@@ -23,6 +23,11 @@ ARG FEATURES="sqlite,postgresql"
 WORKDIR /app
 COPY Cargo.toml Cargo.lock ./
 COPY crates ./crates
+# crates/scim-conformance embeds these via include_str! at compile time
+# (spec/rfc/*.txt, spec/ledger/*.yaml, tools/prototype/golden/*.json are its
+# differential oracle and RFC-line citation source, not runtime config).
+COPY spec ./spec
+COPY tools/prototype/golden ./tools/prototype/golden
 RUN mkdir src && echo "fn main() {}" > src/main.rs
 RUN cargo build --release --locked --features "${FEATURES}" -p scim-server
 RUN rm -rf src
