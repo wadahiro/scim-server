@@ -23,6 +23,7 @@ pub mod basis;
 pub mod capability;
 pub mod client;
 pub mod diag;
+pub mod findings;
 pub mod gen;
 pub mod ledger;
 pub mod matrix;
@@ -32,17 +33,20 @@ pub mod report;
 pub mod requirement;
 pub mod schema;
 pub mod scim_plugin;
+pub mod scoreboard;
+pub mod spec_extract;
 pub mod templates;
 
 pub use basis::Basis;
 pub use capability::{Capabilities, Capability, Gated};
 pub use client::{Auth, ClientConfig, ScimClient};
-pub use diag::{run, DiagError, DiagOptions};
+pub use diag::{run, run_scoreboard, DiagError, DiagOptions};
 pub use gen::attrdefs::{checks_from_attrdefs, AttrdefCheck};
 pub use matrix::{Cell, Characteristic, Method, Outcome, Verdict};
 pub use render::render_text;
 pub use report::{Counts, DiagnosticReport, Finding};
 pub use schema::{decls_from_schemas, AttrDecl};
+pub use scoreboard::Scoreboard;
 
 /// Convenience entry point: reads `GET /Schemas`, derives and runs the full
 /// check matrix, and returns the outcomes. Equivalent to calling

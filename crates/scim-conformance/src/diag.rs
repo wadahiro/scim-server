@@ -10,6 +10,7 @@ use std::time::Duration;
 
 use crate::client::{self, ClientConfig, ClientExtra, ScimClient};
 use crate::report::{Counts, DiagnosticReport, Finding};
+use crate::scoreboard::{self, Scoreboard};
 
 /// Everything `scim-server diagnose` needs to run a check against one live
 /// target. Deliberately its own type rather than an extended
@@ -85,10 +86,11 @@ impl From<client::Error> for DiagError {
     }
 }
 
-/// Builds a client from `opts`, preflights it, and runs the generated
-/// checks this crate has (the full suite, or the read-only subset -- see
-/// [`DiagOptions::read_only`]).
-pub async fn run(opts: &DiagOptions) -> Result<DiagnosticReport, DiagError> {
+/// Builds a [`ScimClient`] from `opts` and preflights it with a single
+/// `GET /ServiceProviderConfig`, shared by [`run`] and [`run_scoreboard`]
+/// so both refuse to run anything at all against a target that doesn't
+/// even answer that one request, or that rejects it with 401/403.
+async fn client_from_opts(opts: &DiagOptions) -> Result<ScimClient, DiagError> {
     if opts.base_url.trim().is_empty() {
         return Err(DiagError::BadArgs("base_url must not be empty".to_string()));
     }
@@ -104,7 +106,7 @@ pub async fn run(opts: &DiagOptions) -> Result<DiagnosticReport, DiagError> {
         native_roots: opts.native_roots,
         headers: opts.headers.clone(),
     };
-    let mut client = ScimClient::with_extra(cfg, extra)?;
+    let client = ScimClient::with_extra(cfg, extra)?;
 
     let preflight = client.get("/ServiceProviderConfig").await?;
     if preflight.status == 401 || preflight.status == 403 {
@@ -119,6 +121,15 @@ pub async fn run(opts: &DiagOptions) -> Result<DiagnosticReport, DiagError> {
             preflight.detail()
         )));
     }
+
+    Ok(client)
+}
+
+/// Builds a client from `opts`, preflights it, and runs the generated
+/// checks this crate has (the full suite, or the read-only subset -- see
+/// [`DiagOptions::read_only`]).
+pub async fn run(opts: &DiagOptions) -> Result<DiagnosticReport, DiagError> {
+    let mut client = client_from_opts(opts).await?;
 
     let findings: Vec<Finding> = if opts.read_only {
         crate::checks_from_attrdefs(&mut client)
@@ -136,4 +147,15 @@ pub async fn run(opts: &DiagOptions) -> Result<DiagnosticReport, DiagError> {
         findings,
         counts,
     })
+}
+
+/// Builds a client from `opts`, preflights it, and computes the T12
+/// [`Scoreboard`] against it (`scoreboard::compute`). Ignores
+/// [`DiagOptions::read_only`]: the scoreboard's whole point is to report on
+/// what the full generated-check suite can and can't see, so a read-only
+/// run would silently under-report `req_coverage` and `detection` -- see
+/// the T12 task report for this tradeoff.
+pub async fn run_scoreboard(opts: &DiagOptions) -> Result<Scoreboard, DiagError> {
+    let mut client = client_from_opts(opts).await?;
+    Ok(scoreboard::compute(&mut client).await)
 }

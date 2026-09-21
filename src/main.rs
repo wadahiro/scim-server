@@ -39,6 +39,10 @@ async fn run_diagnose(args: DiagnoseArgs) -> ! {
         }
     };
 
+    if args.scoreboard {
+        run_scoreboard_and_exit(&opts, &args).await;
+    }
+
     let report = match scim_conformance::run(&opts).await {
         Ok(report) => report,
         Err(e) => {
@@ -64,6 +68,40 @@ async fn run_diagnose(args: DiagnoseArgs) -> ! {
     }
 
     std::process::exit(if failed { 1 } else { 0 });
+}
+
+/// T12: `--scoreboard`'s own path, split out of `run_diagnose` so that
+/// function's existing finding-by-finding report stays exactly as T11 left
+/// it. Always runs the full generated-check suite (see
+/// `scim_conformance::diag::run_scoreboard`'s doc comment on why
+/// `--read-only` is ignored here) and always exits 0 -- the scoreboard is
+/// descriptive (how much does this suite cover, how much does it catch),
+/// not a pass/fail gate the way the finding report's exit code is.
+async fn run_scoreboard_and_exit(opts: &scim_conformance::DiagOptions, args: &DiagnoseArgs) -> ! {
+    let scoreboard = match scim_conformance::run_scoreboard(opts).await {
+        Ok(sb) => sb,
+        Err(e) => {
+            eprintln!("error: {e}");
+            std::process::exit(2);
+        }
+    };
+
+    let text = scim_conformance::scoreboard::render_text(&scoreboard);
+
+    match &args.output {
+        Some(path) => {
+            if let Err(e) = std::fs::write(path, &text) {
+                eprintln!("error: could not write {}: {e}", path.display());
+                std::process::exit(2);
+            }
+            if !args.quiet {
+                println!("report written to {}", path.display());
+            }
+        }
+        None => print!("{text}"),
+    }
+
+    std::process::exit(0);
 }
 
 async fn setup_backend(

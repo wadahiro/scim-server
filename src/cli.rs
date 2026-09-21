@@ -104,6 +104,13 @@ pub struct DiagnoseArgs {
     #[arg(long)]
     pub read_only: bool,
 
+    /// Instead of the finding-by-finding report, print the T12 scoreboard:
+    /// requirement coverage, cell completeness, and detection power. Runs
+    /// the full generated-check suite either way (ignores `--read-only` --
+    /// see `scim_conformance::diag::run_scoreboard`'s doc comment).
+    #[arg(long)]
+    pub scoreboard: bool,
+
     /// Per-request timeout, in seconds.
     #[arg(long, default_value_t = 30)]
     pub timeout: u64,
