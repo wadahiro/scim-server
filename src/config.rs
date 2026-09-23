@@ -649,7 +649,51 @@ impl AppConfig {
             return Err("Configuration must contain at least one tenant".to_string());
         }
 
+        app_config.validate_meta_datetime_formats()?;
+
         Ok(app_config)
+    }
+
+    /// Reject any `meta_datetime_format` value other than the two
+    /// recognized spellings ("rfc3339", "epoch"). The comparison is
+    /// exact/case-sensitive, matching the consumer in `utils.rs`
+    /// (`if format_type == "epoch"`), so config authors get an
+    /// unambiguous, single accepted spelling for each value instead of a
+    /// value silently falling through to rfc3339.
+    ///
+    /// Validates both the global `compatibility:` block and every
+    /// tenant's `compatibility:` override (when present).
+    fn validate_meta_datetime_formats(&self) -> Result<(), String> {
+        const VALID_VALUES: [&str; 2] = ["rfc3339", "epoch"];
+
+        fn check(value: &str, where_: &str) -> Result<(), String> {
+            if VALID_VALUES.contains(&value) {
+                Ok(())
+            } else {
+                Err(format!(
+                    "Invalid meta_datetime_format {:?} in {}: must be one of {:?}",
+                    value, where_, VALID_VALUES
+                ))
+            }
+        }
+
+        check(
+            &self.compatibility.meta_datetime_format,
+            "the global compatibility block",
+        )?;
+
+        for tenant in &self.tenants {
+            if let Some(ref tenant_override) = tenant.compatibility {
+                if let Some(ref value) = tenant_override.meta_datetime_format {
+                    check(
+                        value,
+                        &format!("tenant id {}'s compatibility block", tenant.id),
+                    )?;
+                }
+            }
+        }
+
+        Ok(())
     }
 
     /// Create default configuration for in-memory SQLite with anonymous access
