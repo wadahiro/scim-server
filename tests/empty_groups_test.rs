@@ -106,10 +106,13 @@ async fn test_show_empty_groups_with_tenant_override() {
     // Override for the specific tenant
     if let Some(tenant) = app_config.tenants.get_mut(2) {
         // tenant with id: 3 (index 2)
-        tenant.compatibility = Some(CompatibilityConfig {
-            show_empty_groups_members: false,
-            ..Default::default()
-        });
+        tenant.compatibility = Some(
+            CompatibilityConfig {
+                show_empty_groups_members: false,
+                ..Default::default()
+            }
+            .into(),
+        );
     }
 
     let app = setup_test_app(app_config).await.unwrap();

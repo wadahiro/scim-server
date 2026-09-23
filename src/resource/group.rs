@@ -1147,7 +1147,7 @@ pub async fn patch_group(
                     &mut group_json,
                     &operation.op,
                     op_value,
-                    compatibility,
+                    &compatibility,
                 )
                 .map_err(|e| e.to_response())?;
             crate::schema::validate_required_attributes_present(
@@ -1167,7 +1167,7 @@ pub async fn patch_group(
     }
 
     match backend
-        .patch_group(tenant_id, &id, &patch_ops, compatibility)
+        .patch_group(tenant_id, &id, &patch_ops, &compatibility)
         .await
     {
         Ok(Some(mut group)) => {

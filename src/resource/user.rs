@@ -986,14 +986,14 @@ pub async fn patch_user(
                     &mut prospective_json,
                     &operation.op,
                     op_value,
-                    compatibility,
+                    &compatibility,
                 )
                 .map_err(|e| e.to_response())?;
         }
     }
 
     match backend
-        .patch_user(tenant_id, &id, &patch_ops, compatibility)
+        .patch_user(tenant_id, &id, &patch_ops, &compatibility)
         .await
     {
         Ok(Some(mut user)) => {

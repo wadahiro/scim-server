@@ -54,10 +54,13 @@ async fn test_patch_replace_empty_array_allowed_by_default() {
 async fn test_patch_replace_empty_array_disabled() {
     // Create config with empty array support disabled
     let mut tenant_config = common::create_test_app_config();
-    tenant_config.tenants[2].compatibility = Some(CompatibilityConfig {
-        support_patch_replace_empty_array: false,
-        ..Default::default()
-    });
+    tenant_config.tenants[2].compatibility = Some(
+        CompatibilityConfig {
+            support_patch_replace_empty_array: false,
+            ..Default::default()
+        }
+        .into(),
+    );
 
     let app = common::setup_test_app(tenant_config).await.unwrap();
     let server = TestServer::new(app).unwrap();
@@ -168,10 +171,13 @@ async fn test_patch_replace_empty_value_disabled_by_default() {
 async fn test_patch_replace_empty_value_enabled() {
     // Create config with empty value pattern support enabled
     let mut tenant_config = common::create_test_app_config();
-    tenant_config.tenants[2].compatibility = Some(CompatibilityConfig {
-        support_patch_replace_empty_value: true,
-        ..Default::default()
-    });
+    tenant_config.tenants[2].compatibility = Some(
+        CompatibilityConfig {
+            support_patch_replace_empty_value: true,
+            ..Default::default()
+        }
+        .into(),
+    );
 
     let app = common::setup_test_app(tenant_config).await.unwrap();
     let server = TestServer::new(app).unwrap();
@@ -216,11 +222,14 @@ async fn test_patch_replace_empty_value_enabled() {
 async fn test_patch_replace_normal_values_always_allowed() {
     // Create config with empty array support disabled
     let mut tenant_config = common::create_test_app_config();
-    tenant_config.tenants[2].compatibility = Some(CompatibilityConfig {
-        support_patch_replace_empty_array: false,
-        support_patch_replace_empty_value: false,
-        ..Default::default()
-    });
+    tenant_config.tenants[2].compatibility = Some(
+        CompatibilityConfig {
+            support_patch_replace_empty_array: false,
+            support_patch_replace_empty_value: false,
+            ..Default::default()
+        }
+        .into(),
+    );
 
     let app = common::setup_test_app(tenant_config).await.unwrap();
     let server = TestServer::new(app).unwrap();
@@ -272,11 +281,14 @@ async fn test_patch_replace_normal_values_always_allowed() {
 async fn test_patch_remove_operations_not_affected() {
     // Create config with empty array support disabled
     let mut tenant_config = common::create_test_app_config();
-    tenant_config.tenants[2].compatibility = Some(CompatibilityConfig {
-        support_patch_replace_empty_array: false,
-        support_patch_replace_empty_value: false,
-        ..Default::default()
-    });
+    tenant_config.tenants[2].compatibility = Some(
+        CompatibilityConfig {
+            support_patch_replace_empty_array: false,
+            support_patch_replace_empty_value: false,
+            ..Default::default()
+        }
+        .into(),
+    );
 
     let app = common::setup_test_app(tenant_config).await.unwrap();
     let server = TestServer::new(app).unwrap();
@@ -364,10 +376,13 @@ async fn test_group_patch_replace_empty_members_disabled() {
     // honor the same tenant setting -- not silently apply the built-in
     // default regardless of what the tenant configured.
     let mut tenant_config = common::create_test_app_config();
-    tenant_config.tenants[2].compatibility = Some(CompatibilityConfig {
-        support_patch_replace_empty_array: false,
-        ..Default::default()
-    });
+    tenant_config.tenants[2].compatibility = Some(
+        CompatibilityConfig {
+            support_patch_replace_empty_array: false,
+            ..Default::default()
+        }
+        .into(),
+    );
 
     let app = common::setup_test_app(tenant_config).await.unwrap();
     let server = TestServer::new(app).unwrap();
