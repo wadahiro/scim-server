@@ -42,7 +42,11 @@ impl SqliteGroupUpdater {
             })?;
 
         if count > 0 {
-            return Err(AppError::BadRequest("Group already exists".to_string()));
+            // RFC 7644 §3.12 Table 9 "uniqueness" applies to PUT (§3.5.1) the
+            // same as POST (§3.3); RFC 7643 §7 permits 400 for a uniqueness
+            // violation, but this server uses 409 + scimType "uniqueness"
+            // for consistency with the create path (see group_insert_impl.rs).
+            return Err(AppError::Conflict("Group already exists".to_string()));
         }
 
         Ok(())
