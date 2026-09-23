@@ -325,9 +325,18 @@ fn create_filtered_group_list_response(
 pub async fn create_group(
     State((backend, app_config)): State<AppState>,
     Extension(tenant_info): Extension<TenantInfo>,
+    Query(params): Query<HashMap<String, String>>,
     ScimJson(payload): ScimJson<serde_json::Value>,
 ) -> Result<Response, (StatusCode, Json<serde_json::Value>)> {
     let tenant_id = tenant_info.tenant_id;
+
+    // RFC 7644 §3.9: clients MAY request a partial resource representation
+    // on any operation that returns a resource within the response --
+    // POST included, not just GET.
+    let attribute_filter = AttributeFilter::from_params(
+        params.get("attributes").map(String::as_str),
+        params.get("excludedAttributes").map(String::as_str),
+    );
 
     // Create a Group from the JSON payload
     let mut group = Group::default();
@@ -390,7 +399,8 @@ pub async fn create_group(
                 )
             })?;
 
-            let cleaned_group_json = AttributeFilter::remove_null_fields(&group_json);
+            let cleaned_group_json =
+                attribute_filter.apply_to_resource(&group_json, ResourceType::Group);
 
             // Create response with Location and ETag headers
             let mut headers = HeaderMap::new();
@@ -771,6 +781,7 @@ pub async fn update_group(
     Extension(tenant_info): Extension<TenantInfo>,
     headers: HeaderMap,
     uri: Uri,
+    Query(params): Query<HashMap<String, String>>,
     ScimJson(payload): ScimJson<serde_json::Value>,
 ) -> Result<Response, (StatusCode, Json<serde_json::Value>)> {
     let tenant_id = tenant_info.tenant_id;
@@ -786,6 +797,15 @@ pub async fn update_group(
             ))
         }
     };
+
+    // RFC 7644 §3.5.1: "Unless otherwise specified, a successful PUT
+    // operation returns a 200 ... the entire resource", subject to the
+    // §3.9 attribute-filtering query parameters like every other operation
+    // that returns a resource within the response.
+    let attribute_filter = AttributeFilter::from_params(
+        params.get("attributes").map(String::as_str),
+        params.get("excludedAttributes").map(String::as_str),
+    );
 
     // Convert JSON payload to Group - similar to create
     let mut group = Group::default();
@@ -886,7 +906,8 @@ pub async fn update_group(
                 )
             })?;
 
-            let cleaned_group_json = AttributeFilter::remove_null_fields(&group_json);
+            let cleaned_group_json =
+                attribute_filter.apply_to_resource(&group_json, ResourceType::Group);
 
             // Build response with ETag header (Phase 2: ETag response headers)
             let mut headers = HeaderMap::new();
@@ -992,6 +1013,7 @@ pub async fn patch_group(
     Extension(tenant_info): Extension<TenantInfo>,
     headers: HeaderMap,
     uri: Uri,
+    Query(params): Query<HashMap<String, String>>,
     ScimJson(patch_ops): ScimJson<ScimPatchOp>,
 ) -> Result<Response, (StatusCode, Json<serde_json::Value>)> {
     let tenant_id = tenant_info.tenant_id;
@@ -1007,6 +1029,14 @@ pub async fn patch_group(
             ))
         }
     };
+
+    // RFC 7644 §3.5.2: a successful PATCH's 200 OK response body is
+    // "subject to the 'attributes' query parameter (see Section 3.9)",
+    // same as every other operation returning a resource.
+    let attribute_filter = AttributeFilter::from_params(
+        params.get("attributes").map(String::as_str),
+        params.get("excludedAttributes").map(String::as_str),
+    );
 
     // Phase 3: Handle conditional requests (If-Match) - Optimistic Concurrency Control
     if let Some(if_match) = headers.get("if-match") {
@@ -1165,7 +1195,8 @@ pub async fn patch_group(
                 )
             })?;
 
-            let cleaned_group_json = AttributeFilter::remove_null_fields(&group_json);
+            let cleaned_group_json =
+                attribute_filter.apply_to_resource(&group_json, ResourceType::Group);
 
             // Build response with ETag header (Phase 2: ETag response headers)
             let mut headers = HeaderMap::new();
