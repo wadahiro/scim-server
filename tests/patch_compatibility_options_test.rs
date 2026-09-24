@@ -105,7 +105,7 @@ async fn test_patch_replace_empty_array_disabled() {
         error_response["schemas"][0],
         "urn:ietf:params:scim:api:messages:2.0:Error"
     );
-    assert_eq!(error_response["scimType"], "unsupported");
+    assert_eq!(error_response["scimType"], "invalidValue");
     assert_eq!(error_response["status"], "400");
     assert!(error_response["detail"]
         .as_str()
@@ -159,7 +159,7 @@ async fn test_patch_replace_empty_value_disabled_by_default() {
         error_response["schemas"][0],
         "urn:ietf:params:scim:api:messages:2.0:Error"
     );
-    assert_eq!(error_response["scimType"], "unsupported");
+    assert_eq!(error_response["scimType"], "invalidValue");
     assert_eq!(error_response["status"], "400");
     assert!(error_response["detail"]
         .as_str()
@@ -421,7 +421,7 @@ async fn test_group_patch_replace_empty_members_disabled() {
         error_response["schemas"][0],
         "urn:ietf:params:scim:api:messages:2.0:Error"
     );
-    assert_eq!(error_response["scimType"], "unsupported");
+    assert_eq!(error_response["scimType"], "invalidValue");
     assert!(error_response["detail"]
         .as_str()
         .unwrap()

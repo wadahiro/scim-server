@@ -701,8 +701,7 @@ pub async fn update_user(
                                     Json(json!({
                                         "schemas": ["urn:ietf:params:scim:api:messages:2.0:Error"],
                                         "detail": "Resource version mismatch",
-                                        "status": "412",
-                                        "scimType": "preconditionFailed"
+                                        "status": "412"
                                     })),
                                 ));
                             }
@@ -821,8 +820,7 @@ pub async fn delete_user(
                                     Json(json!({
                                         "schemas": ["urn:ietf:params:scim:api:messages:2.0:Error"],
                                         "detail": "Resource version mismatch",
-                                        "status": "412",
-                                        "scimType": "preconditionFailed"
+                                        "status": "412"
                                     })),
                                 ));
                             }
@@ -899,8 +897,7 @@ pub async fn patch_user(
                                     Json(json!({
                                         "schemas": ["urn:ietf:params:scim:api:messages:2.0:Error"],
                                         "detail": "Resource version mismatch",
-                                        "status": "412",
-                                        "scimType": "preconditionFailed"
+                                        "status": "412"
                                     })),
                                 ));
                             }
@@ -931,7 +928,13 @@ pub async fn patch_user(
                 if arr.is_empty() && !compatibility.support_patch_replace_empty_array {
                     return Err(scim_error_response(
                         StatusCode::BAD_REQUEST,
-                        Some("unsupported"),
+                        // RFC 7644 Table 9's invalidValue description
+                        // ("the value specified was not compatible with
+                        // the operation") covers PATCH explicitly; this
+                        // tenant's compatibility settings make an
+                        // otherwise-valid empty-array clear incompatible
+                        // with the PATCH operation it configured.
+                        Some("invalidValue"),
                         "PATCH replace with empty array is not supported for this tenant",
                     ));
                 }
@@ -944,7 +947,8 @@ pub async fn patch_user(
                         {
                             return Err(scim_error_response(
                                 StatusCode::BAD_REQUEST,
-                                Some("unsupported"),
+                                // See the invalidValue rationale above.
+                                Some("invalidValue"),
                                 "PATCH replace with empty value pattern is not supported for this tenant",
                             ));
                         }

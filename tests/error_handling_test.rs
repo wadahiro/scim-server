@@ -18,7 +18,9 @@ async fn test_user_not_found() {
 
     // RFC 7644 §3.12: the body must be the SCIM Error resource, with
     // "status" as a JSON *string* (not a number), and no "scimType" for a
-    // 404 (scimType is only defined for 400-class errors, plus 409/412).
+    // 404 (Table 9 defines scimType values for 400-class errors only;
+    // "uniqueness" is separately reused for 409 per Table 8. 412 has no
+    // defined scimType at all).
     assert_eq!(
         json["schemas"],
         json!(["urn:ietf:params:scim:api:messages:2.0:Error"])

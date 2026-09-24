@@ -16,6 +16,7 @@ macro_rules! matrix_test {
             }
 
             #[tokio::test]
+            #[cfg(feature = "postgresql")]
             async fn [<$test_name _postgres>]() {
                 $test_fn(TestDatabaseType::Postgres).await;
             }

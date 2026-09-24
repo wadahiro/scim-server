@@ -337,7 +337,9 @@ async fn test_custom_endpoint_not_found() {
     let error = response.json::<serde_json::Value>();
 
     // RFC 7644 §3.12: the SCIM Error resource shape, with "status" as a
-    // JSON string and no "scimType" (only defined for 400/409/412).
+    // JSON string and no "scimType" (Table 9 defines scimType values for
+    // 400-class errors only; "uniqueness" is separately reused for 409
+    // per Table 8. 412 has no defined scimType at all).
     assert_eq!(
         error["schemas"],
         json!(["urn:ietf:params:scim:api:messages:2.0:Error"])

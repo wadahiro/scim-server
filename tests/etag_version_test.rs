@@ -215,7 +215,8 @@ async fn test_phase3_user_update_with_mismatched_if_match_fails_412() {
         "urn:ietf:params:scim:api:messages:2.0:Error"
     );
     assert_eq!(error_response["status"], "412");
-    assert_eq!(error_response["scimType"], "preconditionFailed");
+    // RFC 7644 Table 9 defines no scimType for 412 (Precondition Failed).
+    assert!(error_response.get("scimType").is_none());
     assert!(error_response["detail"]
         .as_str()
         .unwrap()
