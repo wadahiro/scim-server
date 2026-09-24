@@ -476,15 +476,16 @@ pub const PROBE_PATCH_ATOMICITY: Basis = Basis {
 /// SHOULD, and the weak-ETag MAY are three different keywords in the *same*
 /// sentence, so one citation legitimately backs three different
 /// `RfcPosition`s (`Mandated`/`Must`, `Mandated`/`Should`, `Permitted`/MAY
-/// respectively). `etag_consistency`'s `Must` (ETag header and meta.version
-/// must be the *same* string) is not itself stated by this sentence --
-/// it follows from the RFC's own worked example
-/// (`rfc7644.txt:4003-4037`, e.g. `ETag: W/"e180ee84f0671b1"` and
-/// `"version":"W\/\"e180ee84f0671b1\""` being the identical string) -- so
-/// that axis reuses this same `Basis` for the fields it *does* establish
-/// (both a header and a meta.version may exist) but the consistency
-/// requirement itself is inferred, not quoted; see
-/// `crate::axes::ETAG_CONSISTENCY`'s own doc comment.
+/// respectively). `etag_consistency` (the header and `meta.version`
+/// carrying the *same* string) rests on this sentence's shared referent,
+/// not on the RFC's worked example: examples are non-normative and must
+/// not be read as a MUST. The subject of both clauses is "SCIM ETags" --
+/// one value, specified in a header and also within `meta.version` -- so
+/// publishing two different strings means the SHOULD clause was attempted
+/// and given the wrong value. That is why the axis is `Keyword::Should`
+/// and not `Must`: nothing in RFC 7643/7644 states the equality as a
+/// requirement in its own right, so a mismatch is reported as a deviation,
+/// never as a violation.
 pub const ETAG_REPRESENTATION: Basis = Basis {
     doc: "RFC 7644",
     section: "3.14",

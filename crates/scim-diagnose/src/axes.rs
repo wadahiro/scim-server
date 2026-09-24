@@ -359,7 +359,7 @@ pub const ETAG_CONSISTENCY: Axis = Axis {
     about: "whether the ETag header and meta.version, when both present, are the identical string",
     rfc: RfcPosition::Mandated {
         basis: crate::rfc::ETAG_REPRESENTATION,
-        keyword: Keyword::Must,
+        keyword: Keyword::Should,
         expected: "consistent",
     },
     knob: None,
