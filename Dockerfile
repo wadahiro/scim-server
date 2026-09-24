@@ -22,11 +22,12 @@ FROM rust:1.96-bookworm AS builder
 ARG FEATURES="sqlite,postgresql"
 WORKDIR /app
 COPY Cargo.toml Cargo.lock ./
+COPY crates ./crates
 RUN mkdir src && echo "fn main() {}" > src/main.rs
-RUN cargo build --release --locked --features "${FEATURES}"
+RUN cargo build --release --locked --features "${FEATURES}" -p scim-server
 RUN rm -rf src
 COPY src ./src
-RUN cargo build --release --locked --features "${FEATURES}"
+RUN cargo build --release --locked --features "${FEATURES}" -p scim-server
 
 # --- shared runtime definition (settings declared once, here) ---
 FROM ${RUNTIME} AS runtime
