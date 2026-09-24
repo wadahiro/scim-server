@@ -32,10 +32,6 @@ use scim_server::cli::{Args, Command, DiagnoseArgs, OutputFormat};
 /// ripple into the serve path for no benefit to it. Unlike a conformance
 /// checker, a behavioural profile has no pass/fail of its own to encode in
 /// an exit status -- see `scim_diagnose`'s crate docs.
-///
-/// `--emit-config` (the `compatibility:` YAML payoff) lands in the next
-/// commit, alongside the seven axes it has something real to emit for --
-/// until then every axis reports itself as not yet implemented.
 async fn run_diagnose(args: DiagnoseArgs) -> ! {
     let opts = match args.to_diag_options() {
         Ok(opts) => opts,
@@ -53,10 +49,15 @@ async fn run_diagnose(args: DiagnoseArgs) -> ! {
         }
     };
 
-    let text = match args.format {
+    let mut text = match args.format {
         OutputFormat::Text => scim_diagnose::render_profile(&profile),
         OutputFormat::Json => scim_diagnose::profile_json(&profile),
     };
+
+    if args.emit_config {
+        text.push_str("\n---\n");
+        text.push_str(&scim_diagnose::compatibility_config(&profile));
+    }
 
     match &args.output {
         Some(path) => {

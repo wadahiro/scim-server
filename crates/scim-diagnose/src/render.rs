@@ -342,7 +342,10 @@ mod tests {
             "evidence must be omitted for a Known value"
         );
 
-        assert!(json.to_lowercase().contains("2026") == false);
+        assert!(
+            !json.to_lowercase().contains("2026"),
+            "per-axis records must carry no timestamp, so two runs diff cleanly"
+        );
     }
 
     #[test]

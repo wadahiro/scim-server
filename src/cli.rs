@@ -12,10 +12,10 @@
 //! [`DiagnoseArgs::to_diag_options`]'s validation -- live here.
 //!
 //! Ported and adapted from `feat/rfc-extract`'s `src/cli.rs`: the
-//! auth/TLS argument set is taken essentially as-is. `--format` and
-//! `--allow-writes` land here, alongside `scim_diagnose::runner`'s
-//! cost/capability-gated axis runner; `--emit-config` lands in the next
-//! commit alongside the seven axes it has something to emit for.
+//! auth/TLS argument set is taken essentially as-is. `--emit-config`
+//! prints `scim_diagnose::compatibility_config`'s `compatibility:` YAML
+//! block after the profile -- the payoff, now that the seven axes
+//! (`scim_diagnose::axes`) produce real values to emit.
 
 use clap::{Parser, Subcommand};
 use std::path::PathBuf;
@@ -53,9 +53,9 @@ pub struct Args {
 #[derive(Subcommand, Debug)]
 pub enum Command {
     /// Runs `scim-diagnose` against a live SCIM server and prints its
-    /// behavioural profile. Until the next commit lands the seven axes,
-    /// every axis reports itself as not yet implemented -- see
-    /// `scim_diagnose::axes`'s module docs.
+    /// behavioural profile: what the target actually does on the seven
+    /// dimensions `scim-server`'s `CompatibilityConfig` knows how to
+    /// emulate, citing RFC 7643/7644 where the RFC has an opinion at all.
     Diagnose(DiagnoseArgs),
 }
 
@@ -125,6 +125,12 @@ pub struct DiagnoseArgs {
     /// a real person, so this is opt-in.
     #[arg(long)]
     pub allow_writes: bool,
+
+    /// After the profile, also print a `compatibility:` YAML block that
+    /// makes `scim-server` emulate the diagnosed target
+    /// (`scim_diagnose::compatibility_config`).
+    #[arg(long)]
+    pub emit_config: bool,
 
     /// Per-request timeout, in seconds.
     #[arg(long, default_value_t = 30)]
