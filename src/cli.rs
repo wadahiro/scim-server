@@ -12,11 +12,10 @@
 //! [`DiagnoseArgs::to_diag_options`]'s validation -- live here.
 //!
 //! Ported and adapted from `feat/rfc-extract`'s `src/cli.rs`: the
-//! auth/TLS argument set is taken essentially as-is. This first commit's
-//! `DiagnoseArgs` only carries what `scim_diagnose::run`'s discovery-only
-//! `run` needs -- the output-shape/write-budget flags
-//! (`--format`/`--emit-config`/`--allow-writes`) land in later commits
-//! alongside the machinery they control.
+//! auth/TLS argument set is taken essentially as-is. `--format` and
+//! `--allow-writes` land here, alongside `scim_diagnose::runner`'s
+//! cost/capability-gated axis runner; `--emit-config` lands in the next
+//! commit alongside the seven axes it has something to emit for.
 
 use clap::{Parser, Subcommand};
 use std::path::PathBuf;
@@ -53,10 +52,10 @@ pub struct Args {
 
 #[derive(Subcommand, Debug)]
 pub enum Command {
-    /// Runs `scim-diagnose` against a live SCIM server. This first commit
-    /// only fetches and prints the three discovery endpoints
-    /// (`/ServiceProviderConfig`, `/Schemas`, `/ResourceTypes`); the
-    /// behavioural-axis profile lands in later commits.
+    /// Runs `scim-diagnose` against a live SCIM server and prints its
+    /// behavioural profile. Until the next commit lands the seven axes,
+    /// every axis reports itself as not yet implemented -- see
+    /// `scim_diagnose::axes`'s module docs.
     Diagnose(DiagnoseArgs),
 }
 
@@ -66,6 +65,13 @@ pub enum AuthKind {
     Bearer,
     Token,
     Basic,
+}
+
+#[derive(clap::ValueEnum, Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum OutputFormat {
+    #[default]
+    Text,
+    Json,
 }
 
 #[derive(clap::Args, Debug)]
@@ -105,6 +111,20 @@ pub struct DiagnoseArgs {
     /// Also trust the OS's native certificate store (off by default).
     #[arg(long)]
     pub native_roots: bool,
+
+    /// Output shape: human-readable text, or the stable/diffable JSON
+    /// profile (`scim_diagnose::profile_json`).
+    #[arg(long, value_enum, default_value_t = OutputFormat::Text)]
+    pub format: OutputFormat,
+
+    /// Opt into the axes that need write access (`Cost::NeedsUser` /
+    /// `Cost::NeedsUserAndGroup`): creating a User, a Group, or both.
+    /// Without this flag, only discovery-only axes are observed and the
+    /// rest report `Unobservable::NeedsWrite` -- never silently omitted.
+    /// Creating a User against a production tenant may send real email to
+    /// a real person, so this is opt-in.
+    #[arg(long)]
+    pub allow_writes: bool,
 
     /// Per-request timeout, in seconds.
     #[arg(long, default_value_t = 30)]
@@ -163,6 +183,7 @@ impl DiagnoseArgs {
             ca_certs: self.ca_certs.clone(),
             native_roots: self.native_roots,
             timeout_secs: self.timeout,
+            allow_writes: self.allow_writes,
         })
     }
 }

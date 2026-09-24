@@ -22,19 +22,20 @@ mod utils;
 use backend::database::DatabaseBackendConfig;
 use backend::{BackendFactory, ScimBackend};
 use config::AppConfig;
-use scim_server::cli::{Args, Command, DiagnoseArgs};
+use scim_server::cli::{Args, Command, DiagnoseArgs, OutputFormat};
 
-/// Runs `scim-diagnose` and prints what it found. Exits the process
-/// directly (rather than returning a value `main` would have to
+/// Runs `scim-diagnose` and prints its behavioural profile. Exits the
+/// process directly (rather than returning a value `main` would have to
 /// translate) since the exit code diagnose needs -- 0 clean, 2 bad CLI
 /// usage or an unreachable target -- doesn't fit `main`'s existing
 /// `Result<(), Box<dyn Error>>` return, and changing that signature would
-/// ripple into the serve path for no benefit to it.
+/// ripple into the serve path for no benefit to it. Unlike a conformance
+/// checker, a behavioural profile has no pass/fail of its own to encode in
+/// an exit status -- see `scim_diagnose`'s crate docs.
 ///
-/// This first commit only fetches and prints the three discovery
-/// endpoints (`scim_diagnose::Discovery`) -- the behavioural-axis profile
-/// (`render_profile`/`profile_json`/`compatibility_config`) lands in
-/// later commits, along with the CLI flags that select among them.
+/// `--emit-config` (the `compatibility:` YAML payoff) lands in the next
+/// commit, alongside the seven axes it has something real to emit for --
+/// until then every axis reports itself as not yet implemented.
 async fn run_diagnose(args: DiagnoseArgs) -> ! {
     let opts = match args.to_diag_options() {
         Ok(opts) => opts,
@@ -44,20 +45,18 @@ async fn run_diagnose(args: DiagnoseArgs) -> ! {
         }
     };
 
-    let discovery = match scim_diagnose::run(&opts).await {
-        Ok(discovery) => discovery,
+    let profile = match scim_diagnose::run(&opts).await {
+        Ok(profile) => profile,
         Err(e) => {
             eprintln!("error: {e}");
             std::process::exit(2);
         }
     };
 
-    let text = format!(
-        "ServiceProviderConfig:\n{}\n\nSchemas:\n{}\n\nResourceTypes:\n{}\n",
-        pretty(&discovery.service_provider_config),
-        pretty(&discovery.schemas),
-        pretty(&discovery.resource_types),
-    );
+    let text = match args.format {
+        OutputFormat::Text => scim_diagnose::render_profile(&profile),
+        OutputFormat::Json => scim_diagnose::profile_json(&profile),
+    };
 
     match &args.output {
         Some(path) => {
@@ -73,13 +72,6 @@ async fn run_diagnose(args: DiagnoseArgs) -> ! {
     }
 
     std::process::exit(0);
-}
-
-fn pretty(v: &Option<serde_json::Value>) -> String {
-    match v {
-        Some(v) => serde_json::to_string_pretty(v).unwrap_or_else(|_| v.to_string()),
-        None => "(unreachable or non-2xx)".to_string(),
-    }
 }
 
 async fn setup_backend(
