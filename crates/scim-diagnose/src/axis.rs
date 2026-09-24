@@ -43,10 +43,15 @@ pub enum Cost {
     NeedsUserAndGroup,
 }
 
-/// One run's finding for one [`Axis`].
+/// One run's finding for one [`Axis`] (a static axis's `id`, or -- as of
+/// the schema-derived families in `crate::matrix` -- a `DerivedAxis`'s
+/// owned, generated id such as `"mutability_readonly/User.manager.$ref/PATCH"`).
+/// Owned rather than `&'static str` because a derived id is built at run
+/// time from the target's own `GET /Schemas` response, not known at compile
+/// time the way the seven static axes' ids are.
 #[derive(Debug, Clone)]
 pub struct Observation {
-    pub axis: &'static str,
+    pub axis: String,
     pub value: Value,
     /// Always populated when `value` is `Value::Unknown` (the discovery
     /// signal needs full evidence to be useful); otherwise populated only

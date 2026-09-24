@@ -26,7 +26,7 @@ pub async fn run(client: &mut ScimClient, target: &str, allow_writes: bool) -> P
     for axis in axes::AXES {
         if !allow_writes && axis.cost != Cost::DiscoveryOnly {
             observations.push(Observation {
-                axis: axis.id,
+                axis: axis.id.to_string(),
                 value: Value::Unobservable(Unobservable::NeedsWrite),
                 evidence: Vec::new(),
                 detail: format!(

@@ -157,7 +157,7 @@ fn known_or_unknown(axis: &Axis, token: &str) -> Value {
 
 fn unobservable(axis: &Axis, u: Unobservable) -> Observation {
     Observation {
-        axis: axis.id,
+        axis: axis.id.to_string(),
         value: Value::Unobservable(u),
         evidence: Vec::new(),
         detail: String::new(),
@@ -172,7 +172,7 @@ pub(crate) async fn probe_meta_datetime_format(
     let r = safe(client.post("/Users", &make_baseline(Resource::User))).await;
     if !is_2xx(r.status) {
         return Observation {
-            axis: axis.id,
+            axis: axis.id.to_string(),
             value: Value::Unobservable(Unobservable::ProbeFailed(format!(
                 "baseline POST failed: {} {}",
                 r.status,
@@ -185,7 +185,7 @@ pub(crate) async fn probe_meta_datetime_format(
     let rj = body_of(&r);
     let Some(id) = r.id() else {
         return Observation {
-            axis: axis.id,
+            axis: axis.id.to_string(),
             value: Value::Unobservable(Unobservable::ProbeFailed(
                 "baseline POST succeeded but returned no id".to_string(),
             )),
@@ -224,7 +224,7 @@ pub(crate) async fn probe_meta_datetime_format(
     };
 
     Observation {
-        axis: axis.id,
+        axis: axis.id.to_string(),
         value: known_or_unknown(axis, &token),
         evidence,
         detail,
@@ -239,7 +239,7 @@ pub(crate) async fn probe_empty_multivalued_rendering(
     let r = safe(client.post("/Groups", &make_baseline(Resource::Group))).await;
     if !is_2xx(r.status) {
         return Observation {
-            axis: axis.id,
+            axis: axis.id.to_string(),
             value: Value::Unobservable(Unobservable::ProbeFailed(format!(
                 "baseline POST failed: {} {}",
                 r.status,
@@ -251,7 +251,7 @@ pub(crate) async fn probe_empty_multivalued_rendering(
     }
     let Some(id) = r.id() else {
         return Observation {
-            axis: axis.id,
+            axis: axis.id.to_string(),
             value: Value::Unobservable(Unobservable::ProbeFailed(
                 "baseline POST succeeded but returned no id".to_string(),
             )),
@@ -267,19 +267,19 @@ pub(crate) async fn probe_empty_multivalued_rendering(
 
     match gj.get("members") {
         None => Observation {
-            axis: axis.id,
+            axis: axis.id.to_string(),
             value: known_or_unknown(axis, "omitted"),
             evidence,
             detail: "members omitted entirely for a Group created without members".to_string(),
         },
         Some(Json::Array(a)) if a.is_empty() => Observation {
-            axis: axis.id,
+            axis: axis.id.to_string(),
             value: known_or_unknown(axis, "empty_array"),
             evidence,
             detail: "members rendered as [] for a Group created without members".to_string(),
         },
         Some(other) => Observation {
-            axis: axis.id,
+            axis: axis.id.to_string(),
             value: Value::Unobservable(Unobservable::ProbeFailed(format!(
                 "expected members absent or [], got {other:?}"
             ))),
@@ -323,7 +323,7 @@ pub(crate) async fn probe_user_groups_presence(
     let gr = safe(client.post("/Groups", &gpayload)).await;
     if !is_2xx(gr.status) {
         return Observation {
-            axis: axis.id,
+            axis: axis.id.to_string(),
             value: Value::Unobservable(Unobservable::ProbeFailed(format!(
                 "fixture Group POST failed: {} {}",
                 gr.status,
@@ -365,7 +365,7 @@ pub(crate) async fn probe_user_groups_presence(
         format!("User.groups declares returned:{declared} and does not contain {gid}: {uj}")
     };
     Observation {
-        axis: axis.id,
+        axis: axis.id.to_string(),
         value: known_or_unknown(axis, &token),
         evidence,
         detail,
@@ -389,7 +389,7 @@ async fn run_group_filter_probe(
 
     if r.status == 400 {
         return Observation {
-            axis: axis.id,
+            axis: axis.id.to_string(),
             value: known_or_unknown(axis, "rejected_400"),
             evidence,
             detail: format!(
@@ -400,7 +400,7 @@ async fn run_group_filter_probe(
     }
     if r.status != 200 {
         return Observation {
-            axis: axis.id,
+            axis: axis.id.to_string(),
             value: Value::Unobservable(Unobservable::ProbeFailed(format!(
                 "unexpected status {} for filter={filter}: {}",
                 r.status,
@@ -420,14 +420,14 @@ async fn run_group_filter_probe(
         });
     if found {
         Observation {
-            axis: axis.id,
+            axis: axis.id.to_string(),
             value: known_or_unknown(axis, "processed"),
             evidence,
             detail: format!("filter={filter} returned {expect_group_id}"),
         }
     } else {
         Observation {
-            axis: axis.id,
+            axis: axis.id.to_string(),
             value: Value::Unobservable(Unobservable::ProbeFailed(format!(
                 "filter={filter} returned 200 without {expect_group_id}: {body}"
             ))),
@@ -458,7 +458,7 @@ pub(crate) async fn probe_group_members_filter(
     let gr = safe(client.post("/Groups", &gpayload)).await;
     if !is_2xx(gr.status) {
         return Observation {
-            axis: axis.id,
+            axis: axis.id.to_string(),
             value: Value::Unobservable(Unobservable::ProbeFailed(format!(
                 "fixture Group POST failed: {} {}",
                 gr.status,
@@ -495,7 +495,7 @@ pub(crate) async fn probe_group_displayname_filter(
     let gr = safe(client.post("/Groups", &payload)).await;
     if !is_2xx(gr.status) {
         return Observation {
-            axis: axis.id,
+            axis: axis.id.to_string(),
             value: Value::Unobservable(Unobservable::ProbeFailed(format!(
                 "fixture Group POST failed: {} {}",
                 gr.status,
@@ -569,7 +569,7 @@ pub(crate) async fn probe_patch_replace_empty_array(
 
     if pr.status == 400 {
         return Observation {
-            axis: axis.id,
+            axis: axis.id.to_string(),
             value: known_or_unknown(axis, "rejected_400"),
             evidence,
             detail: format!(
@@ -580,7 +580,7 @@ pub(crate) async fn probe_patch_replace_empty_array(
     }
     if !is_2xx(pr.status) {
         return Observation {
-            axis: axis.id,
+            axis: axis.id.to_string(),
             value: Value::Unobservable(Unobservable::ProbeFailed(format!(
                 "unexpected status {}: {}",
                 pr.status,
@@ -601,14 +601,14 @@ pub(crate) async fn probe_patch_replace_empty_array(
     };
     if cleared {
         Observation {
-            axis: axis.id,
+            axis: axis.id.to_string(),
             value: known_or_unknown(axis, "cleared"),
             evidence,
             detail: "phoneNumbers absent or [] after PATCH replace with []".to_string(),
         }
     } else {
         Observation {
-            axis: axis.id,
+            axis: axis.id.to_string(),
             value: known_or_unknown(axis, "not_cleared"),
             evidence,
             detail: format!(
@@ -643,7 +643,7 @@ pub(crate) async fn probe_patch_replace_empty_value(
 
     if pr.status == 400 {
         return Observation {
-            axis: axis.id,
+            axis: axis.id.to_string(),
             value: known_or_unknown(axis, "rejected_400"),
             evidence,
             detail: format!(
@@ -654,7 +654,7 @@ pub(crate) async fn probe_patch_replace_empty_value(
     }
     if !is_2xx(pr.status) {
         return Observation {
-            axis: axis.id,
+            axis: axis.id.to_string(),
             value: Value::Unobservable(Unobservable::ProbeFailed(format!(
                 "unexpected status {}: {}",
                 pr.status,
@@ -673,7 +673,7 @@ pub(crate) async fn probe_patch_replace_empty_value(
             if a.len() == 1 && a[0].get("value").and_then(Json::as_str) == Some("") =>
         {
             Observation {
-                axis: axis.id,
+                axis: axis.id.to_string(),
                 value: known_or_unknown(axis, "stored_as_sent"),
                 evidence,
                 detail: "phoneNumbers stored as [{\"value\":\"\"}] verbatim -- a literal replace"
@@ -681,21 +681,21 @@ pub(crate) async fn probe_patch_replace_empty_value(
             }
         }
         None => Observation {
-            axis: axis.id,
+            axis: axis.id.to_string(),
             value: known_or_unknown(axis, "cleared"),
             evidence,
             detail: "phoneNumbers was removed entirely -- the server rewrote replace as clear"
                 .to_string(),
         },
         Some(Json::Array(a)) if a.is_empty() => Observation {
-            axis: axis.id,
+            axis: axis.id.to_string(),
             value: known_or_unknown(axis, "cleared"),
             evidence,
             detail: "phoneNumbers was replaced with [] -- the server rewrote replace as clear"
                 .to_string(),
         },
         other => Observation {
-            axis: axis.id,
+            axis: axis.id.to_string(),
             value: Value::Unobservable(Unobservable::ProbeFailed(format!(
                 "unexpected phoneNumbers shape after replace: {other:?}"
             ))),

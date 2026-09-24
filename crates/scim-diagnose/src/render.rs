@@ -52,7 +52,7 @@ pub fn render_profile(profile: &Profile) -> String {
     ));
 
     for obs in &profile.observations {
-        let Some(axis) = axis_for(obs.axis) else {
+        let Some(axis) = axis_for(&obs.axis) else {
             continue;
         };
         out.push_str(&format!("{}\n", axis.id));
@@ -151,7 +151,7 @@ pub fn profile_json(profile: &Profile) -> String {
         .observations
         .iter()
         .map(|obs| JsonAxis {
-            id: obs.axis,
+            id: &obs.axis,
             observed: value_token(&obs.value),
             evidence: if matches!(obs.value, Value::Unknown(_)) {
                 Some(
@@ -189,7 +189,7 @@ pub fn compatibility_config(profile: &Profile) -> String {
     let mut any = false;
 
     for obs in &profile.observations {
-        let Some(axis) = axis_for(obs.axis) else {
+        let Some(axis) = axis_for(&obs.axis) else {
             continue;
         };
         let Some(field) = axis.knob else { continue };
@@ -252,7 +252,7 @@ mod tests {
             observations: vec![
                 // Known, mandated, matches expected -> conforms.
                 Observation {
-                    axis: "meta_datetime_format",
+                    axis: "meta_datetime_format".to_string(),
                     value: Value::Known("rfc3339"),
                     evidence: vec![Exchange {
                         method: "POST".to_string(),
@@ -266,14 +266,14 @@ mod tests {
                 },
                 // Permitted -> never a fault regardless of value.
                 Observation {
-                    axis: "empty_multivalued_rendering",
+                    axis: "empty_multivalued_rendering".to_string(),
                     value: Value::Known("omitted"),
                     evidence: Vec::new(),
                     detail: "members omitted entirely".to_string(),
                 },
                 // Silent, Unknown -> the discovery signal, carries evidence.
                 Observation {
-                    axis: "group_members_filter",
+                    axis: "group_members_filter".to_string(),
                     value: Value::Unknown("processed_but_case_insensitive".to_string()),
                     evidence: vec![Exchange {
                         method: "GET".to_string(),
@@ -287,7 +287,7 @@ mod tests {
                 },
                 // Unobservable: one of each variant.
                 Observation {
-                    axis: "group_displayname_filter",
+                    axis: "group_displayname_filter".to_string(),
                     value: Value::Unobservable(crate::axis::Unobservable::CapabilityNotAdvertised(
                         "filter",
                     )),
@@ -295,19 +295,19 @@ mod tests {
                     detail: String::new(),
                 },
                 Observation {
-                    axis: "user_groups_presence",
+                    axis: "user_groups_presence".to_string(),
                     value: Value::Unobservable(crate::axis::Unobservable::NeedsWrite),
                     evidence: Vec::new(),
                     detail: "skipped: would create a User and a Group".to_string(),
                 },
                 Observation {
-                    axis: "patch_replace_empty_array",
+                    axis: "patch_replace_empty_array".to_string(),
                     value: Value::Unobservable(crate::axis::Unobservable::NotDeclaredBySchema),
                     evidence: Vec::new(),
                     detail: String::new(),
                 },
                 Observation {
-                    axis: "patch_replace_empty_value",
+                    axis: "patch_replace_empty_value".to_string(),
                     value: Value::Unobservable(crate::axis::Unobservable::ProbeFailed(
                         "fixture POST failed: 500".to_string(),
                     )),
@@ -386,7 +386,7 @@ mod tests {
             target: "t".to_string(),
             observed_at: "now".to_string(),
             observations: vec![Observation {
-                axis: "meta_datetime_format",
+                axis: "meta_datetime_format".to_string(),
                 value: Value::Unobservable(crate::axis::Unobservable::NeedsWrite),
                 evidence: Vec::new(),
                 detail: String::new(),
