@@ -1,18 +1,23 @@
-//! Integration tests for `scim-diagnose`'s seven behavioural axes, run
-//! against this repo's own server (`common::spawn_real_server`, a real
-//! HTTP listener -- `scim_diagnose::ScimClient` speaks real HTTP, not
-//! `axum_test`'s in-process transport).
+//! Integration tests for `scim-diagnose`'s sixteen static behavioural axes
+//! (the original seven `CompatibilityConfig` axes plus the nine ported
+//! from `feat/rfc-extract`'s uniqueness/sequence/atomicity/conditional
+//! templates), run against this repo's own server
+//! (`common::spawn_real_server`, a real HTTP listener --
+//! `scim_diagnose::ScimClient` speaks real HTTP, not `axum_test`'s
+//! in-process transport).
 //!
-//! Two things are asserted:
+//! Three things are asserted:
 //!
 //! 1. Against a default-`CompatibilityConfig` server, every one of the
-//!    seven axes observes a `Value::Known` value (not `Unobservable`, not
-//!    `Unknown`) -- the tool can actually see `scim-server`'s own
-//!    behaviour end to end.
+//!    sixteen axes observes a `Value::Known` value (not `Unobservable`) --
+//!    the tool can actually see `scim-server`'s own behaviour end to end.
 //! 2. The tool's core claim: start the server with a **non-default**
 //!    `CompatibilityConfig`, assert the profile changes to match it, and
 //!    that `compatibility_config()` round-trips -- the YAML it emits names
 //!    the same knob values the server was actually started with.
+//! 3. The nine new axes' actual observed values against this repo's own
+//!    server -- what `scim-server` really does for uniqueness scimType,
+//!    PATCH sequencing, atomicity, and primary demotion.
 
 mod common;
 
@@ -88,12 +93,12 @@ async fn run_profile(base_url: &str, allow_writes: bool) -> scim_diagnose::Profi
 }
 
 #[tokio::test]
-async fn all_seven_axes_are_known_against_the_default_server() {
+async fn all_sixteen_axes_are_known_against_the_default_server() {
     let handle = spawn_real_server(base_app_config(CompatibilityConfig::default())).await;
 
     let profile = run_profile(&handle.base_url, true).await;
 
-    // The profile carries the seven static axes plus the schema-derived
+    // The profile carries the sixteen static axes plus the schema-derived
     // matrix's 389 instances (crate::matrix) -- assert on the former by id,
     // not on the collection's total length.
     let static_ids: std::collections::HashSet<&str> =
@@ -105,8 +110,8 @@ async fn all_seven_axes_are_known_against_the_default_server() {
         .collect();
     assert_eq!(
         static_observed.len(),
-        7,
-        "all seven static axes must report"
+        16,
+        "all sixteen static axes must report"
     );
     for obs in &static_observed {
         match &obs.value {
@@ -118,6 +123,59 @@ async fn all_seven_axes_are_known_against_the_default_server() {
             ),
         }
     }
+
+    handle.shutdown().await;
+}
+
+/// The nine new axes' actual observed values against this repo's own
+/// reference server -- printed to stdout (visible with `cargo test --
+/// --nocapture`) so a run of this test doubles as the "observed value for
+/// each of the 9 against this server" evidence the diagnose crate exists
+/// to produce.
+#[tokio::test]
+async fn new_nine_axes_observed_values_against_this_server() {
+    let handle = spawn_real_server(base_app_config(CompatibilityConfig::default())).await;
+
+    let profile = run_profile(&handle.base_url, true).await;
+
+    let new_axis_ids = [
+        "uniqueness_scimtype/User/POST",
+        "uniqueness_scimtype/User/PUT",
+        "uniqueness_scimtype/User/PATCH",
+        "uniqueness_scimtype/Group/POST",
+        "uniqueness_scimtype/Group/PUT",
+        "uniqueness_scimtype/Group/PATCH",
+        "patch_sequential_application",
+        "patch_atomicity",
+        "patch_primary_demotion",
+    ];
+    for axis_id in new_axis_ids {
+        let obs = profile
+            .get(axis_id)
+            .unwrap_or_else(|| panic!("axis {axis_id} missing from profile"));
+        println!("{axis_id}: {:?} ({})", obs.value, obs.detail);
+        assert!(
+            matches!(obs.value, Value::Known(_)),
+            "axis {axis_id} expected a Known value against scim-server's own default server, \
+             got {:?} (detail: {})",
+            obs.value,
+            obs.detail
+        );
+    }
+
+    // scim-server's PATCH implementation actually treats operations
+    // sequentially and demotes correctly, so this repo's own server should
+    // report the RFC-preferred token for each Mandated axis.
+    let expect_known = |axis_id: &str, expected: &str| {
+        let obs = profile.get(axis_id).unwrap();
+        match &obs.value {
+            Value::Known(v) => assert_eq!(*v, expected, "axis {axis_id}: detail: {}", obs.detail),
+            other => panic!("axis {axis_id}: expected Known({expected:?}), got {other:?}"),
+        }
+    };
+    expect_known("patch_sequential_application", "b");
+    expect_known("patch_atomicity", "rejected_and_unchanged");
+    expect_known("patch_primary_demotion", "new_primary_only");
 
     handle.shutdown().await;
 }

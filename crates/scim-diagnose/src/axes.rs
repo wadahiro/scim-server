@@ -1,25 +1,32 @@
-//! The seven behavioural axes: `scim-server`'s seven `CompatibilityConfig`
-//! knobs (`src/config.rs`, documented in `CLAUDE.md`), each traced back to
-//! the real provider behaviour it exists to emulate.
+//! The sixteen static behavioural axes: `scim-server`'s seven
+//! `CompatibilityConfig` knobs (`src/config.rs`, documented in
+//! `CLAUDE.md`), each traced back to the real provider behaviour it exists
+//! to emulate, plus nine more ported from `feat/rfc-extract`'s
+//! `crates/scim-conformance/src/templates/{status,sequence,atomicity,
+//! conditional}.rs` (the `uniqueness_scimtype` family, 6 instances, and
+//! `patch_sequential_application`/`patch_atomicity`/`patch_primary_demotion`,
+//! 1 instance each).
 //!
 //! Ported from `feat/rfc-extract`'s `crates/scim-conformance/src/probes.rs`
-//! -- the HTTP-probing logic per axis is taken over close to 1:1; what
+//! (the original seven) and `.../templates/*.rs` (the nine added here) --
+//! the HTTP-probing logic per axis is taken over close to 1:1; what
 //! changes is the *shape* of the result. That branch's probes returned a
 //! schema-matrix `Outcome` (`Verdict::{Pass,Fail,Skip,Error}` against a
-//! single fixed expectation). This crate's axes instead classify the
-//! observed value against `Axis::known` (see `crate::axis::Value`) and let
-//! `crate::render` decide, per axis, whether a given value is a fault --
-//! using each axis's own `RfcPosition` rather than a single verdict baked
-//! into the probe.
+//! single fixed expectation, via a `Requirement`/ledger citation this
+//! crate does not carry over -- see `crate::rfc`'s module docs). This
+//! crate's axes instead classify the observed value against `Axis::known`
+//! (see `crate::axis::Value`) and let `crate::render` decide, per axis,
+//! whether a given value is a fault -- using each axis's own
+//! `RfcPosition` rather than a single verdict baked into the probe.
 
 use serde_json::{json, Value as Json};
 
 use crate::axis::{Axis, Cost, Observation, Unobservable, Value};
 use crate::capability::{Capabilities, Capability};
-use crate::client::{truncate, ScimClient};
+use crate::client::{truncate, ScimClient, ScimResponse};
 use crate::fixtures::{
     body_of, cleanup, fresh_user_id, is_2xx, make_baseline, safe, short_uid, Bookkeeping,
-    GROUP_URN, PATCHOP_URN,
+    GROUP_URN, PATCHOP_URN, USER_URN,
 };
 use crate::rfc::{Keyword, RfcPosition};
 use crate::schema::{decls_from_schemas, Resource};
@@ -134,8 +141,139 @@ pub const PATCH_REPLACE_EMPTY_VALUE: Axis = Axis {
     known: &["stored_as_sent", "rejected_400", "cleared"],
 };
 
-/// All seven axes, in the fixed order they're probed in ([`run_all`]) and
-/// reported in (`crate::render`).
+// ---------------------------------------------------- uniqueness_scimtype
+//
+// Ported from `feat/rfc-extract`'s
+// `crates/scim-conformance/src/templates/status.rs`: create A with a
+// unique value, then try to give B that same value via POST/PUT/PATCH, for
+// both User (`userName`) and Group (`displayName`) -- 6 instances. That
+// source branch asserted the response's `scimType` MUST be `"uniqueness"`.
+// It can't be: RFC 7644 §3.12 declares `scimType` OPTIONAL with no closing
+// keyword (`rfc7644.txt:3718-3719`, `crate::rfc::PROBE_UNIQUENESS_SCIMTYPE`),
+// and RFC 7643 §7 already makes *rejecting* a duplicate at all a MAY, not a
+// MUST (`crate::rfc::UNIQUENESS`). So this is the fingerprint axis it
+// really is (`RfcPosition::Silent`, no verdict): what does the provider
+// actually emit? `known` covers the values worth naming by hand --
+// `"uniqueness"` (Table 9's suggested keyword), `"invalidValue"` (a
+// plausible generic substitute), `"none"` (rejected with no `scimType` in
+// the body at all), and `"accepted"` (not rejected -- a legitimate,
+// RFC-permitted choice per `UNIQUENESS`'s MAY, but still worth recording
+// since it means the uniqueness constraint isn't enforced through this
+// path at all). Anything else the wire actually returns falls through to
+// `Value::Unknown`, carrying full evidence -- that unnamed-value discovery
+// is this axis's entire point.
+const UNIQUENESS_SCIMTYPE_KNOWN: &[&str] = &["uniqueness", "invalidValue", "none", "accepted"];
+
+pub const UNIQUENESS_SCIMTYPE_USER_POST: Axis = Axis {
+    id: "uniqueness_scimtype/User/POST",
+    about: "scimType (or outright acceptance) a POST of a duplicate userName produces",
+    rfc: RfcPosition::Silent,
+    knob: None,
+    cost: Cost::NeedsUser,
+    known: UNIQUENESS_SCIMTYPE_KNOWN,
+};
+
+pub const UNIQUENESS_SCIMTYPE_USER_PUT: Axis = Axis {
+    id: "uniqueness_scimtype/User/PUT",
+    about: "scimType (or outright acceptance) a PUT that sets userName to another User's value produces",
+    rfc: RfcPosition::Silent,
+    knob: None,
+    cost: Cost::NeedsUser,
+    known: UNIQUENESS_SCIMTYPE_KNOWN,
+};
+
+pub const UNIQUENESS_SCIMTYPE_USER_PATCH: Axis = Axis {
+    id: "uniqueness_scimtype/User/PATCH",
+    about: "scimType (or outright acceptance) a PATCH replace that sets userName to another User's value produces",
+    rfc: RfcPosition::Silent,
+    knob: None,
+    cost: Cost::NeedsUser,
+    known: UNIQUENESS_SCIMTYPE_KNOWN,
+};
+
+pub const UNIQUENESS_SCIMTYPE_GROUP_POST: Axis = Axis {
+    id: "uniqueness_scimtype/Group/POST",
+    about: "scimType (or outright acceptance) a POST of a duplicate displayName produces",
+    rfc: RfcPosition::Silent,
+    knob: None,
+    cost: Cost::NeedsUserAndGroup,
+    known: UNIQUENESS_SCIMTYPE_KNOWN,
+};
+
+pub const UNIQUENESS_SCIMTYPE_GROUP_PUT: Axis = Axis {
+    id: "uniqueness_scimtype/Group/PUT",
+    about: "scimType (or outright acceptance) a PUT that sets displayName to another Group's value produces",
+    rfc: RfcPosition::Silent,
+    knob: None,
+    cost: Cost::NeedsUserAndGroup,
+    known: UNIQUENESS_SCIMTYPE_KNOWN,
+};
+
+pub const UNIQUENESS_SCIMTYPE_GROUP_PATCH: Axis = Axis {
+    id: "uniqueness_scimtype/Group/PATCH",
+    about: "scimType (or outright acceptance) a PATCH replace that sets displayName to another Group's value produces",
+    rfc: RfcPosition::Silent,
+    knob: None,
+    cost: Cost::NeedsUserAndGroup,
+    known: UNIQUENESS_SCIMTYPE_KNOWN,
+};
+
+// ------------------------------------------ patch_sequential_application
+
+pub const PATCH_SEQUENTIAL_APPLICATION: Axis = Axis {
+    id: "patch_sequential_application",
+    about: "whether two replace operations against the same PATCH path apply in array order (the later one wins)",
+    rfc: RfcPosition::Mandated {
+        basis: crate::rfc::PROBE_PATCH_SEQUENTIAL_APPLICATION,
+        keyword: Keyword::Must,
+        expected: "b",
+    },
+    knob: None,
+    cost: Cost::NeedsUser,
+    known: &["b", "a", "absent"],
+};
+
+// ------------------------------------------------------- patch_atomicity
+
+pub const PATCH_ATOMICITY: Axis = Axis {
+    id: "patch_atomicity",
+    about: "whether a PATCH with a valid first operation and an invalid second operation is rejected without the first operation's effect sticking",
+    rfc: RfcPosition::Mandated {
+        basis: crate::rfc::PROBE_PATCH_ATOMICITY,
+        keyword: Keyword::Must,
+        expected: "rejected_and_unchanged",
+    },
+    knob: None,
+    cost: Cost::NeedsUser,
+    known: &["rejected_and_unchanged", "accepted", "rejected_but_changed"],
+};
+
+// ------------------------------------------------- patch_primary_demotion
+
+pub const PATCH_PRIMARY_DEMOTION: Axis = Axis {
+    id: "patch_primary_demotion",
+    about: "whether PATCH-adding a new primary email demotes the previously primary email, leaving exactly the new one primary",
+    rfc: RfcPosition::Mandated {
+        basis: crate::rfc::PROBE_PATCH_PRIMARY_DEMOTION,
+        keyword: Keyword::Must,
+        expected: "new_primary_only",
+    },
+    knob: None,
+    cost: Cost::NeedsUser,
+    known: &[
+        "new_primary_only",
+        "add_dropped",
+        "multiple_primary",
+        "wrong_primary",
+    ],
+};
+
+/// All sixteen axes, in the fixed order they're probed in ([`run_all`]) and
+/// reported in (`crate::render`): the original seven `CompatibilityConfig`
+/// axes, then the nine ported from `feat/rfc-extract`'s
+/// `templates/{status,sequence,atomicity,conditional}.rs` (the six
+/// `uniqueness_scimtype` instances, then `patch_sequential_application`,
+/// `patch_atomicity`, `patch_primary_demotion`).
 pub const AXES: &[Axis] = &[
     META_DATETIME_FORMAT,
     EMPTY_MULTIVALUED_RENDERING,
@@ -144,6 +282,15 @@ pub const AXES: &[Axis] = &[
     GROUP_DISPLAYNAME_FILTER,
     PATCH_REPLACE_EMPTY_ARRAY,
     PATCH_REPLACE_EMPTY_VALUE,
+    UNIQUENESS_SCIMTYPE_USER_POST,
+    UNIQUENESS_SCIMTYPE_USER_PUT,
+    UNIQUENESS_SCIMTYPE_USER_PATCH,
+    UNIQUENESS_SCIMTYPE_GROUP_POST,
+    UNIQUENESS_SCIMTYPE_GROUP_PUT,
+    UNIQUENESS_SCIMTYPE_GROUP_PATCH,
+    PATCH_SEQUENTIAL_APPLICATION,
+    PATCH_ATOMICITY,
+    PATCH_PRIMARY_DEMOTION,
 ];
 
 // ---------------------------------------------------------------- probes
@@ -705,11 +852,578 @@ pub(crate) async fn probe_patch_replace_empty_value(
     }
 }
 
-/// Runs all seven axis probes, in the fixed [`AXES`] order, against
-/// `client`. Deterministic: no probe depends on another's outcome, only
-/// (for the two filter probes and the two PATCH probes) on the provider's
-/// own advertised capabilities. Cleans up every fixture it created
-/// afterward, best-effort, the same way `crate::runner`'s caller expects.
+// ---------------------------------------------- uniqueness_scimtype probes
+
+fn unique_field(resource: Resource) -> &'static str {
+    match resource {
+        Resource::User | Resource::EnterpriseUser => "userName",
+        Resource::Group => "displayName",
+    }
+}
+
+fn schema_urn(resource: Resource) -> &'static str {
+    match resource {
+        Resource::User | Resource::EnterpriseUser => USER_URN,
+        Resource::Group => GROUP_URN,
+    }
+}
+
+fn make_with_value(resource: Resource, value: &str) -> Json {
+    let mut v = json!({ "schemas": [schema_urn(resource)] });
+    v[unique_field(resource)] = json!(value);
+    v
+}
+
+/// Classifies `r` (the response to attempting to give B a value A already
+/// holds) against `axis`'s `known` vocabulary. See `UNIQUENESS_SCIMTYPE_KNOWN`
+/// for what each token means.
+fn judge_uniqueness_scimtype(axis: &Axis, r: &ScimResponse) -> (Value, String) {
+    if is_2xx(r.status) {
+        return (
+            known_or_unknown(axis, "accepted"),
+            format!(
+                "duplicate value accepted instead of rejected (status={})",
+                r.status
+            ),
+        );
+    }
+    match r.scim_type() {
+        Some(st) if st == "uniqueness" => (
+            known_or_unknown(axis, "uniqueness"),
+            format!(
+                "rejected (status={}) with scimType=\"uniqueness\"",
+                r.status
+            ),
+        ),
+        Some(st) => (
+            known_or_unknown(axis, &st),
+            format!(
+                "rejected (status={}) with scimType={st:?}, not \"uniqueness\"",
+                r.status
+            ),
+        ),
+        None => (
+            known_or_unknown(axis, "none"),
+            format!(
+                "rejected (status={}) with no scimType in the error body: {}",
+                r.status,
+                truncate(&r.raw, 150)
+            ),
+        ),
+    }
+}
+
+async fn probe_uniqueness_scimtype_post(
+    axis: &Axis,
+    client: &ScimClient,
+    bk: &mut Bookkeeping,
+    resource: Resource,
+) -> Observation {
+    let endpoint = resource.endpoint();
+    let dup_value = format!("dup-{}", short_uid());
+    let a = safe(client.post(endpoint, &make_with_value(resource, &dup_value))).await;
+    if let Some(id) = a.id() {
+        bk.note(endpoint, id);
+    }
+    if !is_2xx(a.status) {
+        return unobservable(
+            axis,
+            Unobservable::ProbeFailed(format!(
+                "could not create fixture A: {} {}",
+                a.status,
+                truncate(&a.raw, 200)
+            )),
+        );
+    }
+    let b = safe(client.post(endpoint, &make_with_value(resource, &dup_value))).await;
+    if let Some(id) = b.id() {
+        bk.note(endpoint, id);
+    }
+    let (value, detail) = judge_uniqueness_scimtype(axis, &b);
+    Observation {
+        axis: axis.id.to_string(),
+        value,
+        evidence: vec![a.exchange.clone(), b.exchange.clone()],
+        detail,
+    }
+}
+
+async fn probe_uniqueness_scimtype_put(
+    axis: &Axis,
+    client: &ScimClient,
+    bk: &mut Bookkeeping,
+    resource: Resource,
+) -> Observation {
+    let endpoint = resource.endpoint();
+    let field = unique_field(resource);
+    let a_value = format!("dupA-{}", short_uid());
+    let a = safe(client.post(endpoint, &make_with_value(resource, &a_value))).await;
+    let b_created = safe(client.post(
+        endpoint,
+        &make_with_value(resource, &format!("dupB-{}", short_uid())),
+    ))
+    .await;
+    match (a.id(), b_created.id()) {
+        (Some(aid), Some(bid)) => {
+            bk.note(endpoint, aid);
+            bk.note(endpoint, bid.clone());
+            let mut put_body = body_of(&b_created);
+            put_body[field] = json!(a_value);
+            let r = safe(client.put(&format!("{endpoint}/{bid}"), &put_body)).await;
+            let (value, detail) = judge_uniqueness_scimtype(axis, &r);
+            Observation {
+                axis: axis.id.to_string(),
+                value,
+                evidence: vec![
+                    a.exchange.clone(),
+                    b_created.exchange.clone(),
+                    r.exchange.clone(),
+                ],
+                detail,
+            }
+        }
+        _ => unobservable(
+            axis,
+            Unobservable::ProbeFailed("could not create A/B fixtures".to_string()),
+        ),
+    }
+}
+
+async fn probe_uniqueness_scimtype_patch(
+    axis: &Axis,
+    client: &ScimClient,
+    bk: &mut Bookkeeping,
+    resource: Resource,
+) -> Observation {
+    let endpoint = resource.endpoint();
+    let field = unique_field(resource);
+    let a_value = format!("dupA-{}", short_uid());
+    let a = safe(client.post(endpoint, &make_with_value(resource, &a_value))).await;
+    let b_created = safe(client.post(
+        endpoint,
+        &make_with_value(resource, &format!("dupB-{}", short_uid())),
+    ))
+    .await;
+    match (a.id(), b_created.id()) {
+        (Some(aid), Some(bid)) => {
+            bk.note(endpoint, aid);
+            bk.note(endpoint, bid.clone());
+            let patch_body = json!({
+                "schemas": [PATCHOP_URN],
+                "Operations": [{"op": "replace", "path": field, "value": a_value}],
+            });
+            let r = safe(client.patch(&format!("{endpoint}/{bid}"), &patch_body)).await;
+            let (value, detail) = judge_uniqueness_scimtype(axis, &r);
+            Observation {
+                axis: axis.id.to_string(),
+                value,
+                evidence: vec![
+                    a.exchange.clone(),
+                    b_created.exchange.clone(),
+                    r.exchange.clone(),
+                ],
+                detail,
+            }
+        }
+        _ => unobservable(
+            axis,
+            Unobservable::ProbeFailed("could not create A/B fixtures".to_string()),
+        ),
+    }
+}
+
+pub(crate) async fn probe_uniqueness_scimtype_user_post(
+    client: &ScimClient,
+    bk: &mut Bookkeeping,
+) -> Observation {
+    probe_uniqueness_scimtype_post(&UNIQUENESS_SCIMTYPE_USER_POST, client, bk, Resource::User).await
+}
+
+pub(crate) async fn probe_uniqueness_scimtype_user_put(
+    client: &ScimClient,
+    bk: &mut Bookkeeping,
+) -> Observation {
+    probe_uniqueness_scimtype_put(&UNIQUENESS_SCIMTYPE_USER_PUT, client, bk, Resource::User).await
+}
+
+pub(crate) async fn probe_uniqueness_scimtype_user_patch(
+    client: &ScimClient,
+    bk: &mut Bookkeeping,
+    caps: &Capabilities,
+) -> Observation {
+    let axis = &UNIQUENESS_SCIMTYPE_USER_PATCH;
+    if caps.get(Capability::Patch) == Some(false) {
+        return unobservable(axis, Unobservable::CapabilityNotAdvertised("patch"));
+    }
+    probe_uniqueness_scimtype_patch(axis, client, bk, Resource::User).await
+}
+
+pub(crate) async fn probe_uniqueness_scimtype_group_post(
+    client: &ScimClient,
+    bk: &mut Bookkeeping,
+) -> Observation {
+    probe_uniqueness_scimtype_post(&UNIQUENESS_SCIMTYPE_GROUP_POST, client, bk, Resource::Group)
+        .await
+}
+
+pub(crate) async fn probe_uniqueness_scimtype_group_put(
+    client: &ScimClient,
+    bk: &mut Bookkeeping,
+) -> Observation {
+    probe_uniqueness_scimtype_put(&UNIQUENESS_SCIMTYPE_GROUP_PUT, client, bk, Resource::Group).await
+}
+
+pub(crate) async fn probe_uniqueness_scimtype_group_patch(
+    client: &ScimClient,
+    bk: &mut Bookkeeping,
+    caps: &Capabilities,
+) -> Observation {
+    let axis = &UNIQUENESS_SCIMTYPE_GROUP_PATCH;
+    if caps.get(Capability::Patch) == Some(false) {
+        return unobservable(axis, Unobservable::CapabilityNotAdvertised("patch"));
+    }
+    probe_uniqueness_scimtype_patch(axis, client, bk, Resource::Group).await
+}
+
+// --------------------------------------- patch_sequential_application probe
+
+pub(crate) async fn probe_patch_sequential_application(
+    client: &ScimClient,
+    bk: &mut Bookkeeping,
+    caps: &Capabilities,
+) -> Observation {
+    let axis = &PATCH_SEQUENTIAL_APPLICATION;
+    if caps.get(Capability::Patch) == Some(false) {
+        return unobservable(axis, Unobservable::CapabilityNotAdvertised("patch"));
+    }
+    let endpoint = "/Users";
+
+    let created = safe(client.post(
+        endpoint,
+        &json!({"schemas": [USER_URN], "userName": format!("u-seq-{}", short_uid())}),
+    ))
+    .await;
+    if !is_2xx(created.status) {
+        return unobservable(
+            axis,
+            Unobservable::ProbeFailed(format!(
+                "could not create fixture: {} {}",
+                created.status,
+                truncate(&created.raw, 200)
+            )),
+        );
+    }
+    let Some(id) = created.id() else {
+        return unobservable(
+            axis,
+            Unobservable::ProbeFailed("fixture POST succeeded but returned no id".to_string()),
+        );
+    };
+    bk.note(endpoint, id.clone());
+
+    let patch_body = json!({
+        "schemas": [PATCHOP_URN],
+        "Operations": [
+            {"op": "replace", "path": "nickName", "value": "a"},
+            {"op": "replace", "path": "nickName", "value": "b"},
+        ],
+    });
+    let r = safe(client.patch(&format!("{endpoint}/{id}"), &patch_body)).await;
+    let mut evidence = vec![created.exchange.clone(), r.exchange.clone()];
+
+    if !is_2xx(r.status) {
+        return Observation {
+            axis: axis.id.to_string(),
+            value: Value::Unobservable(Unobservable::ProbeFailed(format!(
+                "PATCH with 2 sequential replace operations on the same path failed: status={} \
+                 body={}",
+                r.status,
+                truncate(&r.raw, 150)
+            ))),
+            evidence,
+            detail: String::new(),
+        };
+    }
+
+    let got = safe(client.get(&format!("{endpoint}/{id}"))).await;
+    evidence.push(got.exchange.clone());
+    let gj = body_of(&got);
+    let value_seen = gj.get("nickName").and_then(Json::as_str).map(String::from);
+    let (token, detail) = match value_seen.as_deref() {
+        Some("b") => (
+            "b".to_string(),
+            "the second (later) operation's value won, as RFC 7644 §3.5.2 describes".to_string(),
+        ),
+        Some("a") => (
+            "a".to_string(),
+            "the first operation's value won instead of the second -- operations are not \
+             applied in array order"
+                .to_string(),
+        ),
+        Some(other) => (
+            other.to_string(),
+            format!(
+                "nickName={other:?} after two sequential replace operations (\"a\" then \"b\"), \
+                 neither of which it is"
+            ),
+        ),
+        None => (
+            "absent".to_string(),
+            "nickName absent after a PATCH that should have set it to \"b\"".to_string(),
+        ),
+    };
+    Observation {
+        axis: axis.id.to_string(),
+        value: known_or_unknown(axis, &token),
+        evidence,
+        detail,
+    }
+}
+
+// -------------------------------------------------- patch_atomicity probe
+
+pub(crate) async fn probe_patch_atomicity(
+    client: &ScimClient,
+    bk: &mut Bookkeeping,
+    caps: &Capabilities,
+) -> Observation {
+    let axis = &PATCH_ATOMICITY;
+    if caps.get(Capability::Patch) == Some(false) {
+        return unobservable(axis, Unobservable::CapabilityNotAdvertised("patch"));
+    }
+    let endpoint = "/Users";
+
+    let created = safe(client.post(
+        endpoint,
+        &json!({"schemas": [USER_URN], "userName": format!("u-atomic-{}", short_uid())}),
+    ))
+    .await;
+    if !is_2xx(created.status) {
+        return unobservable(
+            axis,
+            Unobservable::ProbeFailed(format!(
+                "could not create fixture: {} {}",
+                created.status,
+                truncate(&created.raw, 200)
+            )),
+        );
+    }
+    let Some(id) = created.id() else {
+        return unobservable(
+            axis,
+            Unobservable::ProbeFailed("fixture POST succeeded but returned no id".to_string()),
+        );
+    };
+    bk.note(endpoint, id.clone());
+
+    // A valid first operation, followed by a second operation this crate
+    // does not expect any server to recognize (an unrecognised `op` value)
+    // -- forces a failure without relying on a `readOnly` write being
+    // silently ignored rather than rejected (see the source branch's note,
+    // ported into `crate::rfc::PROBE_PATCH_ATOMICITY`'s sibling doc
+    // comments).
+    let patch_body = json!({
+        "schemas": [PATCHOP_URN],
+        "Operations": [
+            {"op": "replace", "path": "nickName", "value": "should-not-stick"},
+            {"op": "frobnicate", "path": "nickName", "value": "also-should-not-stick"},
+        ],
+    });
+    let r = safe(client.patch(&format!("{endpoint}/{id}"), &patch_body)).await;
+    let mut evidence = vec![created.exchange.clone(), r.exchange.clone()];
+
+    if is_2xx(r.status) {
+        return Observation {
+            axis: axis.id.to_string(),
+            value: known_or_unknown(axis, "accepted"),
+            evidence,
+            detail: format!(
+                "a PATCH containing an invalid operation was accepted (status={}) instead of \
+                 failing atomically",
+                r.status
+            ),
+        };
+    }
+
+    // Both halves of RFC 7644 §3.5.2's atomicity sentence must hold: the
+    // request failed (checked above) AND the valid first operation's
+    // effect was not partially applied (checked here). A check that stops
+    // at "the request failed" would also pass a server that rejects the
+    // request but still applies the first operation -- unsound, and
+    // exactly the gap this axis exists to catch.
+    let got = safe(client.get(&format!("{endpoint}/{id}"))).await;
+    evidence.push(got.exchange.clone());
+    let gj = body_of(&got);
+    let nick_name = gj.get("nickName").cloned();
+    let unchanged = match &nick_name {
+        None => true,
+        Some(v) => v.is_null(),
+    };
+    let (token, detail) = if unchanged {
+        (
+            "rejected_and_unchanged".to_string(),
+            format!(
+                "the request failed (status={}) and the valid first operation's effect was not \
+                 partially applied",
+                r.status
+            ),
+        )
+    } else {
+        (
+            "rejected_but_changed".to_string(),
+            format!(
+                "the request failed (status={}) but nickName={nick_name:?} -- the valid first \
+                 operation was partially applied despite the second operation's error",
+                r.status
+            ),
+        )
+    };
+    Observation {
+        axis: axis.id.to_string(),
+        value: known_or_unknown(axis, &token),
+        evidence,
+        detail,
+    }
+}
+
+// ------------------------------------------- patch_primary_demotion probe
+
+pub(crate) async fn probe_patch_primary_demotion(
+    client: &ScimClient,
+    bk: &mut Bookkeeping,
+    caps: &Capabilities,
+) -> Observation {
+    let axis = &PATCH_PRIMARY_DEMOTION;
+    if caps.get(Capability::Patch) == Some(false) {
+        return unobservable(axis, Unobservable::CapabilityNotAdvertised("patch"));
+    }
+    let endpoint = "/Users";
+
+    let created = safe(client.post(
+        endpoint,
+        &json!({
+            "schemas": [USER_URN],
+            "userName": format!("u-demote-{}", short_uid()),
+            "emails": [
+                {"value": format!("a-{}@example.com", short_uid()), "primary": true},
+                {"value": format!("b-{}@example.com", short_uid()), "primary": false},
+            ],
+        }),
+    ))
+    .await;
+    if !is_2xx(created.status) {
+        return unobservable(
+            axis,
+            Unobservable::ProbeFailed(format!(
+                "could not create fixture: {} {}",
+                created.status,
+                truncate(&created.raw, 200)
+            )),
+        );
+    }
+    let Some(id) = created.id() else {
+        return unobservable(
+            axis,
+            Unobservable::ProbeFailed("fixture POST succeeded but returned no id".to_string()),
+        );
+    };
+    bk.note(endpoint, id.clone());
+
+    let new_email = format!("c-{}@example.com", short_uid());
+    let patch_body = json!({
+        "schemas": [PATCHOP_URN],
+        "Operations": [
+            {"op": "add", "path": "emails", "value": [{"value": new_email, "primary": true}]},
+        ],
+    });
+    let r = safe(client.patch(&format!("{endpoint}/{id}"), &patch_body)).await;
+    let mut evidence = vec![created.exchange.clone(), r.exchange.clone()];
+
+    if !is_2xx(r.status) {
+        return Observation {
+            axis: axis.id.to_string(),
+            value: Value::Unobservable(Unobservable::ProbeFailed(format!(
+                "PATCH add of a new primary email failed: status={}",
+                r.status
+            ))),
+            evidence,
+            detail: String::new(),
+        };
+    }
+
+    let got = safe(client.get(&format!("{endpoint}/{id}"))).await;
+    evidence.push(got.exchange.clone());
+    let gj = body_of(&got);
+    let emails: Vec<Json> = gj
+        .get("emails")
+        .and_then(Json::as_array)
+        .cloned()
+        .unwrap_or_default();
+    // `primary_count == 1` alone is not enough: a server that silently
+    // dropped the `add` operation entirely (2xx, but the new email never
+    // actually appended) would leave the *original* primary (from
+    // creation) as the lone primary:true value -- primary_count == 1 by
+    // accident, with demotion never actually exercised. So the new email's
+    // presence, and that it specifically is the lone primary:true value,
+    // both have to hold.
+    let primary_values: Vec<String> = emails
+        .iter()
+        .filter(|e| e.get("primary").and_then(Json::as_bool) == Some(true))
+        .filter_map(|e| e.get("value").and_then(Json::as_str).map(String::from))
+        .collect();
+    let new_email_present = emails
+        .iter()
+        .any(|e| e.get("value").and_then(Json::as_str) == Some(new_email.as_str()));
+
+    let (token, detail) = if !new_email_present {
+        (
+            "add_dropped".to_string(),
+            format!(
+                "the PATCH add of a new primary email returned 2xx but the new email \
+                 ({new_email:?}) is not present after a follow-up GET: {emails:?}"
+            ),
+        )
+    } else if primary_values.len() == 1 && primary_values[0] == new_email {
+        (
+            "new_primary_only".to_string(),
+            format!(
+                "exactly one email ({new_email:?}, the newly added one) is primary:true after \
+                 the PATCH; the previous primary was automatically demoted"
+            ),
+        )
+    } else if primary_values.len() == 1 {
+        (
+            "wrong_primary".to_string(),
+            format!(
+                "exactly one email is primary:true after the PATCH, but it is {:?}, not the \
+                 newly added {new_email:?}",
+                primary_values[0]
+            ),
+        )
+    } else {
+        (
+            "multiple_primary".to_string(),
+            format!(
+                "expected exactly the new email ({new_email:?}) to be the lone primary:true \
+                 value, found {} primary:true value(s) ({primary_values:?})",
+                primary_values.len()
+            ),
+        )
+    };
+    Observation {
+        axis: axis.id.to_string(),
+        value: known_or_unknown(axis, &token),
+        evidence,
+        detail,
+    }
+}
+
+/// Runs all sixteen axis probes, in the fixed [`AXES`] order, against
+/// `client`. Deterministic: no probe depends on another's outcome, only on
+/// the provider's own advertised capabilities (the two filter probes, the
+/// two PATCH probes, and the four new PATCH-based probes below). Cleans up
+/// every fixture it created afterward, best-effort, the same way
+/// `crate::runner`'s caller expects.
 ///
 /// Callers that only want the `Cost::DiscoveryOnly` subset, or that want
 /// to skip capability-gated axes without spending a probe on them, should
@@ -728,6 +1442,15 @@ pub async fn run_all(client: &mut ScimClient) -> Vec<Observation> {
         probe_group_displayname_filter(client, &mut bk, &caps).await,
         probe_patch_replace_empty_array(client, &mut bk, &caps).await,
         probe_patch_replace_empty_value(client, &mut bk, &caps).await,
+        probe_uniqueness_scimtype_user_post(client, &mut bk).await,
+        probe_uniqueness_scimtype_user_put(client, &mut bk).await,
+        probe_uniqueness_scimtype_user_patch(client, &mut bk, &caps).await,
+        probe_uniqueness_scimtype_group_post(client, &mut bk).await,
+        probe_uniqueness_scimtype_group_put(client, &mut bk).await,
+        probe_uniqueness_scimtype_group_patch(client, &mut bk, &caps).await,
+        probe_patch_sequential_application(client, &mut bk, &caps).await,
+        probe_patch_atomicity(client, &mut bk, &caps).await,
+        probe_patch_primary_demotion(client, &mut bk, &caps).await,
     ];
 
     cleanup(client, &bk).await;

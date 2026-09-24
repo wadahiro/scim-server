@@ -359,6 +359,90 @@ pub const TYPE: Basis = Basis {
     quote: Some("2.3. Attribute Data Types"),
 };
 
+// -------------------------------------------------------- uniqueness_scimtype / patch family
+//
+// Back the `uniqueness_scimtype` (6 instances), `patch_sequential_application`,
+// `patch_atomicity`, and `patch_primary_demotion` static axes in
+// `crate::axes`, ported from `feat/rfc-extract`'s
+// `crates/scim-conformance/src/templates/{status,sequence,atomicity,
+// conditional}.rs`. Verified the same way as every other constant in this
+// file: `sed -n '<range>p' spec/rfc/<doc>.txt`.
+
+/// RFC 7644 §3.12 (`rfc7644.txt:3718-3719`): "scimType A SCIM detail error
+/// keyword. See Table 9. OPTIONAL." No RFC 2119 keyword closes this to a
+/// fixed vocabulary, and Table 9's own uniqueness row
+/// (`rfc7644.txt:3839-3843`) only *names* "uniqueness" as the applicable
+/// keyword for a uniqueness violation -- it does not itself carry a
+/// keyword compelling a provider to use it, and RFC 7643 §7's `UNIQUENESS`
+/// basis already established that rejecting a duplicate at all is a MAY,
+/// not a MUST. `uniqueness_scimtype`'s `RfcPosition::Silent` carries no
+/// `Basis` field (matching `GROUP_MEMBERS_FILTER`/`GROUP_DISPLAYNAME_FILTER`'s
+/// existing convention for `Silent` axes); this constant exists purely so
+/// the citation this reasoning rests on is verified against the vendored
+/// text the same way every other constant here is, and so a doc comment
+/// has somewhere concrete to point at.
+pub const PROBE_UNIQUENESS_SCIMTYPE: Basis = Basis {
+    doc: "RFC 7644",
+    section: "3.12",
+    lines: "rfc7644.txt:3718-3719",
+    quote: None,
+};
+
+/// RFC 7644 §3.5.2 (`rfc7644.txt:1918-1924`): "Each PATCH operation
+/// represents a single action to be applied to the same SCIM resource
+/// specified by the request URI. Operations are applied sequentially in
+/// the order they appear in the array. Each operation in the sequence is
+/// applied to the target resource; the resulting resource becomes the
+/// target of the next operation. Evaluation continues until all
+/// operations are successfully applied or until an error condition is
+/// encountered." No RFC 2119 keyword appears anywhere in this paragraph --
+/// it reads as declarative description of PATCH's processing model, not an
+/// imperative rule. Modeled as `Mandated`/`Must` anyway: this paragraph
+/// immediately precedes, in the same subsection, the SHALL-bearing
+/// primary-demotion sentence and the SHALL/MUST-bearing atomicity sentence
+/// (`PROBE_PATCH_PRIMARY_DEMOTION`, `PROBE_PATCH_ATOMICITY` below) -- both
+/// of which presume a well-defined, ordered sequence of per-operation
+/// effects to demote/restore. A server that applies two operations against
+/// the same path out of array order, or independently rather than each
+/// building on the last, is not offering a different but equally valid
+/// reading of PATCH -- there is no coherent PATCH semantics left once
+/// "sequential" is dropped. Treated as `Must` on that basis, not as a
+/// hedge; the honest alternative reading, if this is wrong, is `Silent`.
+pub const PROBE_PATCH_SEQUENTIAL_APPLICATION: Basis = Basis {
+    doc: "RFC 7644",
+    section: "3.5.2",
+    lines: "rfc7644.txt:1918-1924",
+    quote: None,
+};
+
+/// RFC 7644 §3.5.2 (`rfc7644.txt:1926-1929`): "For multi-valued
+/// attributes, a PATCH operation that sets a value's \"primary\"
+/// sub-attribute to \"true\" SHALL cause the server to automatically set
+/// \"primary\" to \"false\" for any other values in the array." Explicit
+/// SHALL -- `Mandated`/`Must`, no judgment call needed.
+pub const PROBE_PATCH_PRIMARY_DEMOTION: Basis = Basis {
+    doc: "RFC 7644",
+    section: "3.5.2",
+    lines: "rfc7644.txt:1926-1929",
+    quote: None,
+};
+
+/// RFC 7644 §3.5.2 (`rfc7644.txt:1931-1934`): "A PATCH request, regardless
+/// of the number of operations, SHALL be treated as atomic. If a single
+/// operation encounters an error condition, the original SCIM resource
+/// MUST be restored, and a failure status SHALL be returned." Explicit
+/// SHALL/MUST -- `Mandated`/`Must`. Note the second sentence binds *two*
+/// things: the request SHALL fail, and the original resource MUST be
+/// restored -- `crate::axes::probe_patch_atomicity` checks both (rejection
+/// alone, with the valid first operation's effect left applied, is judged
+/// `rejected_but_changed`, a fault, not a pass).
+pub const PROBE_PATCH_ATOMICITY: Basis = Basis {
+    doc: "RFC 7644",
+    section: "3.5.2",
+    lines: "rfc7644.txt:1931-1934",
+    quote: None,
+};
+
 // -------------------------------------------------------- quote verification
 //
 // Part 5: every `Basis` with a `quote` attached is re-derived from the

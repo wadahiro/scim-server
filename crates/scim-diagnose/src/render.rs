@@ -120,7 +120,7 @@ pub fn render_profile(profile: &Profile) -> String {
 
 /// Parses a `DerivedAxis::id`/`Observation::axis` string
 /// (`"<family_prefix>/<Resource>.<attr path>/<method>"`) into its three
-/// components. `None` for anything that isn't a derived id (the seven
+/// components. `None` for anything that isn't a derived id (the sixteen
 /// static axes' ids, which contain no `/`).
 fn parse_derived_id(axis: &str) -> Option<(&str, &str, &str)> {
     let mut parts = axis.splitn(3, '/');

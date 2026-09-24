@@ -1,4 +1,4 @@
-//! Drives all seven [`crate::axes::AXES`] against a live target and
+//! Drives all sixteen [`crate::axes::AXES`] against a live target and
 //! assembles the resulting [`Profile`]. New here (no direct source-branch
 //! equivalent -- that branch's `probes::run_all` had no write-budget
 //! concept, since every probe it ran was always allowed to write): the
@@ -62,6 +62,31 @@ pub async fn run(client: &mut ScimClient, target: &str, allow_writes: bool) -> P
             "patch_replace_empty_value" => {
                 axes::probe_patch_replace_empty_value(client, &mut bk, &caps).await
             }
+            "uniqueness_scimtype/User/POST" => {
+                axes::probe_uniqueness_scimtype_user_post(client, &mut bk).await
+            }
+            "uniqueness_scimtype/User/PUT" => {
+                axes::probe_uniqueness_scimtype_user_put(client, &mut bk).await
+            }
+            "uniqueness_scimtype/User/PATCH" => {
+                axes::probe_uniqueness_scimtype_user_patch(client, &mut bk, &caps).await
+            }
+            "uniqueness_scimtype/Group/POST" => {
+                axes::probe_uniqueness_scimtype_group_post(client, &mut bk).await
+            }
+            "uniqueness_scimtype/Group/PUT" => {
+                axes::probe_uniqueness_scimtype_group_put(client, &mut bk).await
+            }
+            "uniqueness_scimtype/Group/PATCH" => {
+                axes::probe_uniqueness_scimtype_group_patch(client, &mut bk, &caps).await
+            }
+            "patch_sequential_application" => {
+                axes::probe_patch_sequential_application(client, &mut bk, &caps).await
+            }
+            "patch_atomicity" => axes::probe_patch_atomicity(client, &mut bk, &caps).await,
+            "patch_primary_demotion" => {
+                axes::probe_patch_primary_demotion(client, &mut bk, &caps).await
+            }
             other => unreachable!("axis {other} has no probe wired in crate::runner::run"),
         };
         observations.push(obs);
@@ -71,7 +96,7 @@ pub async fn run(client: &mut ScimClient, target: &str, allow_writes: bool) -> P
 
     // The 389 (attribute x characteristic x method) schema-derived
     // instances (`crate::matrix`), generated from the target's own `GET
-    // /Schemas`. Gated by `--allow-writes` exactly like the seven static
+    // /Schemas`. Gated by `--allow-writes` exactly like the sixteen static
     // axes above -- every derived family is `Cost::NeedsUser`.
     match client.get("/Schemas").await {
         Ok(r) if r.is_success() => {
@@ -97,7 +122,7 @@ pub async fn run(client: &mut ScimClient, target: &str, allow_writes: bool) -> P
         _ => {
             // GET /Schemas itself failing means the schema-derived matrix
             // cannot be generated at all -- no instances to report, not an
-            // error for the whole run (the seven static axes above still
+            // error for the whole run (the sixteen static axes above still
             // stand on their own).
         }
     }

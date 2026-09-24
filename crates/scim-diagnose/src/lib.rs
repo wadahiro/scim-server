@@ -22,7 +22,9 @@
 //!                     ^
 //!                     | (gated by Cost / --allow-writes, and by
 //!                     |  capability::Capabilities for the two filter axes)
-//!                 axes::AXES (the seven CompatibilityConfig dimensions)
+//!                 axes::AXES (16 static axes: 7 CompatibilityConfig
+//!                 dimensions + 9 ported from feat/rfc-extract's
+//!                 uniqueness/sequence/atomicity/conditional templates)
 //! ```
 
 pub mod axes;
