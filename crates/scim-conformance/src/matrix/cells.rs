@@ -47,7 +47,7 @@ pub enum Characteristic {
     // -- T10 ledger-generated checks (`crate::templates`), produced
     // directly from a `Requirement` -- like the probes above, these never
     // appear in `cells_from_decls`'s output. Named `ledger_<id>_<shape>`
-    // per entry id in `spec/ledger/rfc7644-3.5.2.yaml`.
+    // per entry id in `crates/scim-conformance/spec/ledger/rfc7644-3.5.2.yaml`.
     #[serde(rename = "ledger_p27_projection")]
     LedgerP27Projection,
     #[serde(rename = "ledger_p26_status")]

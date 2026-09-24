@@ -1,28 +1,27 @@
-//! A line-for-line port of `tools/prototype/extract_attrdefs.py`'s
-//! `extract()` function: it parses RFC 7643/7644's definition-list
-//! attribute syntax (`"   name"` on its own line, or `"   name  Description
-//! text"` inline, with nested sub-attributes indented one level deeper) and
-//! tracks each definition's parent through a simple indent stack.
+//! Parses RFC 7643/7644's definition-list attribute syntax (`"   name"` on
+//! its own line, or `"   name  Description text"` inline, with nested
+//! sub-attributes indented one level deeper) and tracks each definition's
+//! parent through a simple indent stack.
 //!
 //! This module exists for exactly one purpose -- [`crate::gen::attrdefs`]
-//! needs, for each of the 61 entries in
-//! `tools/prototype/golden/attrdefs.json`, the raw-file line its
-//! `name`/`attribute` is actually defined at, so it can cite a
-//! [`crate::basis::Basis`] the same way every other generated check in this
-//! crate does. The golden JSON's own `start`/`end` fields happen to already
-//! be those line numbers (they came out of this exact extraction), but T9's
-//! job is to *re-derive* the citation from the vendored `spec/rfc/*.txt`
-//! text, not to trust a number sitting in a fixture -- so this scans the
-//! raw text itself and the caller matches golden entries to the result by
-//! `(rfc, section, attribute)`, which is unique across all 61 entries
-//! (checked by `attrdefs`'s own test).
+//! needs, for each of the 61 entries in `golden/attrdefs.json`, the
+//! raw-file line its `name`/`attribute` is actually defined at, so it can
+//! cite a [`crate::basis::Basis`] the same way every other generated check
+//! in this crate does. The golden JSON's own `start`/`end` fields happen to
+//! already be those line numbers, but this module's job is to *re-derive*
+//! the citation from the vendored `spec/rfc/*.txt` text independently, not
+//! to trust a number sitting in a fixture -- so this scans the raw text
+//! itself and the caller matches golden entries to the result by `(rfc,
+//! section, attribute)`, which is unique across all 61 entries (checked by
+//! `attrdefs`'s own test).
 //!
-//! Ported quirks-and-all rather than "cleaned up": in particular, the
-//! indent stack is pushed for *every* definition-shaped line, whether or
-//! not that line turned out to carry a recognized `REQUIRED`/`OPTIONAL`/
-//! `RECOMMENDED` cardinality (see the `stack.push` below, which sits
-//! outside the `if let Some(cm) = ...` block) -- matching that exactly is
-//! what makes parent tracking agree with the Python prototype's output.
+//! One quirk kept deliberately: the indent stack is pushed for *every*
+//! definition-shaped line, whether or not that line turned out to carry a
+//! recognized `REQUIRED`/`OPTIONAL`/`RECOMMENDED` cardinality (see the
+//! `stack.push` below, which sits outside the `if let Some(cm) = ...`
+//! block) -- this keeps parent tracking correct even when an
+//! intermediate ancestor in the RFC text carries no cardinality of its
+//! own.
 
 use regex::Regex;
 
@@ -216,13 +215,16 @@ pub fn scan(rfc: u32, raw: &str) -> Vec<ScannedDef> {
 mod tests {
     use super::*;
 
-    const RFC7643_TXT: &str = include_str!("../../../../spec/rfc/rfc7643.txt");
-    const RFC7644_TXT: &str = include_str!("../../../../spec/rfc/rfc7644.txt");
+    const RFC7643_TXT: &str = include_str!("../../spec/rfc/rfc7643.txt");
+    const RFC7644_TXT: &str = include_str!("../../spec/rfc/rfc7644.txt");
 
-    /// The Python prototype (`extract_attrdefs.py`), run fresh against the
-    /// same vendored text, produces exactly 61 entries
-    /// (`tools/prototype/golden/attrdefs.json`). This is the same
-    /// mechanical check, ported: same input, same count.
+    /// Pinned to 61, matching `golden/attrdefs.json`'s own entry count.
+    /// This was cross-checked once, by hand, against an independent Python
+    /// implementation's output during development (that script never
+    /// shipped in this repository and no longer exists anywhere this crate
+    /// can reach); the pin here is a regression guard against silent
+    /// drift between this scanner and the golden fixture, not a live
+    /// differential check.
     #[test]
     fn scan_produces_61_entries_across_both_rfcs() {
         let mut all = scan(7643, RFC7643_TXT);

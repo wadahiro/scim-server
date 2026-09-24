@@ -1,14 +1,14 @@
 //! T10: runs the checks `crates/scim-conformance` generates from the RFC
-//! 7644 §3.5.2 requirement ledger (`spec/ledger/rfc7644-3.5.2.yaml`,
+//! 7644 §3.5.2 requirement ledger (`crates/scim-conformance/spec/ledger/rfc7644-3.5.2.yaml`,
 //! `scim_conformance::ledger_suite`) against this repository's own server.
 //!
 //! This is the "does a ledger entry mechanically produce a runnable check"
-//! experiment (plan §0 decision 6): p27 (projection) and p26 (status) used
-//! to reproduce this server's own known non-conformances (V-18, V-19);
-//! both were fixed in PR #72 and both are now regression guards asserting
-//! PASS everywhere instead. p23 (sequence), p24 (conditional), and p25
-//! (atomicity) are single cells this server was not previously known to
-//! fail or pass, and are unaffected by #72.
+//! experiment: p27 (projection) and p26 (status) used to reproduce this
+//! server's own known non-conformances (`projection-on-write`,
+//! `uniqueness-scimtype`); both were fixed in PR #72 and both are now
+//! regression guards asserting PASS everywhere instead. p23 (sequence),
+//! p24 (conditional), and p25 (atomicity) are single cells this server was
+//! not previously known to fail or pass, and are unaffected by #72.
 //!
 //! The ledger's own quote-verification test
 //! (`crates/scim-conformance/src/ledger.rs`'s
@@ -81,7 +81,7 @@ fn rows_for<'a>(outcomes: &'a [Outcome], characteristic: &str) -> Vec<&'a Outcom
 
 /// Every ledger-generated outcome must cite its basis as
 /// `RFC 7644 §3.5.2 L<a>-<b>`, with `[a, b]` inside the ledger's own
-/// section span (`spec/ledger/rfc7644-3.5.2.yaml`'s top-level `lines`) --
+/// section span (`crates/scim-conformance/spec/ledger/rfc7644-3.5.2.yaml`'s top-level `lines`) --
 /// the mechanical guarantee that a generated check's citation traces back
 /// to the ledger entry it came from, not to a hand-typed line number.
 #[tokio::test]
@@ -119,14 +119,14 @@ async fn every_ledger_outcome_cites_its_basis_within_the_section_span() {
     }
 }
 
-/// p27 (projection): 16 cells -- 12 POST/PUT/PATCH x {User, Group} x
-/// {attributes, excludedAttributes}, plus 4 GET control cells. This *used*
-/// to reproduce V-18 (every non-GET cell FAILed because POST/PUT/PATCH
-/// ignored `attributes`/`excludedAttributes` entirely); PR #72 fixed it,
-/// and against this rebase all 16 cells -- non-GET and the GET controls
-/// alike -- measure PASS. Renamed from `projection_cells_reproduce_v18` to
-/// reflect what it now asserts: projection is honoured on every
-/// resource-returning method, not just GET.
+/// `projection-on-write` guard -- RFC 7644 §3.9. p27 (projection): 16
+/// cells -- 12 POST/PUT/PATCH x {User, Group} x {attributes,
+/// excludedAttributes}, plus 4 GET control cells. Every non-GET cell used
+/// to FAIL because POST/PUT/PATCH ignored `attributes`/`excludedAttributes`
+/// entirely; PR #72 fixed it, and against this rebase all 16 cells --
+/// non-GET and the GET controls alike -- measure PASS. This test asserts
+/// projection is honoured on every resource-returning method, not just
+/// GET.
 #[tokio::test]
 async fn projection_is_honoured_on_every_resource_returning_method() {
     let run = ledger_run().await;
@@ -147,8 +147,8 @@ async fn projection_is_honoured_on_every_resource_returning_method() {
         assert_eq!(
             o.verdict,
             Verdict::Pass,
-            "expected PASS for {:?} {:?} attribute={:?} (V-18 was fixed in #72 -- a FAIL here \
-             is a regression): {}",
+            "expected PASS for {:?} {:?} attribute={:?} (projection-on-write was fixed in \
+             #72 -- a FAIL here is a regression): {}",
             o.resource,
             o.method,
             o.attribute,
@@ -167,13 +167,13 @@ async fn projection_is_honoured_on_every_resource_returning_method() {
     }
 }
 
-/// p26 (status): 6 cells -- {POST, PUT, PATCH} x {User, Group} duplicate
-/// creation/update. *Used* to reproduce V-19 (POST correctly rejected a
-/// duplicate with `scimType: "uniqueness"`, while PUT and PATCH rejected
-/// the same duplicate with `scimType: "invalidValue"` instead); PR #72
-/// fixed it, and against this rebase all 6 cells reject the duplicate with
-/// `scimType: "uniqueness"` regardless of method. Renamed from
-/// `uniqueness_cells_reproduce_v19` to reflect that.
+/// `uniqueness-scimtype` guard -- RFC 7644 §3.12 Table 9. p26 (status): 6
+/// cells -- {POST, PUT, PATCH} x {User, Group} duplicate creation/update.
+/// POST used to correctly reject a duplicate with `scimType:
+/// "uniqueness"`, while PUT and PATCH rejected the same duplicate with
+/// `scimType: "invalidValue"` instead; PR #72 fixed it, and against this
+/// rebase all 6 cells reject the duplicate with `scimType: "uniqueness"`
+/// regardless of method.
 #[tokio::test]
 async fn uniqueness_scim_type_is_uniform_across_methods() {
     let run = ledger_run().await;
@@ -191,8 +191,8 @@ async fn uniqueness_scim_type_is_uniform_across_methods() {
                 assert_eq!(
                     o.verdict,
                     Verdict::Pass,
-                    "expected {:?} duplicate ({:?}) to PASS (V-19 was fixed in #72 -- a FAIL \
-                     here is a regression): {}",
+                    "expected {:?} duplicate ({:?}) to PASS (uniqueness-scimtype was fixed in \
+                     #72 -- a FAIL here is a regression): {}",
                     o.method,
                     o.resource,
                     o.detail

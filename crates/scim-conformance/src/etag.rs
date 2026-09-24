@@ -30,7 +30,7 @@
 //!
 //! RFC 7232 (HTTP Conditional Requests, which §3.14 incorporates by
 //! reference for ETag comparison semantics, `If-Match`, and
-//! `If-None-Match`) is **not vendored** in this repository's `spec/rfc/`.
+//! `If-None-Match`) is **not vendored** in this repository's `crates/scim-conformance/spec/rfc/`.
 //! Every citation below that depends on RFC 7232's operative detail (weak
 //! vs. strong comparison, the exact `If-Match`/`If-None-Match` grammar)
 //! cites the §3.14 sentence that incorporates it by reference instead of

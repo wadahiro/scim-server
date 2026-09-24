@@ -33,7 +33,7 @@ pub struct AuthoredMeta {
 
 /// Looks up the authored classification for a ledger entry id.
 ///
-/// Only 5 of `spec/ledger/rfc7644-3.5.2.yaml`'s 11 `class: definitional,
+/// Only 5 of `crates/scim-conformance/spec/ledger/rfc7644-3.5.2.yaml`'s 11 `class: definitional,
 /// testable: yes` entries are mapped here today -- p23 (sequence), p24
 /// (conditional), p25 (atomicity), p26 (status), p27 (projection), each
 /// with a template in `crate::templates`. The other 6

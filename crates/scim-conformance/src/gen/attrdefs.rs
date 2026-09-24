@@ -3,15 +3,13 @@
 //! plus RFC 7644 §3.4.2's list-response envelope, against the four fixed
 //! discovery endpoints those sections describe.
 //!
-//! This is a direct port of `tools/prototype/run_attrdef_checks.py`
-//! (`TARGETS`, `present()`, and the verdict logic in `main()`), driven by
-//! the same differential-oracle input, `tools/prototype/golden/
-//! attrdefs.json` (61 entries extracted by `tools/prototype/
-//! extract_attrdefs.py`). Only 38 of the 61 entries name a `(rfc, section)`
-//! this crate has a target for (`TARGETS` below); the rest describe
-//! attributes of resources this module doesn't check (e.g. RFC 7643 §2.2's
-//! and §4.*'s User-schema entries) and are skipped, exactly as the Python
-//! prototype does.
+//! The check logic (`TARGETS`, `present()`, and the verdict rules below)
+//! is driven by `golden/attrdefs.json`, a required-member table with 61
+//! entries covering RFC 7643 §§2.2, 4.*, 5, 6, 7 and RFC 7644 §3.4.2. Only
+//! 38 of the 61 entries name a `(rfc, section)` this crate has a target
+//! for (`TARGETS` below); the rest describe attributes of resources this
+//! module doesn't check (e.g. RFC 7643 §2.2's and §4.*'s User-schema
+//! entries) and are skipped.
 //!
 //! Unlike `crate::matrix` (attribute x method cells derived from the
 //! server's own `/Schemas`) this is a small, fixed family of single-
@@ -34,15 +32,15 @@ use crate::requirement::basis_from_span;
 
 use super::attrdef_scan::{scan, ScannedDef};
 
-const GOLDEN_JSON: &str = include_str!("../../../../tools/prototype/golden/attrdefs.json");
-const RFC7643_TXT: &str = include_str!("../../../../spec/rfc/rfc7643.txt");
-const RFC7644_TXT: &str = include_str!("../../../../spec/rfc/rfc7644.txt");
+const GOLDEN_JSON: &str = include_str!("../../golden/attrdefs.json");
+const RFC7643_TXT: &str = include_str!("../../spec/rfc/rfc7643.txt");
+const RFC7644_TXT: &str = include_str!("../../spec/rfc/rfc7644.txt");
 
-/// One entry of `tools/prototype/golden/attrdefs.json`, as specified by
-/// T9. `start`/`end` (present in the JSON but not read here) are the
-/// extractor's own raw-file line numbers; this module re-derives a
-/// citation from `spec/rfc/*.txt` via [`attrdef_scan::scan`] instead of
-/// trusting them (see [`resolve_basis`]).
+/// One entry of `golden/attrdefs.json`. `start`/`end` (present in the JSON
+/// but not read here) are the extractor's own raw-file line numbers; this
+/// module re-derives a citation from `spec/rfc/*.txt` (relative to this
+/// crate) via [`attrdef_scan::scan`] instead of trusting them (see
+/// [`resolve_basis`]).
 #[derive(Debug, Clone, Deserialize)]
 struct DefItemRaw {
     attribute: String,
@@ -60,7 +58,7 @@ struct DefItemRaw {
 }
 
 fn load_defs() -> Vec<DefItemRaw> {
-    serde_json::from_str(GOLDEN_JSON).expect("tools/prototype/golden/attrdefs.json must parse")
+    serde_json::from_str(GOLDEN_JSON).expect("golden/attrdefs.json must parse")
 }
 
 fn scanned_defs() -> Vec<ScannedDef> {
@@ -70,7 +68,7 @@ fn scanned_defs() -> Vec<ScannedDef> {
 }
 
 /// How a matched `(rfc, section)`'s response body is walked when checking
-/// presence -- `run_attrdef_checks.py`'s `'single'`/`'list'`/`'envelope'`.
+/// presence -- `'single'` walks the body itself, `'list'` walks its `Resources` array.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Shape {
     /// The fetched body itself is the one target (`ServiceProviderConfig`,
@@ -84,8 +82,8 @@ enum Shape {
     List,
 }
 
-/// `(rfc, section) -> (path, shape)`, copied unchanged from
-/// `run_attrdef_checks.py`'s `TARGETS`.
+/// `(rfc, section) -> (path, shape)` for the four discovery endpoints this
+/// module checks.
 fn targets() -> HashMap<(u32, &'static str), (&'static str, Shape)> {
     HashMap::from([
         ((7643, "5"), ("/ServiceProviderConfig", Shape::Single)),
@@ -106,8 +104,8 @@ pub struct AttrdefCheck {
     pub detail: String,
 }
 
-/// Tri-state presence classification -- `present()` in
-/// `run_attrdef_checks.py`. Distinguishes "the parent itself is missing"
+/// Tri-state presence classification.
+/// Distinguishes "the parent itself is missing"
 /// from "the parent is present but this attribute isn't", because a
 /// `REQUIRED` child of an `OPTIONAL`, absent parent is not a `FAIL`: its
 /// requirement is conditional on the parent existing at all.
@@ -120,8 +118,8 @@ enum Presence {
 
 /// Walks `dotted` (e.g. `"authenticationSchemes.type"`) through `obj`. If a
 /// traversed segment's value is an array, every element of it must carry
-/// the next segment -- matches the Python docstring: "if the path passes
-/// through an array, require presence in every element".
+/// the next segment -- i.e. if the path passes through an array, presence
+/// is required in every element.
 fn present(obj: &Value, dotted: &str) -> Presence {
     let parts: Vec<&str> = dotted.split('.').collect();
     let mut cur: Vec<&Value> = vec![obj];
@@ -154,8 +152,7 @@ fn present(obj: &Value, dotted: &str) -> Presence {
     Presence::Ok
 }
 
-/// `verdict_for()` in `run_attrdef_checks.py`: aggregates one
-/// [`Presence`] per target into a verdict + detail message.
+/// Aggregates one [`Presence`] per target into a verdict + detail message.
 fn verdict_for(targets: &[&Value], attr: &str, label: &str) -> (Verdict, String) {
     let res: Vec<Presence> = targets.iter().map(|t| present(t, attr)).collect();
     let miss = res.iter().filter(|p| **p == Presence::Missing).count();
@@ -225,7 +222,7 @@ pub async fn checks_from_attrdefs(client: &mut ScimClient) -> Vec<AttrdefCheck> 
         let basis = resolve_basis(def, &scanned).unwrap_or_else(|| {
             panic!(
                 "no scanned definition site matches golden entry rfc={} section={} attribute={:?} \
-                 -- attrdef_scan::scan and tools/prototype/extract_attrdefs.py have drifted apart",
+                                 -- attrdef_scan::scan and golden/attrdefs.json have drifted apart",
                 def.rfc, def.section, def.attribute
             )
         });

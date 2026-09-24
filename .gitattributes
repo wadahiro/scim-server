@@ -1,2 +1,1 @@
-spec/rfc/** linguist-vendored
-tools/prototype/** linguist-vendored
+crates/scim-conformance/spec/rfc/** linguist-vendored

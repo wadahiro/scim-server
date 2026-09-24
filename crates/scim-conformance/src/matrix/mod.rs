@@ -36,9 +36,8 @@ pub enum Verdict {
     /// port that does should be treated as a bug, not a finding.
     Error,
     /// Not judged at all -- e.g. `crate::gen::attrdefs`'s checks for an
-    /// `OPTIONAL` (not `REQUIRED`) attribute, which the Python prototype
-    /// (`tools/prototype/run_attrdef_checks.py`) reports for information
-    /// only and never counts as pass or fail.
+    /// `OPTIONAL` (not `REQUIRED`) attribute, which is reported for
+    /// information only and never counts as pass or fail.
     Info,
 }
 

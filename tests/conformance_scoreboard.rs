@@ -4,10 +4,9 @@
 //! `req_coverage`'s denominator is pinned at 147 -- see
 //! `crate::scoreboard`'s module doc comment for the exact filter (RFC 7644
 //! §3.x paragraphs classified `definitional`/`definitional_prose` by
-//! `crate::spec_extract`, a Rust port of `tools/prototype/extract.py`'s
-//! classification) and the command that produced it by hand this session.
-//! Running `extract.py` is deterministic, so pinning the exact number here
-//! (rather than just asserting "some positive number") is safe.
+//! `crate::spec_extract`). Classification is deterministic, so pinning the
+//! exact number here (rather than just asserting "some positive number")
+//! is safe.
 
 use std::time::Duration;
 
@@ -38,7 +37,7 @@ async fn req_coverage_denominator_is_the_documented_147() {
         147,
         "RFC 7644 §3.x definitional/definitional_prose paragraph count per \
          crate::spec_extract; see scoreboard.rs's module doc comment for the \
-         extract.py command that produced this by hand"
+         exact filter"
     );
 }
 
@@ -145,18 +144,26 @@ async fn scoreboard_numbers_are_internally_consistent_and_guards_hold() {
     }
     println!("knob_detection: {:#?}", sb.knob_detection);
 
-    // regression_guards: V-18, V-19, V-21..V-25 were all fixed in PR #72.
-    // Every one must appear and every one must measure 0 fails (the fix
-    // holding). V-25 used to be reported here with a known "residual" of
-    // 1/18 (Group.members.display/mutability_readOnly/PATCH) -- that was a
-    // false positive in the PATCH-readOnly probe itself (it sent a coarse
-    // container-level request that never actually exercised that
-    // sub-attribute's mutability), corrected in PR #73; see
+    // regression_guards: all seven guards were fixed in PR #72. Every one
+    // must appear and every one must measure 0 fails (the fix holding).
+    // patch-readonly-not-rejected used to be reported here with a known
+    // "residual" of 1/18 (Group.members.display/mutability_readOnly/PATCH)
+    // -- that was a false positive in the PATCH-readOnly probe itself (it
+    // sent a coarse container-level request that never actually exercised
+    // that sub-attribute's mutability), corrected in PR #73; see
     // tests/conformance_schema_matrix.rs's
     // patch_mutability_readonly_fails_are_zero for the measurement. A
-    // `fails != 0` on any guard, including V-25, is now a regression to
-    // investigate, not a literal to update blindly.
-    let expected_guard_labels = ["V-18", "V-19", "V-21", "V-22", "V-23", "V-24", "V-25"];
+    // `fails != 0` on any guard, including patch-readonly-not-rejected, is
+    // now a regression to investigate, not a literal to update blindly.
+    let expected_guard_labels = [
+        "projection-on-write",
+        "uniqueness-scimtype",
+        "readonly-extension-subattr-echo",
+        "required-on-put",
+        "type-validation-bypass",
+        "readonly-multivalued-echo-on-create",
+        "patch-readonly-not-rejected",
+    ];
     assert_eq!(
         sb.regression_guards.len(),
         expected_guard_labels.len(),

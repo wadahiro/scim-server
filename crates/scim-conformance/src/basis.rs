@@ -1,7 +1,7 @@
 //! RFC citation attached to every generated check: which document, which
 //! section, and which raw-file line range the requirement being tested
 //! comes from. `lines` always points into the vendored, unmodified text in
-//! `spec/rfc/` (e.g. `"rfc7643.txt:1731-1732"`), never into a reflowed copy.
+//! `crates/scim-conformance/spec/rfc/` (e.g. `"rfc7643.txt:1731-1732"`), never into a reflowed copy.
 
 use serde::Serialize;
 use std::fmt;
@@ -164,7 +164,7 @@ pub const PROBE_PATCH_REPLACE: Basis = Basis {
 // requirement's own (ledger-derived) basis. Unlike the ledger-derived
 // primary basis (`crate::requirement::basis_from_span`), these cite RFC
 // text with no corresponding ledger entry, so their line numbers are
-// hand-verified against `spec/rfc/rfc7644.txt` the same way every other
+// hand-verified against `crates/scim-conformance/spec/rfc/rfc7644.txt` the same way every other
 // constant in this file is.
 
 /// RFC 7644 §3.9 "Additional Operation Response Parameters"

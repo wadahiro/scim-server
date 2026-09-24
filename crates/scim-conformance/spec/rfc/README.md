@@ -33,9 +33,9 @@ L63-75). No edits, reflowing, or reformatting has been applied.
 Because the license only covers unmodified reproduction, this repository
 never commits a "cleaned" or reflowed version of these files. Any derived
 data (extracted spans, quotes, JSON records) is produced at build/test time
-by the tools in `tools/prototype/` and `crates/*` and is committed instead as
-`span` + `sha256`, never as re-typeset RFC prose. See
-`tools/prototype/README.md` for how those derived artifacts are regenerated.
+by code in `crates/scim-conformance` (see `src/gen/`, `src/ledger.rs`, and
+`src/spec_extract.rs`) and is committed instead as `span` + `sha256`, never
+as re-typeset RFC prose.
 
 **RFC 6749** (OAuth 2.0) is deliberately **not** vendored here: confirm its
 redistribution terms before adding it.
@@ -50,7 +50,7 @@ redistribution terms before adding it.
 ## Verifying integrity
 
 ```bash
-cd spec/rfc
+cd crates/scim-conformance/spec/rfc
 shasum -a 256 -c SHA256SUMS
 ```
 
@@ -62,7 +62,7 @@ a mirror).
 ## Re-fetching
 
 ```bash
-cd spec/rfc
+cd crates/scim-conformance/spec/rfc
 curl -sSf https://www.rfc-editor.org/rfc/rfc7643.txt -o rfc7643.txt
 curl -sSf https://www.rfc-editor.org/rfc/rfc7644.txt -o rfc7644.txt
 shasum -a 256 rfc7643.txt rfc7644.txt > SHA256SUMS

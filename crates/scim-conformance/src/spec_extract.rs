@@ -1,35 +1,35 @@
-//! T12: a small, self-contained Rust port of `tools/prototype/extract.py`'s
-//! paragraph segmentation and classification -- just enough of it to answer
-//! one question at `scoreboard::compute` runtime with no Python
-//! dependency: "which raw-file paragraphs of a vendored RFC text state an
-//! actual requirement (`definitional` / `definitional_prose`), as opposed
-//! to explanatory prose, an example, a heading/caption, or a table?"
+//! A small, self-contained Rust implementation of RFC paragraph
+//! segmentation and classification -- just enough of it to answer one
+//! question at `scoreboard::compute` runtime with no external dependency:
+//! "which raw-file paragraphs of a vendored RFC text state an actual
+//! requirement (`definitional` / `definitional_prose`), as opposed to
+//! explanatory prose, an example, a heading/caption, or a table?"
 //!
-//! # Why a port instead of shelling out to `extract.py`
+//! # Why a pure-Rust implementation
 //!
-//! T12's brief allows either shelling out to `python3
-//! tools/prototype/extract.py` at test time, or porting the paragraph
-//! classification into Rust. This module takes the port, for one concrete
-//! reason: `scim-server diagnose <url> --scoreboard` is the *shipped
-//! binary* (see the release Dockerfile's distroless target), and it has no
-//! Python runtime available at all. Shelling out would make `req_coverage`
-//! silently unavailable (or a hard failure) in exactly the deployment this
-//! feature is meant to run in. A pure-Rust port over the same vendored
-//! `spec/rfc/rfc7644.txt` (already `include_str!`-ed unmodified elsewhere
-//! in this crate, e.g. `gen::attrdefs`) keeps the whole computation
-//! dependency-free and deterministic at both test time and run time.
+//! `scim-server diagnose <url> --scoreboard` is the *shipped binary* (see
+//! the release Dockerfile's distroless target), and it has no scripting
+//! runtime available at all. Computing `req_coverage` by shelling out to
+//! an external script would make it silently unavailable (or a hard
+//! failure) in exactly the deployment this feature is meant to run in. A
+//! pure-Rust implementation over the same vendored `spec/rfc/rfc7644.txt`
+//! (already `include_str!`-ed unmodified elsewhere in this crate, e.g.
+//! `gen::attrdefs`) keeps the whole computation dependency-free and
+//! deterministic at both test time and run time.
 //!
-//! The tradeoff: this is a second implementation of the same
-//! classification logic, so it can silently drift from `extract.py`'s if
-//! either one changes. It was cross-checked once, by hand, against
-//! `extract.py`'s actual output on this branch's vendored spec text (see
-//! `crate::scoreboard`'s module docs for the exact command and the count
-//! it produced); this module's own unit tests pin the resulting counts so
-//! a future edit to either file that changes the classification is at
-//! least caught as a test failure, even though it can't re-run the Python
-//! oracle itself. It intentionally reproduces only the subset of
-//! `extract.py` needed to compute `class` (paragraph segmentation +
-//! `kind` + the `KW10`/`OUTCOME` regexes) -- not `keywords`, `kw7`,
+//! The tradeoff: this classification logic was cross-checked once, by
+//! hand, against an independent Python implementation's output on this
+//! branch's vendored spec text during development of this module (that
+//! script never shipped in this repository, and no longer exists anywhere
+//! this crate can reach). This module's own unit tests pin the resulting
+//! counts, so a future edit that changes the classification -- or a change
+//! to the vendored spec text -- is caught as a test failure; what they can
+//! no longer do is prove agreement with that other implementation, since
+//! there is nothing left here to re-run the comparison against. Treat the
+//! pinned numbers as a regression guard on this module's own determinism,
+//! not as a live differential check.  It intentionally implements only the
+//! subset of classification needed to compute `class` (paragraph
+//! segmentation + `kind` + the `KW10`/`OUTCOME` regexes) -- not `keywords`, `kw7`,
 //! `cardinality_only`, or `attr_def`, none of which `scoreboard` needs.
 
 use regex::Regex;
@@ -56,7 +56,7 @@ pub struct Paragraph {
     pub class: Class,
 }
 
-// ---- ported regexes (`extract.py`'s module-level constants) --------------
+// ---- classification regexes -------------------------------------------
 
 static FURNITURE: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"^(RFC \d+\s|Hunt,|.*\[Page \d+\]\s*$)").unwrap());
@@ -200,8 +200,8 @@ fn classify_kind(body: &[String]) -> &'static str {
     "prose"
 }
 
-/// `extract()`'s `class` assignment (the `if kind in (...) ... elif kws
-/// ... elif OUTCOME.search(flat) ...` chain).
+/// The `class` assignment: checks `kind` first, then a keyword match,
+/// then a looser outcome-verb match, falling back to explanatory.
 fn classify_class(kind: &str, flat: &str) -> Class {
     match kind {
         "json" | "abnf" | "http_example" => Class::Example,
@@ -275,23 +275,26 @@ pub fn extract(rfc: u32, text: &str) -> Vec<Paragraph> {
 mod tests {
     use super::*;
 
-    const RFC7644_TXT: &str = include_str!("../../../spec/rfc/rfc7644.txt");
+    const RFC7644_TXT: &str = include_str!("../spec/rfc/rfc7644.txt");
 
-    /// Pinned against this branch's vendored `spec/rfc/rfc7644.txt`, cross-
-    /// checked once by hand against `python3 tools/prototype/extract.py
-    /// --no-text spec/rfc /tmp/extract.json` (see `crate::scoreboard`'s
-    /// module docs for the exact command and session). If this ever
-    /// changes, it means either the vendored spec text changed (it
-    /// shouldn't -- it's frozen IETF text) or this port drifted from
-    /// `extract.py`; re-run the differential check by hand before updating
-    /// the pinned numbers.
+    /// Pinned against this branch's vendored `spec/rfc/rfc7644.txt`. This
+    /// count was cross-checked once, by hand, against an independent
+    /// Python implementation's output during this module's development;
+    /// that script was never part of this repository and no longer exists
+    /// anywhere this crate can reach, so the pin below can no longer be
+    /// re-verified against it. What it still does, and does honestly: it
+    /// catches silent drift, either in this module's own segmentation and
+    /// classification logic, or in the vendored spec text (which shouldn't
+    /// change -- it's frozen IETF text). If this test ever fails, work out
+    /// which of those two changed before updating the pinned number; there
+    /// is no oracle left to re-run a differential check against.
     #[test]
-    fn rfc7644_paragraph_count_matches_extract_py() {
+    fn rfc7644_paragraph_count_is_pinned() {
         let paras = extract(7644, RFC7644_TXT);
         assert_eq!(
             paras.len(),
             635,
-            "extract.py reported 635 blocks for RFC 7644"
+            "RFC 7644 paragraph count changed -- see this test's doc comment"
         );
     }
 
@@ -307,7 +310,8 @@ mod tests {
             denom.len(),
             147,
             "RFC 7644 section-3 definitional/definitional_prose paragraph count \
-             (extract.py: 124 definitional + 23 definitional_prose = 147 in section 3.*)"
+             (124 definitional + 23 definitional_prose = 147 in section 3.*) -- \
+             see rfc7644_paragraph_count_is_pinned's doc comment"
         );
     }
 

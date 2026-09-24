@@ -1,0 +1,169 @@
+# A hand-curated, paragraph-by-paragraph ledger of RFC 7644 §3.5.2
+# ("Modifying with PATCH"). Baked into the shipped binary via
+# `include_str!` (see `crates/scim-conformance/src/ledger.rs`).
+#
+# One entry per raw-file paragraph. `lines` is the paragraph's 1-based,
+# inclusive line span into the vendored, unmodified
+# `spec/rfc/rfc7644.txt`. For `class: definitional` paragraphs, `quote` is
+# the paragraph's verbatim text; `ledger.rs::verify_quotes` re-derives that
+# text from `lines` (with page headers/footers stripped) and checks it
+# against `quote` byte-for-byte (whitespace-normalized), so "verbatim" is a
+# checked property of this file, not a promise about how it was typed.
+# `crate::requirement::requirements_from_ledger` turns `testable: yes`
+# definitional entries into runnable checks.
+#
+# §3.5.2 spans raw-file lines 1780-1966 and splits into 27 paragraphs here
+# (28 in a naive split; p22 was rejoined after a page-boundary artifact
+# split it into two).
+#
+# class:    definitional | explanatory | example | meta
+# testable: whether this paragraph's requirement currently has a runnable
+#           check wired up in crate::templates (see requirement.rs)
+
+section: "3.5.2"
+doc: RFC 7644
+lines: [1780, 1966]
+
+entries:
+  - {id: p01, lines: [1780, 1780], class: meta}
+
+  - id: p02
+    lines: [1782, 1786]
+    keywords: [OPTIONAL]
+    class: definitional
+    quote: "HTTP PATCH is an OPTIONAL server function"
+    testable: yes
+
+  - {id: p03, lines: [1799, 1803], class: explanatory}
+
+  - id: p04
+    lines: [1805, 1806]
+    keywords: [MUST]
+    class: definitional
+    quote: |
+      The body of each request MUST contain the "schemas" attribute with
+      the URI value of "urn:ietf:params:scim:api:messages:2.0:PatchOp".
+    testable: yes
+
+  - id: p05
+    lines: [1808, 1813]
+    keywords: [MUST, MAY]
+    class: definitional
+    quote: |
+      The body of an HTTP PATCH request MUST contain the attribute
+      "Operations", whose value is an array of one or more PATCH
+      operations.  Each PATCH operation object MUST have exactly one "op"
+      member, whose value indicates the operation to perform and MAY be one
+      of "add", "remove", or "replace".
+    testable: yes
+
+  - {id: p06, lines: [1815, 1816], class: meta}
+  - {id: p07, lines: [1818, 1835], class: example}
+  - {id: p08, lines: [1837, 1837], class: meta}
+
+  - id: p09
+    lines: [1855, 1858]
+    keywords: [REQUIRED, OPTIONAL]
+    class: definitional
+    quote: 'The "path" attribute value is a String containing an attribute path'
+    testable: yes
+
+  - {id: p10, lines: [1860, 1860], class: meta}
+  - {id: p11, lines: [1862, 1862], class: example}
+  - {id: p12, lines: [1864, 1864], class: meta}
+
+  - id: p13
+    lines: [1866, 1868]
+    class: explanatory
+    quote: |
+      The ABNF rules "attrPath", "valuePath", and "subAttr" are defined in
+      Section 3.4.2.2.  The "valuePath" rule allows specific values of a
+      complex multi-valued attribute to be selected.
+
+  - {id: p14, lines: [1870, 1870], class: meta}
+  - {id: p15, lines: [1872, 1872], class: example}
+  - {id: p16, lines: [1874, 1874], class: example}
+  - {id: p17, lines: [1876, 1876], class: example}
+  - {id: p18, lines: [1878, 1879], class: example}
+  - {id: p19, lines: [1881, 1882], class: example}
+  - {id: p20, lines: [1884, 1884], class: meta}
+
+  - id: p21
+    lines: [1886, 1894]
+    keywords: [MUST, MUST NOT, MAY, SHALL]
+    class: definitional
+    quote: |
+      Each operation against an attribute MUST be compatible with the
+      attribute's mutability and schema as defined in Sections 2.2 and 2.3
+      of [RFC7643].  For example, a client MUST NOT modify an attribute
+      that has mutability "readOnly" or "immutable".  However, a client MAY
+      "add" a value to an "immutable" attribute if the attribute had no
+      previous value.
+    testable: yes
+
+  - id: p22
+    lines: [1896, 1916]
+    keywords: [MUST, SHALL, MAY]
+    class: definitional
+    quote: |
+      The attribute notation rules described in Section 3.10 apply for
+      describing attribute paths.  For all operations, the value of the
+      "schemas" attribute on the SCIM service provider's representation of
+      the resource SHALL be assumed by default.  If one of the PATCH
+      operations modifies the "schemas" attribute, subsequent operations
+      SHALL assume the modified state of the "schemas" attribute.
+    testable: yes
+
+  - id: p23
+    lines: [1918, 1924]
+    keywords: []
+    class: definitional
+    quote: |
+      Operations are applied sequentially in the order they appear in the array.
+      Each operation in the sequence is applied to the target resource; the
+      resulting resource becomes the target of the next operation.
+    testable: yes
+
+  - id: p24
+    lines: [1926, 1929]
+    keywords: [SHALL]
+    class: definitional
+    quote: |
+      For multi-valued attributes, a PATCH operation that sets a value's
+      "primary" sub-attribute to "true" SHALL cause the server to
+      automatically set "primary" to "false" for any other values in the
+      array.
+    testable: yes
+
+  - id: p25
+    lines: [1931, 1934]
+    keywords: [SHALL, MUST]
+    class: definitional
+    quote: |
+      A PATCH request, regardless of the number of operations, SHALL be
+      treated as atomic.  If a single operation encounters an error
+      condition, the original SCIM resource MUST be restored, and a failure
+      status SHALL be returned.
+    testable: yes
+
+  - id: p26
+    lines: [1936, 1937]
+    keywords: [SHALL]
+    class: definitional
+    quote: |
+      If a request fails, the server SHALL return an HTTP response status
+      code and a JSON detail error response as defined in Section 3.12.
+    testable: yes
+
+  - id: p27
+    lines: [1939, 1944]
+    keywords: [MUST, MAY]
+    class: definitional
+    quote: |
+      On successful completion, the server either MUST return a 200 OK
+      response code and the entire resource within the response body,
+      subject to the "attributes" query parameter (see Section 3.9), or MAY
+      return HTTP status code 204 (No Content) and the appropriate response
+      headers for a successful PATCH request.  The server MUST return a 200
+      OK if the "attributes" parameter is specified in the request.
+    testable: yes

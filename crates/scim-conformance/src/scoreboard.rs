@@ -6,32 +6,17 @@
 //!
 //! # `req_coverage`
 //!
-//! Denominator: RFC 7644 §3.x paragraphs whose `extract.py`-style `class`
-//! is `definitional` or `definitional_prose` (the paragraphs that state an
-//! actual requirement, as opposed to explanatory prose, an example, a
-//! heading/caption, or a table) -- see [`requirement_inventory`] and
-//! `crate::spec_extract`. Computed by hand once this session with:
+//! Denominator: RFC 7644 §3.x paragraphs whose `class` (as classified by
+//! `crate::spec_extract`) is `definitional` or `definitional_prose` (the
+//! paragraphs that state an actual requirement, as opposed to explanatory
+//! prose, an example, a heading/caption, or a table) -- see
+//! [`requirement_inventory`]. `crate::spec_extract::extract` computes this
+//! at both test and run time, no external tooling involved; its own pinned
+//! unit tests (see that module's doc comment) catch drift in the count.
 //!
-//! ```text
-//! python3 tools/prototype/extract.py --no-text spec/rfc /tmp/t12_extract.json
-//! python3 -c "
-//! import json
-//! items = json.load(open('/tmp/t12_extract.json'))['7644']
-//! sec3 = [i for i in items if i['section'].split('.')[0] == '3']
-//! denom = [i for i in sec3 if i['class'] in ('definitional', 'definitional_prose')]
-//! print(len(denom))
-//! "
-//! ```
-//!
-//! which printed **147** (124 `definitional` + 23 `definitional_prose`,
-//! out of 428 total §3.x blocks) against this branch's vendored
-//! `spec/rfc/rfc7644.txt`. `crate::spec_extract`'s own pinned unit tests
-//! reproduce that count from the Rust port so a future edit is caught by
-//! `cargo test`, without needing Python at test or run time (see that
-//! module's doc comment for why). Note this is **not** the plan's
-//! speculative "282" -- per this task's own instructions, that number was
-//! never verified against the current vendored text or the current
-//! `extract.py` and is not used here.
+//! Filtering RFC 7644's §3.x paragraphs this way yields **147** (124
+//! `definitional` + 23 `definitional_prose`, out of 428 total §3.x blocks)
+//! against this branch's vendored `spec/rfc/rfc7644.txt`.
 //!
 //! Numerator: every [`Basis`] (primary or secondary) cited by any outcome
 //! `crate::full_suite` produces (schema-driven matrix, protocol probes,
@@ -67,19 +52,21 @@
 //!
 //! # `regression_guards`
 //!
-//! V-18, V-19, and V-21..V-25 were the seven non-conformances this
-//! generated-check suite found while evaluating this repository's own
-//! reference server. **All seven were fixed in PR #72.** Reporting them
-//! under `knob_detection`-style "caught" language would be false: against
-//! a fixed server, this suite has nothing left to *catch* for six of the
+//! `projection-on-write`, `uniqueness-scimtype`, and
+//! `readonly-extension-subattr-echo`..`patch-readonly-not-rejected` (seven
+//! named guards in total) were the non-conformances this generated-check
+//! suite found while evaluating this repository's own reference server.
+//! **All seven were fixed in PR #72.** Reporting them under
+//! `knob_detection`-style "caught" language would be false: against a
+//! fixed server, this suite has nothing left to *catch* for six of the
 //! seven (nothing to detect, because nothing is wrong to detect). Instead
 //! each is reported here as a regression guard: the live count of cells
 //! still exhibiting the pre-fix failure mode, out of the relevant cell
 //! count, recomputed fresh from whatever `client` `compute` is given (this
 //! *is* a live measurement -- of whether the fix is still in effect, not
 //! of "can this suite find this bug"). All seven measure 0
-//! fails/relevant-cells on this branch, including V-25 (0 of 18
-//! `mutability_readOnly` PATCH cells fail). V-25's cell,
+//! fails/relevant-cells on this branch, including `patch-readonly-not-
+//! rejected` (0 of 18 `mutability_readOnly` PATCH cells fail). Its cell,
 //! `Group.members.display`, previously appeared to fail because the PATCH
 //! probe itself was unsound: for a readOnly sub-attribute of a
 //! ReadWrite, top-level multi-valued complex attribute, the coarse
@@ -100,13 +87,13 @@ use std::fmt::Write as _;
 
 use crate::basis::Basis;
 use crate::client::ScimClient;
-use crate::findings::classify_known_fail;
+use crate::findings::classify_regression;
 use crate::gen::attrdefs::AttrdefCheck;
 use crate::matrix::{Characteristic, Method, Outcome, Verdict};
 use crate::schema::{decls_from_schemas, AttrDecl, Mutability, Returned};
 use crate::spec_extract::{self, Class};
 
-const RFC7644_TXT: &str = include_str!("../../../spec/rfc/rfc7644.txt");
+const RFC7644_TXT: &str = include_str!("../spec/rfc/rfc7644.txt");
 
 /// The compatibility knobs `tests/conformance_knob_mutation.rs` exercises
 /// (see this module's doc comment for why their `caught` status is static,
@@ -156,8 +143,9 @@ pub struct Scoreboard {
     /// comment.
     pub knob_detection: Vec<(String, bool)>,
     /// Not a detection demonstration -- see this module's doc comment.
-    /// V-18, V-19, V-21..V-25, all fixed in PR #72 and retained as
-    /// regression guards.
+    /// Seven regression guards, all fixed in PR #72 and retained under
+    /// self-explanatory slugs (see `crate::findings::classify_regression`
+    /// and `projection_guard`/`uniqueness_guard` below).
     pub regression_guards: Vec<RegressionGuard>,
 }
 
@@ -176,9 +164,9 @@ fn parse_span(lines: &str) -> Option<(u32, u32)> {
 }
 
 /// The req_coverage denominator: RFC 7644 §3.x paragraphs classified
-/// `definitional` or `definitional_prose` by `crate::spec_extract`'s port
-/// of `extract.py`. See this module's doc comment for the exact filter and
-/// the count it produces (147) on this branch.
+/// `definitional` or `definitional_prose` by `crate::spec_extract`. See
+/// this module's doc comment for the exact filter and the count it
+/// produces (147) on this branch.
 pub fn requirement_inventory() -> Vec<(u32, u32)> {
     spec_extract::extract(7644, RFC7644_TXT)
         .into_iter()
@@ -311,12 +299,14 @@ pub fn cell_completeness(decls: &[AttrDecl]) -> (usize, usize) {
     )
 }
 
-/// p27 (projection): 16 cells, 12 of them non-GET. V-18 used to be "every
-/// non-GET cell FAILs"; fixed in #72, so this now reports how many of the
-/// 12 relevant (non-GET) cells still fail (0 on a fixed server) -- mirrors
-/// `tests/conformance_ledger_matrix.rs`'s
+/// `projection-on-write` guard -- RFC 7644 §3.9: `attributes` /
+/// `excludedAttributes` must be honoured on every resource-returning
+/// method, not just GET. p27 (projection): 16 cells, 12 of them non-GET.
+/// This used to be "every non-GET cell FAILs"; fixed in #72, so this now
+/// reports how many of the 12 relevant (non-GET) cells still fail (0 on a
+/// fixed server) -- mirrors `tests/conformance_ledger_matrix.rs`'s
 /// `projection_is_honoured_on_every_resource_returning_method`.
-fn v18_guard(outcomes: &[Outcome]) -> RegressionGuard {
+fn projection_guard(outcomes: &[Outcome]) -> RegressionGuard {
     let non_get: Vec<&Outcome> = outcomes
         .iter()
         .filter(|o| o.characteristic == Characteristic::LedgerP27Projection)
@@ -327,19 +317,21 @@ fn v18_guard(outcomes: &[Outcome]) -> RegressionGuard {
         .filter(|o| o.verdict == Verdict::Fail)
         .count();
     RegressionGuard {
-        label: "V-18".to_string(),
+        label: "projection-on-write".to_string(),
         fails,
         relevant: non_get.len(),
     }
 }
 
-/// p26 (status): 6 cells. V-19 used to be "PUT and PATCH duplicate
-/// rejection uses scimType=invalidValue instead of uniqueness, 4 of the 6
-/// cells"; fixed in #72, so this now reports how many of the 6 cells still
-/// reject a duplicate with a scimType other than "uniqueness" -- mirrors
+/// `uniqueness-scimtype` guard -- RFC 7644 §3.12 Table 9: a duplicate-value
+/// rejection must report `scimType: "uniqueness"`. p26 (status): 6 cells.
+/// This used to be "PUT and PATCH duplicate rejection uses
+/// scimType=invalidValue instead of uniqueness, 4 of the 6 cells"; fixed
+/// in #72, so this now reports how many of the 6 cells still reject a
+/// duplicate with a scimType other than "uniqueness" -- mirrors
 /// `tests/conformance_ledger_matrix.rs`'s
 /// `uniqueness_scim_type_is_uniform_across_methods`.
-fn v19_guard(outcomes: &[Outcome]) -> RegressionGuard {
+fn uniqueness_guard(outcomes: &[Outcome]) -> RegressionGuard {
     let cells: Vec<&Outcome> = outcomes
         .iter()
         .filter(|o| o.characteristic == Characteristic::LedgerP26Status)
@@ -353,21 +345,24 @@ fn v19_guard(outcomes: &[Outcome]) -> RegressionGuard {
         })
         .count();
     RegressionGuard {
-        label: "V-19".to_string(),
+        label: "uniqueness-scimtype".to_string(),
         fails,
         relevant: cells.len(),
     }
 }
 
-/// V-21..V-25: the relevant cell set is every outcome
-/// `crate::findings::classify_known_fail` would classify under `label`
+/// The five schema-matrix regression guards (`readonly-extension-subattr-
+/// echo`, `required-on-put`, `type-validation-bypass`,
+/// `readonly-multivalued-echo-on-create`, `patch-readonly-not-rejected`):
+/// the relevant cell set is every outcome
+/// `crate::findings::classify_regression` would classify under `label`
 /// (that function matches on resource/attribute/characteristic/method, not
 /// on verdict, so it identifies the relevant cells regardless of how they
 /// currently score); `fails` is how many of those are still FAIL.
-fn known_finding_guard(outcomes: &[Outcome], label: &'static str) -> RegressionGuard {
+fn schema_matrix_guard(outcomes: &[Outcome], label: &'static str) -> RegressionGuard {
     let relevant: Vec<&Outcome> = outcomes
         .iter()
-        .filter(|o| classify_known_fail(o) == Some(label))
+        .filter(|o| classify_regression(o) == Some(label))
         .collect();
     let fails = relevant
         .iter()
@@ -409,9 +404,15 @@ pub async fn compute(client: &mut ScimClient) -> Scoreboard {
     let coverage = req_coverage(&outcomes, &attrdef_checks);
     let cells = cell_completeness(&decls);
 
-    let mut regression_guards = vec![v18_guard(&outcomes), v19_guard(&outcomes)];
-    for label in ["V-21", "V-22", "V-23", "V-24", "V-25"] {
-        regression_guards.push(known_finding_guard(&outcomes, label));
+    let mut regression_guards = vec![projection_guard(&outcomes), uniqueness_guard(&outcomes)];
+    for label in [
+        "readonly-extension-subattr-echo",
+        "required-on-put",
+        "type-validation-bypass",
+        "readonly-multivalued-echo-on-create",
+        "patch-readonly-not-rejected",
+    ] {
+        regression_guards.push(schema_matrix_guard(&outcomes, label));
     }
 
     Scoreboard {
@@ -455,9 +456,9 @@ pub fn render_text(s: &Scoreboard) -> String {
     }
     let _ = writeln!(
         out,
-        "  Regression guards (V-18, V-19, V-21..V-25 -- all fixed in PR #72; NOT a live \
-         \"catches this finding\" detection, since a fixed server has nothing left to catch. \
-         Each row is the live count of cells still exhibiting the pre-fix failure mode.)"
+        "  Regression guards (all fixed in PR #72; NOT a live \"catches this finding\" \
+         detection, since a fixed server has nothing left to catch. Each row is the live \
+         count of cells still exhibiting the pre-fix failure mode.)"
     );
     for g in &s.regression_guards {
         let status = if g.fails == 0 {

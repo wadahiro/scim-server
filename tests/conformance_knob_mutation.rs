@@ -278,18 +278,19 @@ async fn knob_flips_change_exactly_the_expected_rows() {
     // user_groups_presence probe (PASS present -> FAIL absent) PLUS the 4
     // newly-generated `returned_never` cells described below.
     //
-    // Before #72, this knob's flip *also* changed the 3 V-24 schema-matrix
-    // rows for User.groups.{value,$ref,display} MutabilityReadOnly POST
+    // Before #72, this knob's flip *also* changed the 3
+    // `readonly-multivalued-echo-on-create` schema-matrix rows for
+    // User.groups.{value,$ref,display} MutabilityReadOnly POST
     // (FAIL -> PASS) -- masking, not a fix: once `groups` was never
     // rendered at all, a forged groups.value/$ref/display could no longer
     // be observed in the POST response, so the readOnly-forgery check
-    // could no longer catch it. #72 fixed V-24 directly (a forged
+    // could no longer catch it. #72 fixed that guard directly (a forged
     // `User.groups` is no longer echoed on POST at all), so those 3 rows
     // are now PASS in the *baseline* too, and flipping this knob no longer
     // moves them -- they simply drop out of this knob's change set. That
     // this knob went from detecting 4 things to detecting 1 (plus the
     // schema-shape cells below) is expected and correct: it's the same
-    // effect V-24's fix had everywhere else, just visible here as a
+    // effect that guard's fix had everywhere else, just visible here as a
     // shrinking change set rather than a shrinking FAIL count.
     //
     // The remaining 4 keys: `include_user_groups` doesn't just change

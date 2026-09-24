@@ -1,5 +1,5 @@
 //! T9: runs `scim_conformance::checks_from_attrdefs` (generated from
-//! `tools/prototype/golden/attrdefs.json`, the required-member table
+//! `crates/scim-conformance/golden/attrdefs.json`, the required-member table
 //! extracted from RFC 7643 §5/§6/§7 and RFC 7644 §3.4.2) against this
 //! repository's own server.
 //!

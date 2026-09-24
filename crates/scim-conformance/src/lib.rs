@@ -61,7 +61,7 @@ pub async fn schema_matrix(client: &mut ScimClient) -> Result<Vec<Outcome>, clie
 }
 
 /// Generates and runs every check this crate can derive from the RFC 7644
-/// §3.5.2 requirement ledger (T10): loads `spec/ledger/rfc7644-3.5.2.yaml`
+/// §3.5.2 requirement ledger (T10): loads `crates/scim-conformance/spec/ledger/rfc7644-3.5.2.yaml`
 /// ([`ledger::load_rfc7644_3_5_2`]), maps it to [`requirement::Requirement`]s
 /// ([`requirement::requirements_from_ledger`]), and dispatches each one to
 /// its shape's template (`templates::{projection,status,sequence,atomicity,

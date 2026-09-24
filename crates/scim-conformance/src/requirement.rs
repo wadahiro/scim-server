@@ -137,7 +137,7 @@ fn build_requirement(
 /// `TARGETS`-matched entry in `crate::gen::attrdefs` (38, today).
 pub fn basis_from_span(doc: &str, section: &str, span: (u32, u32)) -> Basis {
     // "RFC 7644" -> "rfc7644.txt", matching the vendored filename in
-    // `spec/rfc/` and the existing `basis.rs` constants' convention
+    // `crates/scim-conformance/spec/rfc/` and the existing `basis.rs` constants' convention
     // (`"rfc7644.txt:583-584"`).
     let filename = match doc.rsplit(' ').next() {
         Some(number) => format!("rfc{number}.txt"),

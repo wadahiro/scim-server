@@ -1,7 +1,8 @@
 //! Runs the schema-driven RFC 7643/7644 conformance matrix
 //! (`crates/scim-conformance`) against this repository's own server and
-//! checks it against the differential oracle recorded by the Python
-//! prototype (`tools/prototype/golden/schema_matrix.json`, 242 cells).
+//! checks it against a golden fixture recorded from an earlier,
+//! independent implementation of this same matrix
+//! (`crates/scim-conformance/golden/schema_matrix.json`, 242 cells).
 //!
 //! The matrix is generated from this server's own `GET /Schemas` response
 //! (`scim_conformance::schema::decls_from_schemas`), not from a hand-written
@@ -156,27 +157,31 @@ fn cell_key(v: &Value) -> (String, String, String, String, String) {
 }
 
 /// `Outcome` serialized and stripped of `detail` (the only field the golden
-/// fixture doesn't carry — see `tools/prototype/README.md`'s golden
-/// regeneration recipe, which drops `detail` and `basis.text`). What's left
-/// must be a byte-for-byte match against the golden object: `verdict` and
-/// `basis` included, not just the key.
+/// fixture doesn't carry -- its recording step dropped `detail` and
+/// `basis.text` when it was captured). What's left must be a byte-for-byte
+/// match against the golden object: `verdict` and `basis` included, not
+/// just the key.
 fn outcome_json(o: &Outcome) -> Value {
     let mut v = serde_json::to_value(o).expect("Outcome serializes");
     v.as_object_mut().unwrap().remove("detail");
     v
 }
 
-/// Golden-comparison strategy, decided after PR #72 fixed the five findings
-/// this matrix was built to reproduce (V-21..V-25 -- V-18/V-19 are
-/// ledger-matrix cells, not schema-matrix ones, and are not part of this
-/// golden fixture):
+/// Golden-comparison strategy, decided after PR #72 fixed the five
+/// regressions this matrix guards (`readonly-extension-subattr-echo`,
+/// `required-on-put`, `type-validation-bypass`,
+/// `readonly-multivalued-echo-on-create`, `patch-readonly-not-rejected` --
+/// `projection-on-write` and `uniqueness-scimtype` are ledger-matrix
+/// cells, not schema-matrix ones, and are not part of this golden
+/// fixture):
 ///
-/// The golden fixture (`tools/prototype/golden/schema_matrix.json`) was
-/// recorded against the *pre-fix* server, so a chunk of its recorded
+/// The golden fixture (`crates/scim-conformance/golden/schema_matrix.json`)
+/// was recorded against the *pre-fix* server, so a chunk of its recorded
 /// verdicts no longer match by design -- that's the fix working, not a
-/// regression. Its original purpose was to prove the Rust port generates
-/// the same 242 cells, with the same judgements, as the Python prototype
-/// (a differential-oracle property). Three options were on the table:
+/// regression. Its original purpose was to prove this matrix generates the
+/// same 242 cells, with the same judgements, as an earlier, independent
+/// implementation (a differential-oracle property). Three options were on
+/// the table:
 /// (a) compare cell *keys* only and assert the verdict divergence is
 /// confined to exactly the cells the fixes touched, (b) regenerate the
 /// golden against the fixed server (loses the port-vs-prototype property
@@ -184,30 +189,34 @@ fn outcome_json(o: &Outcome) -> Value {
 ///
 /// This test takes (a). Measured against this rebase (golden 242 cells,
 /// 18 of them `mutability_readOnly` PATCH rows excluded up front for the
-/// reason below): every golden key is still present in the Rust matrix
-/// (the port-equivalence property on cell *generation* survives), and of
+/// reason below): every golden key is still present in the current matrix
+/// (the equivalence property on cell *generation* survives), and of
 /// the 224 remaining rows exactly 21 diverge in verdict, every one of them
 /// golden=FAIL -> rust=PASS, and every one classifies under
-/// `classify_known_fail` as V-21 (4: manager.$ref/manager.displayName x
-/// POST/PUT), V-22 (1: Group displayName required on PUT-omit), V-23 (13:
+/// `classify_regression` as `readonly-extension-subattr-echo` (4:
+/// manager.$ref/manager.displayName x POST/PUT), `required-on-put` (1:
+/// Group displayName required on PUT-omit), `type-validation-bypass` (13:
 /// Group type-validation bypass on externalId/members/members.*, User
-/// addresses.* on POST), or V-24 (3: User groups.value/$ref/display on
-/// POST). Two of the V-21 PUT rows (`manager.$ref`, `manager.displayName`)
+/// addresses.* on POST), or `readonly-multivalued-echo-on-create` (3: User
+/// groups.value/$ref/display on POST). Two of the
+/// `readonly-extension-subattr-echo` PUT rows (`manager.$ref`,
+/// `manager.displayName`)
 /// also sharpen their `basis` citation from the POST-only §3.3 the
-/// prototype cited to PUT's own §3.5.1 (L1665) -- the readOnly-PUT check
-/// cites the rule for the method it's actually exercising, which the
-/// prototype's single shared citation didn't distinguish; `basis` is
+/// golden fixture cited to PUT's own §3.5.1 (L1665) -- the readOnly-PUT
+/// check cites the rule for the method it's actually exercising, which the
+/// golden fixture's single shared citation didn't distinguish; `basis` is
 /// dropped before comparing those two so the (unchanged) verdict is still
 /// checked. This keeps a real, falsifiable property (cell generation still
-/// matches the prototype; verdict divergence is fully accounted for) and
-/// records the fix's effect in the same place the pre-fix behavior used to
-/// live, rather than silently deleting that history.
+/// matches the golden fixture; verdict divergence is fully accounted for)
+/// and records the fix's effect in the same place the pre-fix behavior
+/// used to live, rather than silently deleting that history.
 #[tokio::test]
 async fn golden_cells_are_a_subset_and_divergence_is_confined_to_fixed_findings() {
     let m = matrix().await;
-    let golden: Vec<Value> =
-        serde_json::from_str(include_str!("../tools/prototype/golden/schema_matrix.json"))
-            .expect("golden JSON parses");
+    let golden: Vec<Value> = serde_json::from_str(include_str!(
+        "../crates/scim-conformance/golden/schema_matrix.json"
+    ))
+    .expect("golden JSON parses");
     assert_eq!(
         golden.len(),
         242,
@@ -269,14 +278,14 @@ async fn golden_cells_are_a_subset_and_divergence_is_confined_to_fixed_findings(
                     if g_verdict == "FAIL" && a_verdict == "PASS" {
                         let label = outcome_by_key
                             .get(&key)
-                            .and_then(|o| classify_known_fail_ignoring_verdict(o));
+                            .and_then(|o| classify_regression_ignoring_verdict(o));
                         match label {
-                            Some(l) if l != "V-25" => {
+                            Some(l) if l != "patch-readonly-not-rejected" => {
                                 divergent += 1;
                             }
                             other => mismatches.push(format!(
                                 "{key:?}: golden={g} rust={actual} (unexplained divergence, \
-                                 classify_known_fail={other:?})"
+                                 classify_regression={other:?})"
                             )),
                         }
                     } else {
@@ -292,7 +301,8 @@ async fn golden_cells_are_a_subset_and_divergence_is_confined_to_fixed_findings(
          {excluded_patch_readonly}"
     );
     eprintln!(
-        "golden->rust divergence confined to fixed findings (V-21/V-22/V-23/V-24): {divergent}"
+        "golden->current divergence confined to fixed regressions (readonly-extension-subattr-echo/\
+         required-on-put/type-validation-bypass/readonly-multivalued-echo-on-create): {divergent}"
     );
     assert!(
         excluded_patch_readonly > 0 && excluded_patch_readonly <= 18,
@@ -312,37 +322,41 @@ async fn golden_cells_are_a_subset_and_divergence_is_confined_to_fixed_findings(
     assert_eq!(
         divergent, 21,
         "expected exactly 21 cells to diverge from golden (all FAIL->PASS, all classified as \
-         V-21/V-22/V-23/V-24); got {divergent} -- if this moved, a fix's effect on the matrix \
-         changed and this pinned count must be re-measured, not silently updated"
+         readonly-extension-subattr-echo/required-on-put/type-validation-bypass/\
+         readonly-multivalued-echo-on-create); got {divergent} -- if this moved, a fix's effect \
+         on the matrix changed and this pinned count must be re-measured, not silently updated"
     );
 }
 
-/// Like `classify_known_fail`, but usable on a PASS outcome too (the golden
+/// Like `classify_regression`, but usable on a PASS outcome too (the golden
 /// comparison above needs to label a cell that *used* to FAIL and now
-/// PASSes, and `classify_known_fail`'s PATCH arm matches on
+/// PASSes, and `classify_regression`'s PATCH arm matches on
 /// resource/attribute/characteristic/method only -- it never actually
 /// looks at `o.verdict` -- so this is exactly that function, not a
 /// reimplementation).
-fn classify_known_fail_ignoring_verdict(o: &Outcome) -> Option<&'static str> {
-    classify_known_fail(o)
+fn classify_regression_ignoring_verdict(o: &Outcome) -> Option<&'static str> {
+    classify_regression(o)
 }
 
-/// Classifies a FAIL outcome by the finding it used to be part of, before
-/// PR #72 fixed all eight (V-18, V-19, V-21..V-25) this generator was built
-/// to reproduce. Retained purely as a regression-diagnosis label now: every
-/// arm matches zero FAIL outcomes against a fixed server (see below), and
-/// exists so that *if* one of them regresses, the FAIL it reappears as is
-/// immediately attributed to the finding it used to be, not reported as an
-/// unexplained new one.
-use scim_conformance::findings::classify_known_fail;
+/// Classifies a FAIL outcome by the regression guard it used to be part
+/// of, before PR #72 fixed all eight (`projection-on-write`,
+/// `uniqueness-scimtype`, `readonly-extension-subattr-echo`,
+/// `required-on-put`, `type-validation-bypass`,
+/// `readonly-multivalued-echo-on-create`, `patch-readonly-not-rejected`)
+/// this generator was built to reproduce. Retained purely as a
+/// regression-diagnosis label now: every arm matches zero FAIL outcomes
+/// against a fixed server (see below), and exists so that *if* one of them
+/// regresses, the FAIL it reappears as is immediately attributed to the
+/// finding it used to be, not reported as an unexplained new one.
+use scim_conformance::findings::classify_regression;
 
 /// Regression guard, not a detection demonstration: against a server with
 /// PR #72's fixes, this matrix should FAIL nowhere -- and it does, measured
 /// (verdict distribution printed below; 0 FAIL, 0 ERROR). This wasn't
 /// always so: `Group.members.display` / `mutability_readOnly` / `PATCH`
-/// used to be pinned here as a "known V-25 residual" with the *server*
-/// blamed for it. That conclusion was wrong -- the probe was unsound, not
-/// the server.
+/// used to be pinned here as a known `patch-readonly-not-rejected` residual
+/// with the *server* blamed for it. That conclusion was wrong -- the probe
+/// was unsound, not the server.
 ///
 /// `Group.members.display` is the one cell where a ReadWrite, top-level
 /// multi-valued complex attribute (`members`) holds a readOnly
@@ -417,7 +431,7 @@ async fn patch_mutability_readonly_fails_are_zero() {
         .collect();
 
     // Diagnose every FAIL (key, verdict, detail, and its
-    // classify_known_fail label) so a regression is immediately
+    // classify_regression label) so a regression is immediately
     // attributable, not just detected.
     let report: Vec<String> = fails
         .iter()
@@ -431,7 +445,7 @@ async fn patch_mutability_readonly_fails_are_zero() {
                 o.characteristic,
                 o.method,
                 o.verdict,
-                classify_known_fail(o),
+                classify_regression(o),
                 o.detail
             )
         })

@@ -13,10 +13,11 @@
 use regex::Regex;
 use serde::Deserialize;
 
-/// One paragraph of the ledger. Extra YAML keys not listed here (`refs`,
-/// `coverage_detail`, `finding`, ...) are present in
-/// `spec/ledger/rfc7644-3.5.2.yaml` for human context but are not needed by
-/// the generated-check path and are silently ignored by serde.
+/// One paragraph of the ledger. Every field here is read by this crate;
+/// fields that were carried in an earlier draft of the ledger but never
+/// consumed by any code (`checks`, `coverage`, `coverage_detail`, `note`,
+/// `finding`, `refs`, `tally`, `paragraphs_total`) were dropped from the
+/// YAML itself, so there is nothing left to silently ignore.
 #[derive(Debug, Clone, Deserialize)]
 pub struct LedgerEntry {
     pub id: String,
@@ -33,10 +34,6 @@ pub struct LedgerEntry {
     /// spelling.
     #[serde(default, deserialize_with = "de_optional_yes_no")]
     pub testable: Option<bool>,
-    #[serde(default)]
-    pub checks: Vec<String>,
-    pub coverage: Option<String>,
-    pub note: Option<String>,
 }
 
 /// Deserializes an `Option<bool>` field that may be written in the YAML as
@@ -85,7 +82,7 @@ pub struct Ledger {
 /// time (never read from disk at runtime -- there is no "wrong working
 /// directory" failure mode).
 pub fn load_rfc7644_3_5_2() -> Ledger {
-    const RAW: &str = include_str!("../../../spec/ledger/rfc7644-3.5.2.yaml");
+    const RAW: &str = include_str!("../spec/ledger/rfc7644-3.5.2.yaml");
     serde_yaml::from_str(RAW).expect("spec/ledger/rfc7644-3.5.2.yaml must parse as a Ledger")
 }
 
@@ -100,10 +97,9 @@ pub struct QuoteMismatch {
 
 /// Page furniture: running headers/footers repeated on every page of the
 /// plain-text RFC (`RFC 7644               SCIM Protocol ...`, `Hunt, et
-/// al.  ...`, `... [Page N]`). Matches `tools/prototype/relocate_ledger.py`
-/// and `verify-quotes.rb`'s rule exactly, including the same three
-/// alternatives; a line containing a form-feed is treated as furniture
-/// separately (checked in [`is_furniture`], not by this pattern).
+/// al.  ...`, `... [Page N]`); a line containing a form-feed is treated as
+/// furniture separately (checked in [`is_furniture`], not by this
+/// pattern).
 fn furniture_re() -> Regex {
     Regex::new(r"^(RFC \d+\s|Hunt,|.*\[Page \d+\]\s*$)").expect("static regex")
 }
@@ -172,7 +168,7 @@ mod tests {
         let ledger = load_rfc7644_3_5_2();
         assert_eq!(ledger.entries.len(), 27);
 
-        let raw = include_str!("../../../spec/rfc/rfc7644.txt");
+        let raw = include_str!("../spec/rfc/rfc7644.txt");
         let mismatches = verify_quotes(&ledger, raw);
         assert!(mismatches.is_empty(), "quote mismatches: {:#?}", mismatches);
 
