@@ -161,7 +161,11 @@ async fn profile_matches_non_default_compatibility_and_round_trips() {
 
     expect("meta_datetime_format", "epoch");
     expect("empty_multivalued_rendering", "omitted");
-    expect("user_groups_presence", "absent");
+    // The server rewrites its own /Schemas to `returned: never` for
+    // User.groups when include_user_groups is disabled (see
+    // src/resource/schema.rs), so this is the self-consistent case, not a
+    // fault -- see `RfcPosition::SelfDeclared`.
+    expect("user_groups_presence", "declares_never_absent");
     expect("group_members_filter", "rejected_400");
     expect("group_displayname_filter", "rejected_400");
     expect("patch_replace_empty_array", "rejected_400");

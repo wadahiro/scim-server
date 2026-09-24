@@ -80,6 +80,16 @@ pub enum RfcPosition {
     /// case: an emulation option here has no "correct" RFC value to match,
     /// only providers to match.
     Silent,
+    /// The RFC does not mandate a value directly; it defines the *meaning*
+    /// of a characteristic the target itself declares, and the declaration
+    /// binds the target. A provider that declares `returned: default` for
+    /// an attribute and then omits it contradicts its own `/Schemas`. A
+    /// provider that declares `never` and omits it is self-consistent -- a
+    /// variant, not a fault.
+    SelfDeclared {
+        basis: Basis,
+        declares: &'static str,
+    },
 }
 
 impl RfcPosition {
@@ -88,7 +98,59 @@ impl RfcPosition {
             RfcPosition::Mandated { basis, .. } => Some(*basis),
             RfcPosition::Permitted { basis } => Some(*basis),
             RfcPosition::Silent => None,
+            RfcPosition::SelfDeclared { basis, .. } => Some(*basis),
         }
+    }
+}
+
+/// Judges a `RfcPosition::SelfDeclared` observation whose token has the
+/// shape `"declares_<value>_<present|absent>"` (built by
+/// `crate::axes::self_declared_token`). `never` is the only declared value
+/// that requires absence -- every other declared value (`default`,
+/// `always`, `request`) is read as "this attribute is meant to appear", so
+/// observed absence under those is the self-contradiction. An unparseable
+/// token (should not happen for a `Value::Known` produced by this crate) is
+/// treated as not a fault, since there is nothing to judge it against.
+pub fn self_declared_is_fault(token: &str) -> bool {
+    let Some(rest) = token.strip_prefix("declares_") else {
+        return false;
+    };
+    let Some((declared, presence)) = rest.rsplit_once('_') else {
+        return false;
+    };
+    let present = presence == "present";
+    if declared == "never" {
+        present
+    } else {
+        !present
+    }
+}
+
+#[cfg(test)]
+mod self_declared_tests {
+    use super::*;
+
+    #[test]
+    fn declares_default_present_is_consistent() {
+        assert!(!self_declared_is_fault("declares_default_present"));
+    }
+
+    #[test]
+    fn declares_never_absent_is_consistent() {
+        // The knob-on case: `include_user_groups: false` rewrites the
+        // schema to `returned: never` and then omits the attribute. This
+        // must never be reported as a fault.
+        assert!(!self_declared_is_fault("declares_never_absent"));
+    }
+
+    #[test]
+    fn declares_default_absent_is_self_contradiction() {
+        assert!(self_declared_is_fault("declares_default_absent"));
+    }
+
+    #[test]
+    fn declares_never_present_is_self_contradiction() {
+        assert!(self_declared_is_fault("declares_never_present"));
     }
 }
 
@@ -123,19 +185,20 @@ pub const PROBE_EMPTY_MEMBERS_SHAPE: Basis = Basis {
     lines: "rfc7643.txt:681-683",
 };
 
-/// RFC 7643 §4.1.2 `groups` (`rfc7643.txt:1325-1327`) combined with §7's
-/// `returned: default` definition (`rfc7643.txt:1799-1803`, "The attribute
-/// is returned by default in all SCIM operation responses where attribute
-/// values are returned... DEFAULT."). Neither passage uses a 2119 MUST/
-/// SHALL for this specific behaviour -- `returned: default` reads as a
-/// declared characteristic, not an imperative -- so a provider omitting
-/// `groups` for a User with real membership is treated as a `Should`
-/// deviation: reportable, and the reason `include_user_groups` exists as a
-/// knob, but not a hard violation.
+/// RFC 7643 §7's `returned` definition (`rfc7643.txt:1799-1803`): "default
+/// The attribute is returned by default in all SCIM operation responses
+/// where attribute values are returned... DEFAULT." Contains no RFC 2119
+/// keyword -- it defines what the declaration *means*, not an imperative
+/// value the RFC itself picks. `RfcPosition::SelfDeclared` reflects that:
+/// the obligation comes from the target's own `/Schemas` declaration for
+/// `User.groups.returned`, not from this text directly. See
+/// `src/resource/schema.rs:116-153`: this server rewrites its own
+/// `/Schemas` to `returned: never` when `include_user_groups` is disabled,
+/// so it stays self-consistent under this model.
 pub const PROBE_USER_GROUPS_PRESENCE: Basis = Basis {
     doc: "RFC 7643",
-    section: "4.1.2",
-    lines: "rfc7643.txt:1325-1327",
+    section: "7",
+    lines: "rfc7643.txt:1799-1803",
 };
 
 /// RFC 7644 §3.4.2.2 (`rfc7644.txt:926-932`): "Filtering is an OPTIONAL

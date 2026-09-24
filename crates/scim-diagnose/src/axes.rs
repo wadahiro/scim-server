@@ -22,7 +22,7 @@ use crate::fixtures::{
     GROUP_URN, PATCHOP_URN,
 };
 use crate::rfc::{Keyword, RfcPosition};
-use crate::schema::Resource;
+use crate::schema::{decls_from_schemas, Resource};
 
 fn is_rfc3339(s: &str) -> bool {
     chrono::DateTime::parse_from_rfc3339(s).is_ok()
@@ -58,18 +58,41 @@ pub const EMPTY_MULTIVALUED_RENDERING: Axis = Axis {
     known: &["empty_array", "omitted"],
 };
 
+/// Every combination `Returned` (`crate::schema::Returned`) crosses with
+/// observed presence. Built by [`self_declared_token`]; see its doc comment
+/// and `crate::rfc::self_declared_is_fault` for which combinations are
+/// faults.
+const USER_GROUPS_PRESENCE_KNOWN: &[&str] = &[
+    "declares_default_present",
+    "declares_default_absent",
+    "declares_never_present",
+    "declares_never_absent",
+    "declares_always_present",
+    "declares_always_absent",
+    "declares_request_present",
+    "declares_request_absent",
+];
+
 pub const USER_GROUPS_PRESENCE: Axis = Axis {
     id: "user_groups_presence",
-    about: "whether User.groups appears for a User with known Group membership",
-    rfc: RfcPosition::Mandated {
+    about: "whether User.groups appears for a User with known Group membership, judged against the target's own declared returned characteristic for User.groups",
+    rfc: RfcPosition::SelfDeclared {
         basis: crate::rfc::PROBE_USER_GROUPS_PRESENCE,
-        keyword: Keyword::Should,
-        expected: "present",
+        declares: "groups.returned",
     },
     knob: Some("include_user_groups"),
     cost: Cost::NeedsUserAndGroup,
-    known: &["present", "absent"],
+    known: USER_GROUPS_PRESENCE_KNOWN,
 };
+
+/// Builds the `"declares_<value>_<present|absent>"` token
+/// `crate::rfc::self_declared_is_fault` judges.
+fn self_declared_token(declared: &str, present: bool) -> String {
+    format!(
+        "declares_{declared}_{}",
+        if present { "present" } else { "absent" }
+    )
+}
 
 pub const GROUP_MEMBERS_FILTER: Axis = Axis {
     id: "group_members_filter",
@@ -271,6 +294,24 @@ pub(crate) async fn probe_user_groups_presence(
     bk: &mut Bookkeeping,
 ) -> Observation {
     let axis = &USER_GROUPS_PRESENCE;
+
+    // The obligation this axis judges is created by the target's own
+    // declaration, not by the RFC directly -- read it first. No
+    // declaration for User.groups at all means there is nothing to hold
+    // the target to.
+    let schemas_r = safe(client.get("/Schemas")).await;
+    if !is_2xx(schemas_r.status) {
+        return unobservable(axis, Unobservable::NotDeclaredBySchema);
+    }
+    let decls = decls_from_schemas(&body_of(&schemas_r));
+    let Some(declared) = decls
+        .iter()
+        .find(|d| d.resource == Resource::User && d.path == "groups")
+        .map(|d| d.returned.as_str())
+    else {
+        return unobservable(axis, Unobservable::NotDeclaredBySchema);
+    };
+
     let Some(uid) = fresh_user_id(client, bk).await else {
         return unobservable(
             axis,
@@ -309,22 +350,25 @@ pub(crate) async fn probe_user_groups_presence(
             arr.iter()
                 .any(|g| g.get("value").and_then(Json::as_str) == Some(gid.as_str()))
         });
-    let evidence = vec![gr.exchange.clone(), getr.exchange.clone()];
+    let evidence = vec![
+        schemas_r.exchange.clone(),
+        gr.exchange.clone(),
+        getr.exchange.clone(),
+    ];
 
-    if found {
-        Observation {
-            axis: axis.id,
-            value: known_or_unknown(axis, "present"),
-            evidence,
-            detail: format!("User.groups contains {gid} after Group membership was created"),
-        }
+    let token = self_declared_token(declared, found);
+    let detail = if found {
+        format!(
+            "User.groups declares returned:{declared} and contains {gid} after Group membership was created"
+        )
     } else {
-        Observation {
-            axis: axis.id,
-            value: known_or_unknown(axis, "absent"),
-            evidence,
-            detail: format!("User.groups does not contain {gid}: {uj}"),
-        }
+        format!("User.groups declares returned:{declared} and does not contain {gid}: {uj}")
+    };
+    Observation {
+        axis: axis.id,
+        value: known_or_unknown(axis, &token),
+        evidence,
+        detail,
     }
 }
 

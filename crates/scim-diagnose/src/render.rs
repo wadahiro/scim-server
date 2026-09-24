@@ -10,7 +10,7 @@
 
 use crate::axes::AXES;
 use crate::axis::{Axis, Observation, Profile, Value};
-use crate::rfc::{Keyword, RfcPosition};
+use crate::rfc::{self, Keyword, RfcPosition};
 
 fn axis_for(id: &str) -> Option<&'static Axis> {
     AXES.iter().find(|a| a.id == id)
@@ -28,6 +28,7 @@ fn is_fault(axis: &Axis, obs: &Observation) -> Option<bool> {
             keyword, expected, ..
         } => Some(keyword.is_fault(*v == expected)),
         RfcPosition::Permitted { .. } | RfcPosition::Silent => None,
+        RfcPosition::SelfDeclared { .. } => Some(rfc::self_declared_is_fault(v)),
     }
 }
 
@@ -79,16 +80,26 @@ pub fn render_profile(profile: &Profile) -> String {
             RfcPosition::Silent => {
                 out.push_str("  rfc:    silent -- not regulated by RFC 7643/7644\n");
             }
+            RfcPosition::SelfDeclared { basis, declares } => {
+                out.push_str(&format!(
+                    "  rfc:    self-declared (bound by the target's own declaration of {declares}) -- {basis}\n"
+                ));
+            }
         }
         out.push_str(&format!(
             "  knob:   {}\n",
             axis.knob.unwrap_or("(none -- candidate for a new option)")
         ));
         out.push_str(&format!("  observed: {}\n", value_token(&obs.value)));
-        match is_fault(axis, obs) {
-            Some(true) => out.push_str("  verdict: VIOLATION (deviates from a mandated value)\n"),
-            Some(false) => out.push_str("  verdict: conforms\n"),
-            None => out.push_str("  verdict: n/a (permitted, silent, or unobservable)\n"),
+        match (is_fault(axis, obs), axis.rfc) {
+            (Some(true), RfcPosition::SelfDeclared { .. }) => {
+                out.push_str("  verdict: VIOLATION (contradicts the target's own declaration)\n")
+            }
+            (Some(true), _) => {
+                out.push_str("  verdict: VIOLATION (deviates from a mandated value)\n")
+            }
+            (Some(false), _) => out.push_str("  verdict: conforms\n"),
+            (None, _) => out.push_str("  verdict: n/a (permitted, silent, or unobservable)\n"),
         }
         if matches!(obs.value, Value::Unknown(_)) {
             out.push_str("  ** discovery: this value has no name -- a candidate for a new compatibility option **\n");
@@ -208,7 +219,11 @@ fn knob_yaml_value(field: &str, observed: &str) -> String {
     match field {
         "meta_datetime_format" => format!("\"{observed}\""),
         "show_empty_groups_members" => bool_str(observed == "empty_array").to_string(),
-        "include_user_groups" => bool_str(observed == "present").to_string(),
+        // `observed` is a `declares_<value>_<present|absent>` token (see
+        // `crate::axes::self_declared_token`): the knob tracks the actual
+        // observed presence, independent of whether the declaration was
+        // self-consistent.
+        "include_user_groups" => bool_str(observed.ends_with("_present")).to_string(),
         "support_group_members_filter" => bool_str(observed == "processed").to_string(),
         "support_group_displayname_filter" => bool_str(observed == "processed").to_string(),
         "support_patch_replace_empty_array" => bool_str(observed == "cleared").to_string(),

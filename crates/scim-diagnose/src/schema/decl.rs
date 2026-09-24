@@ -96,6 +96,17 @@ impl Returned {
             _ => Returned::Default,
         }
     }
+
+    /// Inverse of [`Returned::from_str`] -- the literal `/Schemas` token, as
+    /// used in `RfcPosition::SelfDeclared` tokens (`crate::axes`).
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Returned::Always => "always",
+            Returned::Never => "never",
+            Returned::Default => "default",
+            Returned::Request => "request",
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
