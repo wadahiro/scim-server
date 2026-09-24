@@ -39,6 +39,12 @@ struct Args {
     /// Host to bind to (overrides config file)
     #[arg(long)]
     host: Option<String>,
+
+    /// Validate the configuration and exit without starting the server (no
+    /// database file or tables are created, no port is bound). With no -c,
+    /// validates the built-in zero-config defaults.
+    #[arg(long)]
+    validate: bool,
 }
 
 async fn setup_backend(
@@ -96,6 +102,65 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Initialize tracing for better debugging
     tracing_subscriber::fmt::init();
+
+    // `--validate` loads (and thus validates -- `load_from_file` runs
+    // `AppConfig::validate()` internally) the configuration and exits
+    // before `setup_backend`, so no database file or tenant tables are
+    // created and no port is bound. Handled as its own early-exit branch,
+    // printing every collected problem (not just the first, which is all
+    // the default `Result`-from-`main` error reporting would show for a
+    // multi-line message) rather than going through the normal `?` flow.
+    if args.validate {
+        let (app_config, using_defaults) = match &args.config {
+            Some(config_path) => match AppConfig::load_from_file(config_path) {
+                Ok(config) => (config, false),
+                Err(e) => {
+                    eprintln!("❌ Configuration is invalid:");
+                    for line in e.lines() {
+                        eprintln!("   - {}", line);
+                    }
+                    std::process::exit(1);
+                }
+            },
+            None => (AppConfig::default_config(), true),
+        };
+
+        // `load_from_file` already validated a file-based config; run
+        // validate() again anyway (cheap, and it's the only validation a
+        // defaults-only run gets) so both paths are checked uniformly.
+        if let Err(errors) = app_config.validate() {
+            eprintln!("❌ Configuration is invalid:");
+            for line in errors.to_string().lines() {
+                eprintln!("   - {}", line);
+            }
+            std::process::exit(1);
+        }
+
+        println!(
+            "✅ Configuration is valid{}.",
+            if using_defaults {
+                " (built-in zero-config defaults; no -c given)"
+            } else {
+                ""
+            }
+        );
+        if let Some(db_config) = &app_config.backend.database {
+            println!(
+                "   Backend: database/{} ({})",
+                db_config.db_type, db_config.url
+            );
+        } else {
+            println!("   Backend: {}", app_config.backend.backend_type);
+        }
+        println!("   Tenants: {} configured", app_config.tenants.len());
+        for tenant in &app_config.tenants {
+            println!(
+                "     - id {}: {} (auth: {})",
+                tenant.id, tenant.path, tenant.auth.auth_type
+            );
+        }
+        return Ok(());
+    }
 
     // Load configuration from specified file or use defaults
     let (mut app_config, using_defaults) = if let Some(config_path) = &args.config {

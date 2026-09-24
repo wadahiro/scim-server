@@ -297,6 +297,27 @@ impl CustomEndpoint {
 }
 
 impl TenantConfig {
+    /// Compute the route path prefix this tenant registers its SCIM routes
+    /// under (`{base}/Users`, `{base}/Groups`, ...).
+    ///
+    /// This MUST mirror `app::build_scim_router` exactly -- that function
+    /// calls this method instead of re-deriving the prefix itself, so the
+    /// two can never drift. When `path` is an absolute `http(s)://` URL,
+    /// only the URL's path component is used as the route prefix (matching
+    /// historical configs that wrote a full origin in `path`); otherwise
+    /// `path` is used verbatim with any trailing slash trimmed.
+    pub fn route_base_path(&self) -> String {
+        if self.path.starts_with("http://") || self.path.starts_with("https://") {
+            if let Ok(url) = url::Url::parse(&self.path) {
+                url.path().trim_end_matches('/').to_string()
+            } else {
+                "/scim".to_string() // fallback, matches build_scim_router's historical behavior
+            }
+        } else {
+            self.path.trim_end_matches('/').to_string()
+        }
+    }
+
     /// Build the base URL for this tenant based on configuration and request
     /// - If override_base_url is set: use override_base_url + path (forced override)
     /// - If override_base_url is unset: use host resolution result + path (auto-constructed)
@@ -649,51 +670,9 @@ impl AppConfig {
             return Err("Configuration must contain at least one tenant".to_string());
         }
 
-        app_config.validate_meta_datetime_formats()?;
+        app_config.validate().map_err(|e| e.to_string())?;
 
         Ok(app_config)
-    }
-
-    /// Reject any `meta_datetime_format` value other than the two
-    /// recognized spellings ("rfc3339", "epoch"). The comparison is
-    /// exact/case-sensitive, matching the consumer in `utils.rs`
-    /// (`if format_type == "epoch"`), so config authors get an
-    /// unambiguous, single accepted spelling for each value instead of a
-    /// value silently falling through to rfc3339.
-    ///
-    /// Validates both the global `compatibility:` block and every
-    /// tenant's `compatibility:` override (when present).
-    fn validate_meta_datetime_formats(&self) -> Result<(), String> {
-        const VALID_VALUES: [&str; 2] = ["rfc3339", "epoch"];
-
-        fn check(value: &str, where_: &str) -> Result<(), String> {
-            if VALID_VALUES.contains(&value) {
-                Ok(())
-            } else {
-                Err(format!(
-                    "Invalid meta_datetime_format {:?} in {}: must be one of {:?}",
-                    value, where_, VALID_VALUES
-                ))
-            }
-        }
-
-        check(
-            &self.compatibility.meta_datetime_format,
-            "the global compatibility block",
-        )?;
-
-        for tenant in &self.tenants {
-            if let Some(ref tenant_override) = tenant.compatibility {
-                if let Some(ref value) = tenant_override.meta_datetime_format {
-                    check(
-                        value,
-                        &format!("tenant id {}'s compatibility block", tenant.id),
-                    )?;
-                }
-            }
-        }
-
-        Ok(())
     }
 
     /// Create default configuration for in-memory SQLite with anonymous access
@@ -856,6 +835,355 @@ impl AppConfig {
             }
         }
         self.compatibility.clone()
+    }
+}
+
+/// Every `auth.type` value `src/auth.rs`'s `validate_authentication` matches
+/// on. Kept as the single source of truth for "what auth types exist" so
+/// validation can never drift from what the middleware actually accepts.
+const VALID_AUTH_TYPES: [&str; 4] = ["unauthenticated", "bearer", "token", "basic"];
+
+/// Every `meta_datetime_format` value `src/utils.rs` recognizes.
+const VALID_META_DATETIME_FORMATS: [&str; 2] = ["rfc3339", "epoch"];
+
+/// The fixed set of GET routes `app::build_scim_router` registers under
+/// every tenant's `route_base_path()`. A `custom_endpoints` entry (which is
+/// also always a GET route, and -- critically -- is registered in a single
+/// router shared by *every* tenant, not scoped to its own tenant) that
+/// collides with one of these literal paths panics the server at startup
+/// exactly like a duplicate tenant path does.
+const SCIM_GET_ROUTE_SUFFIXES: [&str; 7] = [
+    "/ServiceProviderConfig",
+    "/Schemas",
+    "/ResourceTypes",
+    "/Users",
+    "/Users/.search",
+    "/Groups",
+    "/Groups/.search",
+];
+
+/// All problems found by [`AppConfig::validate`] in one pass. `Display`
+/// renders one message per line.
+#[derive(Debug)]
+pub struct ConfigValidationErrors(pub Vec<String>);
+
+impl std::fmt::Display for ConfigValidationErrors {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        for (i, e) in self.0.iter().enumerate() {
+            if i > 0 {
+                writeln!(f)?;
+            }
+            write!(f, "{}", e)?;
+        }
+        Ok(())
+    }
+}
+
+impl std::error::Error for ConfigValidationErrors {}
+
+/// Validate a single `auth:` block, appending every problem found to
+/// `errors`. `context` names where this auth block lives (e.g. `"tenant id
+/// 1"` or `"tenant id 1's custom endpoint \"/health\""`) so each message is
+/// self-locating.
+fn validate_auth_config(auth: &AuthConfig, context: &str, errors: &mut Vec<String>) {
+    if !VALID_AUTH_TYPES.contains(&auth.auth_type.as_str()) {
+        errors.push(format!(
+            "{}: auth.type {:?} is invalid; must be one of {:?}",
+            context, auth.auth_type, VALID_AUTH_TYPES
+        ));
+        return;
+    }
+
+    match auth.auth_type.as_str() {
+        "bearer" | "token" => match &auth.token {
+            Some(t) if !t.is_empty() => {}
+            Some(_) => errors.push(format!(
+                "{}: auth.type \"{}\" has an empty token, which can never authenticate a request; set a non-empty token",
+                context, auth.auth_type
+            )),
+            None => errors.push(format!(
+                "{}: auth.type \"{}\" requires a token",
+                context, auth.auth_type
+            )),
+        },
+        "basic" => match &auth.basic {
+            Some(_) => {}
+            None => errors.push(format!(
+                "{}: auth.type \"basic\" requires a basic: block with username and password",
+                context
+            )),
+        },
+        _ => {}
+    }
+}
+
+impl AppConfig {
+    /// Validate this configuration, collecting every problem found rather
+    /// than stopping at the first. Called from `load_from_file` so normal
+    /// startup benefits, and also exposed for the `--validate` CLI flag.
+    pub fn validate(&self) -> Result<(), ConfigValidationErrors> {
+        let mut errors = Vec::new();
+
+        self.validate_backend(&mut errors);
+        self.validate_tenant_ids(&mut errors);
+        self.validate_tenant_paths(&mut errors);
+
+        for tenant in &self.tenants {
+            validate_auth_config(
+                &tenant.auth,
+                &format!("tenant id {}", tenant.id),
+                &mut errors,
+            );
+            self.validate_tenant_host_resolution(tenant, &mut errors);
+            self.validate_tenant_override_base_url(tenant, &mut errors);
+            self.validate_tenant_custom_endpoints(tenant, &mut errors);
+        }
+
+        self.validate_custom_endpoints_global(&mut errors);
+        self.validate_meta_datetime_formats(&mut errors);
+
+        if errors.is_empty() {
+            Ok(())
+        } else {
+            Err(ConfigValidationErrors(errors))
+        }
+    }
+
+    /// Rule: `backend.type` must be `"database"`, `backend.database` must be
+    /// present, and `backend.database.type` must be `"postgresql"` or
+    /// `"sqlite"`. `setup_backend` (in `main.rs`) checks the same things
+    /// today, but only *after* `load_from_file` returns -- and only for the
+    /// value it happens to hit first. Validating here catches every problem
+    /// up front; `setup_backend`'s own check is left in place as a
+    /// defensive fallback for callers that construct `AppConfig` without
+    /// going through `load_from_file`/`validate`.
+    fn validate_backend(&self, errors: &mut Vec<String>) {
+        if self.backend.backend_type != "database" {
+            errors.push(format!(
+                "backend.type {:?} is unsupported; must be \"database\"",
+                self.backend.backend_type
+            ));
+            return;
+        }
+
+        match &self.backend.database {
+            None => errors.push(
+                "backend.database block is required when backend.type is \"database\"".to_string(),
+            ),
+            Some(db) => {
+                if db.db_type != "postgresql" && db.db_type != "sqlite" {
+                    errors.push(format!(
+                        "backend.database.type {:?} is unsupported; must be \"postgresql\" or \"sqlite\"",
+                        db.db_type
+                    ));
+                }
+            }
+        }
+    }
+
+    /// Rule: tenant `id` values must be unique.
+    ///
+    /// `resolve_tenant_id_from_path` itself only uses `.any(|t| t.id ==
+    /// ..)`, so it isn't directly broken by a duplicate id. The actual
+    /// damage happens one layer up: `AppConfig::find_tenant_by_request`
+    /// (used by `auth.rs`'s `resolve_tenant_id_from_request`) matches a
+    /// request by *path*, so it correctly returns the *second* tenant's
+    /// struct and thus its id -- but `auth.rs`'s own tenant lookup right
+    /// after that, and `get_effective_compatibility`, both do `.find(|t|
+    /// t.id == id)`, which returns the *first* tenant with that id. The
+    /// result isn't "unreachable" -- it's worse: requests that match the
+    /// second tenant's path get authenticated with the first tenant's
+    /// `auth` config, resolved with the first tenant's base URL and
+    /// compatibility settings, and (since `setup_backend` calls
+    /// `init_tenant(id)` once per tenant *entry*, not per unique id)
+    /// written into the first tenant's already-initialized tables --
+    /// silent cross-tenant data leakage, not a dead/unreachable tenant.
+    fn validate_tenant_ids(&self, errors: &mut Vec<String>) {
+        let mut seen = std::collections::HashSet::new();
+        for tenant in &self.tenants {
+            if !seen.insert(tenant.id) {
+                errors.push(format!(
+                    "duplicate tenant id {}: tenant ids must be unique (requests matching the later tenant's path are authenticated and served using the first tenant's auth, base URL, compatibility settings, and database tables -- silent cross-tenant leakage, not just an unreachable tenant)",
+                    tenant.id
+                ));
+            }
+        }
+    }
+
+    /// Rule: tenants must not resolve to the same route path.
+    /// `app::build_scim_router` registers `{base}/Users`, `{base}/Groups`,
+    /// etc. for every tenant's `TenantConfig::route_base_path()`; two
+    /// tenants resolving to the same base panics the server at startup
+    /// with axum's "Overlapping method route", *after* `setup_backend` has
+    /// already created that tenant's database file and tables.
+    fn validate_tenant_paths(&self, errors: &mut Vec<String>) {
+        let mut seen: std::collections::HashMap<String, (u32, String)> =
+            std::collections::HashMap::new();
+        for tenant in &self.tenants {
+            let normalized = tenant.route_base_path();
+            if let Some((first_id, first_path)) = seen.get(&normalized) {
+                errors.push(format!(
+                    "tenant id {} (path {:?}) and tenant id {} (path {:?}) both resolve to route path {:?}; this panics the server at startup with axum's \"Overlapping method route\" (after tables for both tenants have already been created)",
+                    first_id, first_path, tenant.id, tenant.path, normalized
+                ));
+            } else {
+                seen.insert(normalized, (tenant.id, tenant.path.clone()));
+            }
+        }
+    }
+
+    /// Rule: `host_resolution.trusted_proxies` entries must parse as either
+    /// an `IpAddr` or an `IpNet`, using the exact same parsing
+    /// `HostResolutionConfig::is_trusted_proxy` performs at request time.
+    /// Today, an unparsable entry is silently skipped by `is_trusted_proxy`
+    /// (it just never matches), so that proxy is quietly never trusted and
+    /// nothing is ever logged -- this turns that into a load-time error.
+    fn validate_tenant_host_resolution(&self, tenant: &TenantConfig, errors: &mut Vec<String>) {
+        if let Some(host_resolution) = &tenant.host_resolution {
+            if let Some(trusted_proxies) = &host_resolution.trusted_proxies {
+                for entry in trusted_proxies {
+                    let valid = IpNet::from_str(entry).is_ok() || IpAddr::from_str(entry).is_ok();
+                    if !valid {
+                        errors.push(format!(
+                            "tenant id {}: host_resolution.trusted_proxies entry {:?} is not a valid IP address or CIDR range",
+                            tenant.id, entry
+                        ));
+                    }
+                }
+            }
+        }
+    }
+
+    /// Rule: `override_base_url`, when present, must parse as an absolute
+    /// http/https URL (reusing the `url` crate already used elsewhere in
+    /// this codebase, rather than hand-rolling URL validation).
+    fn validate_tenant_override_base_url(&self, tenant: &TenantConfig, errors: &mut Vec<String>) {
+        if let Some(url_str) = &tenant.override_base_url {
+            match url::Url::parse(url_str) {
+                Ok(parsed) if parsed.scheme() == "http" || parsed.scheme() == "https" => {}
+                Ok(parsed) => errors.push(format!(
+                    "tenant id {}: override_base_url {:?} has unsupported scheme {:?}; must be \"http\" or \"https\"",
+                    tenant.id, url_str, parsed.scheme()
+                )),
+                Err(e) => errors.push(format!(
+                    "tenant id {}: override_base_url {:?} is not a valid absolute URL: {}",
+                    tenant.id, url_str, e
+                )),
+            }
+        }
+    }
+
+    /// Rule (tenant-local half): a tenant's own `custom_endpoints` must not
+    /// contain duplicate `path` values, and each endpoint's optional `auth:`
+    /// override (see `CustomEndpoint::effective_auth_config`) is validated
+    /// the same way tenant-level auth is.
+    fn validate_tenant_custom_endpoints(&self, tenant: &TenantConfig, errors: &mut Vec<String>) {
+        let mut seen = std::collections::HashSet::new();
+        for endpoint in &tenant.custom_endpoints {
+            if !seen.insert(endpoint.path.clone()) {
+                errors.push(format!(
+                    "tenant id {}: duplicate custom_endpoints path {:?}",
+                    tenant.id, endpoint.path
+                ));
+            }
+            if let Some(auth) = &endpoint.auth {
+                validate_auth_config(
+                    auth,
+                    &format!(
+                        "tenant id {}'s custom endpoint {:?}",
+                        tenant.id, endpoint.path
+                    ),
+                    errors,
+                );
+            }
+        }
+    }
+
+    /// Rule (global half): `app::build_custom_router` registers every
+    /// tenant's `custom_endpoints` into a *single, shared* router keyed only
+    /// by `endpoint.path` -- it is NOT scoped per tenant. That means a
+    /// `custom_endpoints` path colliding with another tenant's
+    /// `custom_endpoints` path, or with any tenant's built-in SCIM GET
+    /// route (`{base}/Users`, `{base}/ServiceProviderConfig`, ...), panics
+    /// the server at startup with axum's "Overlapping method route" --
+    /// verified empirically against this build, not just inferred from
+    /// reading the router code.
+    fn validate_custom_endpoints_global(&self, errors: &mut Vec<String>) {
+        let mut reserved_scim_routes: std::collections::HashMap<String, u32> =
+            std::collections::HashMap::new();
+        for tenant in &self.tenants {
+            let base = tenant.route_base_path();
+            for suffix in SCIM_GET_ROUTE_SUFFIXES {
+                reserved_scim_routes.insert(format!("{}{}", base, suffix), tenant.id);
+            }
+        }
+
+        let mut seen_custom_paths: std::collections::HashMap<String, u32> =
+            std::collections::HashMap::new();
+        for tenant in &self.tenants {
+            for endpoint in &tenant.custom_endpoints {
+                if let Some(&owner_id) = reserved_scim_routes.get(&endpoint.path) {
+                    errors.push(format!(
+                        "tenant id {}: custom_endpoints path {:?} collides with tenant id {}'s built-in SCIM GET route at the same path; this panics the server at startup with axum's \"Overlapping method route\"",
+                        tenant.id, endpoint.path, owner_id
+                    ));
+                }
+
+                match seen_custom_paths.get(&endpoint.path) {
+                    Some(&first_owner) if first_owner != tenant.id => {
+                        errors.push(format!(
+                            "tenant id {} and tenant id {} both register custom_endpoints path {:?}; custom endpoint routes are shared across all tenants (not scoped per tenant), so this panics the server at startup with axum's \"Overlapping method route\"",
+                            first_owner, tenant.id, endpoint.path
+                        ));
+                    }
+                    Some(_) => {
+                        // Same-tenant duplicate, already reported by
+                        // `validate_tenant_custom_endpoints`.
+                    }
+                    None => {
+                        seen_custom_paths.insert(endpoint.path.clone(), tenant.id);
+                    }
+                }
+            }
+        }
+    }
+
+    /// Reject any `meta_datetime_format` value other than the two
+    /// recognized spellings ("rfc3339", "epoch"). The comparison is
+    /// exact/case-sensitive, matching the consumer in `utils.rs`
+    /// (`if format_type == "epoch"`), so config authors get an
+    /// unambiguous, single accepted spelling for each value instead of a
+    /// value silently falling through to rfc3339.
+    ///
+    /// Validates both the global `compatibility:` block and every tenant's
+    /// `compatibility:` override (when present).
+    fn validate_meta_datetime_formats(&self, errors: &mut Vec<String>) {
+        fn check(value: &str, where_: &str, errors: &mut Vec<String>) {
+            if !VALID_META_DATETIME_FORMATS.contains(&value) {
+                errors.push(format!(
+                    "Invalid meta_datetime_format {:?} in {}: must be one of {:?}",
+                    value, where_, VALID_META_DATETIME_FORMATS
+                ));
+            }
+        }
+
+        check(
+            &self.compatibility.meta_datetime_format,
+            "the global compatibility block",
+            errors,
+        );
+
+        for tenant in &self.tenants {
+            if let Some(ref tenant_override) = tenant.compatibility {
+                if let Some(ref value) = tenant_override.meta_datetime_format {
+                    check(
+                        value,
+                        &format!("tenant id {}'s compatibility block", tenant.id),
+                        errors,
+                    );
+                }
+            }
+        }
     }
 }
 

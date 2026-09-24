@@ -58,16 +58,10 @@ pub fn build_scim_router(app_config: &AppConfig) -> Router<AppState> {
     let mut app = Router::new();
 
     for tenant in &app_config.tenants {
-        let base_path = if tenant.path.starts_with("http://") || tenant.path.starts_with("https://")
-        {
-            if let Ok(url) = url::Url::parse(&tenant.path) {
-                url.path().trim_end_matches('/').to_string()
-            } else {
-                "/scim".to_string() // fallback
-            }
-        } else {
-            tenant.path.trim_end_matches('/').to_string()
-        };
+        // Kept in sync with `AppConfig::validate()`'s duplicate-path and
+        // custom-endpoint-collision checks via `TenantConfig::route_base_path`
+        // -- see its doc comment.
+        let base_path = tenant.route_base_path();
 
         // ServiceProviderConfig routes
         app = app.route(
