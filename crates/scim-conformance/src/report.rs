@@ -16,7 +16,7 @@
 
 use crate::basis::Basis;
 use crate::gen::attrdefs::AttrdefCheck;
-use crate::matrix::{Characteristic, Method, Outcome, Verdict};
+use crate::matrix::{Characteristic, Keyword, Method, Outcome, Verdict};
 use crate::schema::Resource;
 
 /// One generated check, flattened out of whichever family produced it.
@@ -40,6 +40,11 @@ pub struct Finding {
     pub secondary: Vec<Basis>,
     pub detail: String,
     pub observed: Option<String>,
+    /// The RFC 2119 strength of the rule this finding judges -- see
+    /// [`Keyword`]. `None` for every family that predates the §3.14
+    /// ETag/versioning family (`crate::etag`), which introduced the
+    /// distinction.
+    pub keyword: Option<Keyword>,
 }
 
 /// Renders a `#[derive(Serialize)]` enum variant the same way `serde_json`
@@ -84,6 +89,7 @@ fn family_for(characteristic: Characteristic) -> &'static str {
     match characteristic {
         LedgerP27Projection | LedgerP26Status | LedgerP23Sequence | LedgerP24Conditional
         | LedgerP25Atomicity => "ledger",
+        EtagRepresentation | EtagConditionalRead | EtagConditionalWrite => "etag",
         ProbeMetaDatetime
         | ProbeEmptyMembersShape
         | ProbeUserGroupsPresence
@@ -106,6 +112,7 @@ impl From<Outcome> for Finding {
             secondary: o.secondary,
             detail: o.detail,
             observed: o.observed,
+            keyword: o.keyword,
         }
     }
 }
@@ -126,6 +133,7 @@ impl From<AttrdefCheck> for Finding {
             secondary: Vec::new(),
             detail: c.detail,
             observed: None,
+            keyword: None,
         }
     }
 }

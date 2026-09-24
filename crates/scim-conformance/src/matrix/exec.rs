@@ -515,6 +515,7 @@ fn outcome(
         detail: detail.into(),
         observed: None,
         secondary: Vec::new(),
+        keyword: None,
     }
 }
 
@@ -579,6 +580,7 @@ fn readonly_patch_outcome(
         detail: detail.into(),
         observed: Some(observed.into()),
         secondary: vec![basis::STATUS_TABLE9_MUTABILITY],
+        keyword: None,
     }
 }
 
@@ -1930,8 +1932,13 @@ pub async fn run_cells(client: &mut ScimClient, cells: &[Cell]) -> Vec<Outcome> 
             | Characteristic::LedgerP26Status
             | Characteristic::LedgerP23Sequence
             | Characteristic::LedgerP24Conditional
-            | Characteristic::LedgerP25Atomicity => {
-                unreachable!("probe/ledger characteristics never appear in cells_from_decls output")
+            | Characteristic::LedgerP25Atomicity
+            | Characteristic::EtagRepresentation
+            | Characteristic::EtagConditionalRead
+            | Characteristic::EtagConditionalWrite => {
+                unreachable!(
+                    "probe/ledger/etag characteristics never appear in cells_from_decls output"
+                )
             }
         }
     }
@@ -1997,8 +2004,13 @@ pub async fn run_cells(client: &mut ScimClient, cells: &[Cell]) -> Vec<Outcome> 
             | Characteristic::LedgerP26Status
             | Characteristic::LedgerP23Sequence
             | Characteristic::LedgerP24Conditional
-            | Characteristic::LedgerP25Atomicity => {
-                unreachable!("probe/ledger characteristics never appear in cells_from_decls output")
+            | Characteristic::LedgerP25Atomicity
+            | Characteristic::EtagRepresentation
+            | Characteristic::EtagConditionalRead
+            | Characteristic::EtagConditionalWrite => {
+                unreachable!(
+                    "probe/ledger/etag characteristics never appear in cells_from_decls output"
+                )
             }
         };
         debug_assert_eq!(

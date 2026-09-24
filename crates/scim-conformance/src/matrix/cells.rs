@@ -58,6 +58,15 @@ pub enum Characteristic {
     LedgerP24Conditional,
     #[serde(rename = "ledger_p25_atomicity")]
     LedgerP25Atomicity,
+    // -- RFC 7644 §3.14 ETag/versioning checks (`crate::etag`) -- like the
+    // probes above, gated on `Capability::Etag` and produced directly by
+    // that module rather than `cells_from_decls`.
+    #[serde(rename = "etag_representation")]
+    EtagRepresentation,
+    #[serde(rename = "etag_conditional_read")]
+    EtagConditionalRead,
+    #[serde(rename = "etag_conditional_write")]
+    EtagConditionalWrite,
 }
 
 /// The "method" column. Most values are literal HTTP methods, but several
@@ -75,6 +84,8 @@ pub enum Method {
     Patch,
     #[serde(rename = "GET")]
     Get,
+    #[serde(rename = "DELETE")]
+    Delete,
     #[serde(rename = "N/A")]
     NA,
     #[serde(rename = "POST-create")]

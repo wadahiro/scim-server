@@ -216,12 +216,77 @@ impl ScimClient {
         self.request(Method::DELETE, path, &[], None).await
     }
 
+    /// Like [`Self::get`], plus arbitrary extra request headers -- used by
+    /// `crate::etag` for `If-None-Match`.
+    pub async fn get_with_headers(
+        &self,
+        path: &str,
+        headers: &[(&str, &str)],
+    ) -> Result<ScimResponse, Error> {
+        self.request_with_headers(Method::GET, path, &[], None, headers)
+            .await
+    }
+
+    /// Like [`Self::put`], plus arbitrary extra request headers -- used by
+    /// `crate::etag` for `If-Match`.
+    pub async fn put_with_headers(
+        &self,
+        path: &str,
+        body: &Value,
+        headers: &[(&str, &str)],
+    ) -> Result<ScimResponse, Error> {
+        self.request_with_headers(Method::PUT, path, &[], Some(body), headers)
+            .await
+    }
+
+    /// Like [`Self::patch`], plus arbitrary extra request headers -- used by
+    /// `crate::etag` for `If-Match`.
+    pub async fn patch_with_headers(
+        &self,
+        path: &str,
+        body: &Value,
+        headers: &[(&str, &str)],
+    ) -> Result<ScimResponse, Error> {
+        self.request_with_headers(Method::PATCH, path, &[], Some(body), headers)
+            .await
+    }
+
+    /// Like [`Self::delete`], plus arbitrary extra request headers -- used
+    /// by `crate::etag` for `If-Match`.
+    pub async fn delete_with_headers(
+        &self,
+        path: &str,
+        headers: &[(&str, &str)],
+    ) -> Result<ScimResponse, Error> {
+        self.request_with_headers(Method::DELETE, path, &[], None, headers)
+            .await
+    }
+
     pub async fn request(
         &self,
         method: Method,
         path: &str,
         query: &[(&str, &str)],
         body: Option<&Value>,
+    ) -> Result<ScimResponse, Error> {
+        self.request_with_headers(method, path, query, body, &[])
+            .await
+    }
+
+    /// Like [`Self::request`], plus arbitrary extra request headers
+    /// (`headers`, `(name, value)` pairs) applied after auth/content-type
+    /// but before the body is attached -- so a caller can override
+    /// `Content-Type` if it ever needs to, though nothing does today.
+    /// [`Self::request`] delegates here with an empty `headers` slice, so
+    /// every existing call site (including `templates/projection.rs`'s
+    /// direct `.request(...)` calls) is unaffected.
+    pub async fn request_with_headers(
+        &self,
+        method: Method,
+        path: &str,
+        query: &[(&str, &str)],
+        body: Option<&Value>,
+        headers: &[(&str, &str)],
     ) -> Result<ScimResponse, Error> {
         let url_str = format!("{}{}", self.base, path);
         let parsed: reqwest::Url =
@@ -235,6 +300,14 @@ impl ScimClient {
                 reqwest::header::ACCEPT,
                 "application/scim+json, application/json",
             );
+
+        for (name, value) in headers {
+            let hn = reqwest::header::HeaderName::from_bytes(name.as_bytes())
+                .map_err(|e| Error::BadUrl(format!("bad header name {name:?}: {e}")))?;
+            let hv = reqwest::header::HeaderValue::from_str(value)
+                .map_err(|e| Error::BadUrl(format!("bad header value for {name:?}: {e}")))?;
+            req = req.header(hn, hv);
+        }
 
         if body.is_some() {
             req = req.header(reqwest::header::CONTENT_TYPE, "application/scim+json");

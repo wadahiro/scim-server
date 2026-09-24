@@ -229,6 +229,71 @@ pub const DISCOVERY_SCHEMAS_UNREACHABLE: Basis = Basis {
     lines: "rfc7643.txt:1660",
 };
 
+// ------------------------------------------------------------ T13 §3.14 ETag
+//
+// Back `crate::etag`, not the schema-driven matrix above. `crate::etag`
+// always sets `Outcome::basis` explicitly (its own key type, mirroring the
+// ledger cells' own per-instance `basis` field) rather than through
+// `for_characteristic`, since the three characteristics below cover rows
+// whose citation differs by row (e.g. `EtagConditionalWrite`'s DELETE row
+// cites Table 8, not §3.14's PUT/PATCH sentence) -- see that module's doc
+// comment.
+
+/// RFC 7644 §3.14 (`rfc7644.txt:3963-3969`): "The SCIM protocol supports
+/// resource versioning via standard HTTP ETags (Section 2.3 of [RFC7232]).
+/// Service providers MAY support weak ETags ... When supported, SCIM ETags
+/// MUST be specified as an HTTP header and SHOULD be specified within the
+/// 'version' attribute contained in the resource's 'meta' attribute." RFC
+/// 7232 itself is not vendored in this repository; the operative detail
+/// behind "standard HTTP ETags" (weak vs. strong comparison, Section 2.3 of
+/// [RFC7232]) lives there, not here.
+pub const ETAG_REPRESENTATION: Basis = Basis {
+    doc: "RFC 7644",
+    section: "3.14",
+    lines: "rfc7644.txt:3963-3969",
+};
+
+/// RFC 7644 §3.14 (`rfc7644.txt:4051-4052`): "If the resource has not
+/// changed, the service provider simply returns an empty body with a 304
+/// (Not Modified) response code." The conditional-retrieval mechanism this
+/// governs is introduced two lines above (`rfc7644.txt:4039-4040`: "With
+/// the returned ETag, clients MAY choose to retrieve the resource only if
+/// the resource has been modified") and named via `If-None-Match` (Section
+/// 3.2 of [RFC7232], not vendored here).
+pub const ETAG_CONDITIONAL_READ: Basis = Basis {
+    doc: "RFC 7644",
+    section: "3.14",
+    lines: "rfc7644.txt:4051-4052",
+};
+
+/// RFC 7644 §3.14 (`rfc7644.txt:4054-4058`): "If the service provider
+/// supports versioning of resources, the client MAY supply an If-Match
+/// header (Section 3.1 of [RFC7232]) for PUT and PATCH operations to
+/// ensure that the requested operation succeeds only if the supplied ETag
+/// matches the latest service provider resource." Names PUT and PATCH
+/// only -- DELETE is not named here (see `ETAG_TABLE8_PRECONDITION_FAILED`
+/// for the weaker basis `crate::etag`'s DELETE row cites instead).
+pub const ETAG_CONDITIONAL_WRITE: Basis = Basis {
+    doc: "RFC 7644",
+    section: "3.14",
+    lines: "rfc7644.txt:4054-4058",
+};
+
+/// RFC 7644 §3.12 Table 8 "SCIM HTTP Status Code Usage"
+/// (`rfc7644.txt:3779-3781`, NOT Table 9 -- Table 9 is the `scimType`
+/// detail-error-keyword table a few pages later and has no
+/// `preconditionFailed`/412 row at all): "412 (Precondition Failed) | PUT,
+/// PATCH, DELETE | Failed to update. Resource has changed on the server."
+/// This is the one place in the vendored text that names DELETE alongside
+/// If-Match's 412 outcome -- §3.14 itself (`ETAG_CONDITIONAL_WRITE`) names
+/// only PUT and PATCH, so `crate::etag`'s DELETE×If-Match row cites this as
+/// its (weaker, secondary) basis and is judged `Info`-only, never `Fail`.
+pub const ETAG_TABLE8_PRECONDITION_FAILED: Basis = Basis {
+    doc: "RFC 7644",
+    section: "3.12",
+    lines: "rfc7644.txt:3779-3781",
+};
+
 /// Method-aware basis lookup. Every characteristic's citation is fixed
 /// regardless of method (`for_characteristic` below) except
 /// `MutabilityReadOnly`: POST is governed by §3.3, PUT by §3.5.1, and PATCH
@@ -268,6 +333,11 @@ pub fn for_characteristic(c: crate::matrix::Characteristic) -> Basis {
         | LedgerP25Atomicity => unreachable!(
             "ledger characteristics carry their own per-instance basis (crate::requirement) \
              and are never resolved through this fixed table"
+        ),
+        EtagRepresentation | EtagConditionalRead | EtagConditionalWrite => unreachable!(
+            "crate::etag characteristics carry their own per-row basis (a DELETE row under \
+             EtagConditionalWrite cites a different basis than its PUT/PATCH rows) and are \
+             never resolved through this fixed table"
         ),
     }
 }

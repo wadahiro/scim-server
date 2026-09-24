@@ -71,6 +71,7 @@ pub(crate) fn row(
         detail: detail.into(),
         observed,
         secondary: cell.secondary.clone(),
+        keyword: None,
     }
 }
 

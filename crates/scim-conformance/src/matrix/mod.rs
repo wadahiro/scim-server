@@ -54,6 +54,40 @@ impl Verdict {
     }
 }
 
+/// The RFC 2119 keyword strength of the rule a check judges -- introduced
+/// by the §3.14 (ETag/versioning, `crate::etag`) family, whose core
+/// statements mix `MAY`/`MUST`/`SHOULD` in a single sentence (RFC 7644
+/// §3.14, `rfc7644.txt:3963-3969`) rather than the uniform MUST/SHALL every
+/// earlier family (schema matrix, probes, ledger) judges. `None` on
+/// `Outcome`/`Finding` means "no keyword recorded" -- every pre-existing
+/// check family, which predates this distinction and is implicitly
+/// MUST/SHALL throughout.
+///
+/// Policy (`crate::etag`'s checks apply this; see that module's doc
+/// comment for the full reasoning):
+/// - `Must`/`Shall` deviation -> [`Verdict::Fail`].
+/// - `Should` deviation -> [`Verdict::Info`], never `Fail` -- reported as an
+///   observation in `detail`/`observed`, not a violation.
+/// - `May` -> never a failure; a check with this keyword only records what
+///   it observed (`Verdict::Pass` or `Verdict::Info`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "UPPERCASE")]
+pub enum Keyword {
+    Must,
+    Should,
+    May,
+}
+
+impl Keyword {
+    pub fn tag(&self) -> &'static str {
+        match self {
+            Keyword::Must => "MUST",
+            Keyword::Should => "SHOULD",
+            Keyword::May => "MAY",
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct Outcome {
     pub attribute: String,
@@ -86,4 +120,11 @@ pub struct Outcome {
     /// primary basis plus Table 9's `mutability` row (§3.12) here.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub secondary: Vec<Basis>,
+    /// The RFC 2119 strength of the rule this outcome judges -- see
+    /// [`Keyword`]. `None` for every pre-§3.14 family (schema matrix,
+    /// probes, ledger), which are all implicitly MUST/SHALL and predate
+    /// this distinction; skipped when absent so those families' golden
+    /// fixtures still compare equal.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub keyword: Option<Keyword>,
 }

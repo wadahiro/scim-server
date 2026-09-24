@@ -9,9 +9,9 @@ use crate::client::truncate;
 use crate::matrix::Verdict;
 use crate::report::DiagnosticReport;
 
-/// Fixed print order for the four families [`crate::report::Finding::family`]
+/// Fixed print order for the five families [`crate::report::Finding::family`]
 /// can hold; a family with no findings is skipped entirely.
-const FAMILY_ORDER: [&str; 4] = ["schema", "probe", "ledger", "discovery"];
+const FAMILY_ORDER: [&str; 5] = ["schema", "probe", "etag", "ledger", "discovery"];
 
 /// Renders `report` as plain text, one line per finding: a fixed-width
 /// verdict tag, the finding's stable key, and its RFC citation (via
@@ -42,6 +42,13 @@ pub fn render_text(report: &DiagnosticReport, verbose: bool) -> String {
         for f in items {
             let tag = f.verdict.tag(); // PASS/FAIL/SKIP/ERROR/INFO, already <=5 chars
             let mut line = format!("  {tag:<5} {}  {}", f.key, f.basis);
+            if let Some(kw) = f.keyword {
+                // Only the §3.14 family (and any future one) sets this --
+                // makes a SHOULD/MAY deviation visually distinct from a
+                // MUST/SHALL violation instead of both reading as a bare
+                // PASS/FAIL/INFO tag.
+                let _ = write!(line, " [{}]", kw.tag());
+            }
             for sec in &f.secondary {
                 let _ = write!(line, "; also {sec}");
             }

@@ -23,6 +23,7 @@ pub mod basis;
 pub mod capability;
 pub mod client;
 pub mod diag;
+pub mod etag;
 pub mod findings;
 pub mod gen;
 pub mod ledger;
@@ -93,13 +94,16 @@ pub async fn ledger_suite(client: &mut ScimClient) -> Vec<Outcome> {
 /// Everything this crate can check against a live provider: the
 /// schema-driven matrix ([`schema_matrix`]) plus the protocol probes
 /// ([`probes::run_all`]) that catch what a schema alone can't see (T10c),
-/// plus the ledger-generated checks ([`ledger_suite`], T10). Deterministic
-/// order: the matrix first (in `decls_from_schemas` order), then the
-/// probes (in the fixed order `probes::run_all` runs them), then the
+/// plus the RFC 7644 §3.14 ETag/versioning checks ([`etag::run_all`],
+/// T13), plus the ledger-generated checks ([`ledger_suite`], T10).
+/// Deterministic order: the matrix first (in `decls_from_schemas` order),
+/// then the probes (in the fixed order `probes::run_all` runs them), then
+/// the ETag family (in the fixed order `etag::run_all` runs it), then the
 /// ledger-generated checks (in ledger entry order).
 pub async fn full_suite(client: &mut ScimClient) -> Result<Vec<Outcome>, client::Error> {
     let mut outcomes = schema_matrix(client).await?;
     outcomes.extend(probes::run_all(client).await);
+    outcomes.extend(etag::run_all(client).await);
     outcomes.extend(ledger_suite(client).await);
     Ok(outcomes)
 }
@@ -130,6 +134,7 @@ pub async fn diagnose(client: &mut ScimClient) -> report::DiagnosticReport {
             secondary: Vec::new(),
             detail: format!("could not generate the schema-driven matrix: {e}"),
             observed: None,
+            keyword: None,
         }),
     }
 

@@ -69,6 +69,7 @@ impl ProbeKey {
             detail: detail.into(),
             observed,
             secondary: Vec::new(),
+            keyword: None,
         }
     }
 }
