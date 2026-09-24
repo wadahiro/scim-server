@@ -85,11 +85,15 @@ pub type AppResult<T> = Result<T, AppError>;
 
 // SCIM 2.0 standard error response helper (RFC 7644 §3.12).
 //
-// `scim_type` is the optional `scimType` detail keyword. RFC 7644 only
-// defines `scimType` values for 400-class errors (e.g. `invalidFilter`,
-// `invalidValue`, `invalidSyntax`, `invalidPath`) plus `uniqueness` (409) and
-// `preconditionFailed` (412); 404 and 5xx responses carry no `scimType` at
-// all, so callers pass `None` for those.
+// `scim_type` is the optional `scimType` detail keyword. RFC 7644 §3.12
+// Table 9 (rfc7644.txt:3818-3910) defines exactly ten values, all for
+// HTTP 400 responses: `invalidFilter`, `tooMany`, `uniqueness`,
+// `mutability`, `invalidSyntax`, `invalidPath`, `noTarget`, `invalidValue`,
+// `invalidVers`, `sensitive`. (`uniqueness` is also reused for 409, per
+// Table 8.) Table 9 defines no keyword for 412 (Precondition Failed) --
+// the string "preconditionFailed" does not occur anywhere in RFC 7644 --
+// so 412 responses carry no `scimType`. 404 and 5xx responses likewise
+// carry no `scimType`; callers pass `None` for all of these.
 pub fn scim_error_response(
     status_code: StatusCode,
     scim_type: Option<&str>,
@@ -169,7 +173,9 @@ impl AppError {
             }
             AppError::PreconditionFailed => scim_error_response(
                 StatusCode::PRECONDITION_FAILED,
-                Some("preconditionFailed"),
+                // RFC 7644 Table 9 defines no scimType for 412; see the
+                // comment on `scim_error_response` above.
+                None,
                 "Resource version mismatch",
             ),
             AppError::Mutability(e) => {

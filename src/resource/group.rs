@@ -859,8 +859,7 @@ pub async fn update_group(
                                     Json(json!({
                                         "schemas": ["urn:ietf:params:scim:api:messages:2.0:Error"],
                                         "detail": "Resource version mismatch",
-                                        "status": "412",
-                                        "scimType": "preconditionFailed"
+                                        "status": "412"
                                     })),
                                 ));
                             }
@@ -977,8 +976,7 @@ pub async fn delete_group(
                                     Json(json!({
                                         "schemas": ["urn:ietf:params:scim:api:messages:2.0:Error"],
                                         "detail": "Resource version mismatch",
-                                        "status": "412",
-                                        "scimType": "preconditionFailed"
+                                        "status": "412"
                                     })),
                                 ));
                             }
@@ -1055,8 +1053,7 @@ pub async fn patch_group(
                                     Json(json!({
                                         "schemas": ["urn:ietf:params:scim:api:messages:2.0:Error"],
                                         "detail": "Resource version mismatch",
-                                        "status": "412",
-                                        "scimType": "preconditionFailed"
+                                        "status": "412"
                                     })),
                                 ));
                             }
