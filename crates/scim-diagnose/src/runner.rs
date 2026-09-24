@@ -12,6 +12,8 @@ use crate::axis::{Cost, Observation, Profile, Unobservable, Value};
 use crate::capability;
 use crate::client::ScimClient;
 use crate::fixtures::{cleanup, Bookkeeping};
+use crate::matrix::{expand_all, run_derived_family};
+use crate::schema::decls_from_schemas;
 
 /// Runs every axis in `crate::axes::AXES` against `client`.
 ///
@@ -66,6 +68,39 @@ pub async fn run(client: &mut ScimClient, target: &str, allow_writes: bool) -> P
     }
 
     cleanup(client, &bk).await;
+
+    // The 389 (attribute x characteristic x method) schema-derived
+    // instances (`crate::matrix`), generated from the target's own `GET
+    // /Schemas`. Gated by `--allow-writes` exactly like the seven static
+    // axes above -- every derived family is `Cost::NeedsUser`.
+    match client.get("/Schemas").await {
+        Ok(r) if r.is_success() => {
+            let decls = decls_from_schemas(&r.body.unwrap_or(serde_json::Value::Null));
+            let derived_axes = expand_all(&decls);
+            if allow_writes {
+                observations.extend(run_derived_family(client, &derived_axes).await);
+            } else {
+                for instance in &derived_axes {
+                    observations.push(Observation {
+                        axis: instance.id.clone(),
+                        value: Value::Unobservable(Unobservable::NeedsWrite),
+                        evidence: Vec::new(),
+                        detail: format!(
+                            "skipped: observing {} would create a User; pass --allow-writes to \
+                             run it",
+                            instance.id
+                        ),
+                    });
+                }
+            }
+        }
+        _ => {
+            // GET /Schemas itself failing means the schema-derived matrix
+            // cannot be generated at all -- no instances to report, not an
+            // error for the whole run (the seven static axes above still
+            // stand on their own).
+        }
+    }
 
     Profile {
         target: target.to_string(),

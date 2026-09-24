@@ -26,6 +26,16 @@ pub struct Basis {
     pub doc: &'static str,
     pub section: &'static str,
     pub lines: &'static str,
+    /// A verbatim quote from `lines`' span of the vendored RFC text,
+    /// whitespace-normalized (consecutive whitespace collapsed to a single
+    /// space, leading/trailing trimmed). `None` for a citation this crate
+    /// does not verify word-for-word -- scoped to the eight
+    /// `crate::matrix` derived-family characteristic citations (plus their
+    /// PUT/PATCH/Table-9 variants), per the brief; the seven static axes'
+    /// citations, which cite `Silent`/`Permitted`/broader passages rather
+    /// than a single defining sentence, are not covered. Checked against
+    /// the actual file by `tests::verify_quotes` (`crate::rfc::tests`).
+    pub quote: Option<&'static str>,
 }
 
 impl fmt::Display for Basis {
@@ -172,6 +182,7 @@ pub const PROBE_META_DATETIME: Basis = Basis {
     doc: "RFC 7643",
     section: "2.3.5",
     lines: "rfc7643.txt:526-529",
+    quote: None,
 };
 
 /// RFC 7643 §2.5 (`rfc7643.txt:681-683`): "Unassigned attributes, the null
@@ -183,6 +194,7 @@ pub const PROBE_EMPTY_MEMBERS_SHAPE: Basis = Basis {
     doc: "RFC 7643",
     section: "2.5",
     lines: "rfc7643.txt:681-683",
+    quote: None,
 };
 
 /// RFC 7643 §7's `returned` definition (`rfc7643.txt:1799-1803`): "default
@@ -199,6 +211,7 @@ pub const PROBE_USER_GROUPS_PRESENCE: Basis = Basis {
     doc: "RFC 7643",
     section: "7",
     lines: "rfc7643.txt:1799-1803",
+    quote: None,
 };
 
 /// RFC 7644 §3.4.2.2 (`rfc7644.txt:926-932`): "Filtering is an OPTIONAL
@@ -215,6 +228,7 @@ pub const PROBE_GROUP_FILTER: Basis = Basis {
     doc: "RFC 7644",
     section: "3.4.2.2",
     lines: "rfc7644.txt:926-932",
+    quote: None,
 };
 
 /// RFC 7644 §3.5.2.3 "Replace Operation" (`rfc7644.txt:2372-2373`): "If the
@@ -231,4 +245,232 @@ pub const PROBE_PATCH_REPLACE_EMPTY_ARRAY: Basis = Basis {
     doc: "RFC 7644",
     section: "3.5.2.3",
     lines: "rfc7644.txt:2372-2373",
+    quote: None,
 };
+
+// --------------------------------------------- crate::matrix derived-family citations
+//
+// Back the eight `DerivedFamily`s in `crate::matrix::derive` -- each cites
+// the RFC text that defines the *meaning* of the schema-declared
+// characteristic the family judges (`RfcPosition::SelfDeclared`), verified
+// with `sed -n '<range>p' spec/rfc/<doc>.txt` the same way as every other
+// constant in this file.
+
+/// RFC 7644 §3.3 (`rfc7644.txt:583-584`): "In the request body, attributes
+/// whose mutability is 'readOnly' ... SHALL be ignored." Governs POST only
+/// -- PUT and PATCH have their own, differently-worded rules (see
+/// `MUTABILITY_READ_ONLY_PUT`/`MUTABILITY_READ_ONLY_PATCH`).
+pub const MUTABILITY_READ_ONLY: Basis = Basis {
+    doc: "RFC 7644",
+    section: "3.3",
+    lines: "rfc7644.txt:583-584",
+    quote: Some("In the request body, attributes whose mutability is \"readOnly\" (see Sections 2.2 and 7 of [RFC7643]) SHALL be ignored."),
+};
+
+/// RFC 7644 §3.5.1 (`rfc7644.txt:1665`), the `readOnly` mutability
+/// paragraph: "Any values provided SHALL be ignored." Same "ignore, don't
+/// reject" predicate as POST's §3.3 rule, cited to the PUT-specific text
+/// instead.
+pub const MUTABILITY_READ_ONLY_PUT: Basis = Basis {
+    doc: "RFC 7644",
+    section: "3.5.1",
+    lines: "rfc7644.txt:1665",
+    quote: Some("readOnly Any values provided SHALL be ignored."),
+};
+
+/// RFC 7644 §3.5.2 (`rfc7644.txt:1886-1894`): "a client MUST NOT modify an
+/// attribute that has mutability 'readOnly' or 'immutable' ... An operation
+/// that is not compatible with an attribute's mutability or schema SHALL
+/// return the appropriate HTTP response status code and a JSON detail error
+/// response as defined in Section 3.12." Unlike POST/PUT, PATCH must
+/// *reject* the operation (400, `scimType: mutability` per Table 9 --
+/// `STATUS_TABLE9_MUTABILITY`), not silently ignore it.
+pub const MUTABILITY_READ_ONLY_PATCH: Basis = Basis {
+    doc: "RFC 7644",
+    section: "3.5.2",
+    lines: "rfc7644.txt:1886-1894",
+    quote: Some("Each operation against an attribute MUST be compatible with the attribute's mutability and schema as defined in Sections 2.2 and 2.3 of [RFC7643]. For example, a client MUST NOT modify an attribute that has mutability \"readOnly\" or \"immutable\". However, a client MAY \"add\" a value to an \"immutable\" attribute if the attribute had no previous value. An operation that is not compatible with an attribute's mutability or schema SHALL return the appropriate HTTP response status code and a JSON detail error response as defined in Section 3.12."),
+};
+
+/// RFC 7644 §3.12 Table 9's `mutability` row (`rfc7644.txt:3845-3849`).
+/// Names the concrete `scimType` a PATCH against a `readOnly` attribute
+/// must return per §3.5.2 -- attached alongside `MUTABILITY_READ_ONLY_PATCH`.
+pub const STATUS_TABLE9_MUTABILITY: Basis = Basis {
+    doc: "RFC 7644",
+    section: "3.12",
+    lines: "rfc7644.txt:3845-3849",
+    quote: Some("| mutability | The attempted modification is | PUT (Section | | | not compatible with the target | 3.5.1), PATCH | | | attribute's mutability or | (Section 3.5.2) | | | current state (e.g., | | | | modification of an \"immutable\" | |"),
+};
+
+/// RFC 7643 §7 (`rfc7643.txt:1764-1766`): "immutable  The attribute MAY be
+/// defined at resource creation ... The attribute SHALL NOT be updated."
+pub const MUTABILITY_IMMUTABLE: Basis = Basis {
+    doc: "RFC 7643",
+    section: "7",
+    lines: "rfc7643.txt:1764-1766",
+    quote: Some("immutable The attribute MAY be defined at resource creation (e.g., POST) or at record replacement via a request (e.g., a PUT). The attribute SHALL NOT be updated."),
+};
+
+/// RFC 7643 §7 (`rfc7643.txt:1731-1732`): "required  A Boolean value that
+/// specifies whether or not the attribute is required."
+pub const REQUIRED: Basis = Basis {
+    doc: "RFC 7643",
+    section: "7",
+    lines: "rfc7643.txt:1731-1732",
+    quote: Some(
+        "required A Boolean value that specifies whether or not the attribute is required.",
+    ),
+};
+
+/// RFC 7643 §7 (`rfc7643.txt:1747-1753`): "caseExact ... For attributes
+/// that are case exact, the server SHALL preserve case for any value
+/// submitted."
+pub const CASE_EXACT: Basis = Basis {
+    doc: "RFC 7643",
+    section: "7",
+    lines: "rfc7643.txt:1747-1753",
+    quote: Some("caseExact A Boolean value that specifies whether or not a string attribute is case sensitive. The server SHALL use case sensitivity when evaluating filters. For attributes that are case exact, the server SHALL preserve case for any value submitted. If the attribute is case insensitive, the server MAY alter case for a submitted value. Case sensitivity also impacts how attribute values MAY be compared against filter"),
+};
+
+/// RFC 7643 §7 (`rfc7643.txt:1811-1815`): "uniqueness ... A server MAY
+/// reject an invalid value based on uniqueness by returning HTTP response
+/// code 400 (Bad Request)."
+pub const UNIQUENESS: Basis = Basis {
+    doc: "RFC 7643",
+    section: "7",
+    lines: "rfc7643.txt:1811-1815",
+    quote: Some("uniqueness A single keyword value that specifies how the service provider enforces uniqueness of attribute values. A server MAY reject an invalid value based on uniqueness by returning HTTP response code 400 (Bad Request). A client MAY enforce uniqueness on the client side to a greater degree than the"),
+};
+
+/// RFC 7643 §7 (`rfc7643.txt:1782-1784`): "never  The attribute is never
+/// returned."
+pub const RETURNED_NEVER: Basis = Basis {
+    doc: "RFC 7643",
+    section: "7",
+    lines: "rfc7643.txt:1782-1784",
+    quote: Some("never The attribute is never returned. This may occur because the original attribute value (e.g., a hashed value) is not retained by the service provider. A service provider MAY"),
+};
+
+/// RFC 7643 §2.3 "Attribute Data Types" (`rfc7643.txt:438`).
+pub const TYPE: Basis = Basis {
+    doc: "RFC 7643",
+    section: "2.3",
+    lines: "rfc7643.txt:438",
+    quote: Some("2.3. Attribute Data Types"),
+};
+
+// -------------------------------------------------------- quote verification
+//
+// Part 5: every `Basis` with a `quote` attached is re-derived from the
+// vendored RFC text at `lines` and checked to match word-for-word -- so a
+// citation can never silently drift from the text it claims to quote.
+// Scoped to the definitional citations above (the eight `crate::matrix`
+// characteristics plus their PUT/PATCH/Table-9 variants); `Silent` axes
+// have no defining sentence to quote, so they carry no `quote` and are
+// skipped (ported concept from `feat/rfc-extract`'s `ledger.rs`
+// `verify_quotes`, adapted: that version verified ledger-derived citations
+// against a YAML requirement's own span; this one verifies a `Basis`
+// constant's `quote` field against its own `lines`).
+
+#[cfg(test)]
+mod quote_tests {
+    use super::*;
+    use std::path::Path;
+
+    /// Collapses consecutive whitespace (including newlines) to a single
+    /// space and trims the ends -- the same normalization a citation's
+    /// `quote` field is written in, so line-wrapped RFC prose compares
+    /// equal regardless of exactly where the vendored `.txt` wraps a line.
+    fn normalize(s: &str) -> String {
+        s.split_whitespace().collect::<Vec<_>>().join(" ")
+    }
+
+    /// Page furniture that can appear interleaved within a citation's line
+    /// range in the vendored text (a page break mid-paragraph) -- stripped
+    /// before normalizing, so a quote spanning a page boundary still
+    /// compares equal. No citation in this file currently crosses one, but
+    /// the strip is defensive rather than assumed away.
+    fn is_page_furniture(line: &str) -> bool {
+        let t = line.trim();
+        t.is_empty()
+            || t.contains("Standards Track")
+            || t.contains("[Page ")
+            || (t.starts_with("RFC ") && t.contains("20") && t.len() < 60)
+    }
+
+    fn extract(basis: &Basis) -> String {
+        let (file, range) = basis
+            .lines
+            .split_once(':')
+            .unwrap_or((basis.lines, basis.lines));
+        let spec_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("spec/rfc");
+        let text = std::fs::read_to_string(spec_dir.join(file))
+            .unwrap_or_else(|e| panic!("failed to read spec/rfc/{file}: {e}"));
+        let all_lines: Vec<&str> = text.lines().collect();
+
+        let (start, end) = match range.split_once('-') {
+            Some((a, b)) => (a.parse::<usize>().unwrap(), b.parse::<usize>().unwrap()),
+            None => {
+                let n = range.parse::<usize>().unwrap();
+                (n, n)
+            }
+        };
+        let selected: Vec<&str> = all_lines
+            .iter()
+            .enumerate()
+            .filter(|(i, _)| {
+                let line_no = i + 1;
+                line_no >= start && line_no <= end
+            })
+            .map(|(_, l)| *l)
+            .filter(|l| !is_page_furniture(l))
+            .collect();
+        normalize(&selected.join(" "))
+    }
+
+    /// Every citation constant with a `quote` attached, gathered by name so
+    /// a failure names which one broke.
+    fn quoted_citations() -> Vec<(&'static str, Basis)> {
+        vec![
+            ("MUTABILITY_READ_ONLY", MUTABILITY_READ_ONLY),
+            ("MUTABILITY_READ_ONLY_PUT", MUTABILITY_READ_ONLY_PUT),
+            ("MUTABILITY_READ_ONLY_PATCH", MUTABILITY_READ_ONLY_PATCH),
+            ("STATUS_TABLE9_MUTABILITY", STATUS_TABLE9_MUTABILITY),
+            ("MUTABILITY_IMMUTABLE", MUTABILITY_IMMUTABLE),
+            ("REQUIRED", REQUIRED),
+            ("CASE_EXACT", CASE_EXACT),
+            ("UNIQUENESS", UNIQUENESS),
+            ("RETURNED_NEVER", RETURNED_NEVER),
+            ("TYPE", TYPE),
+        ]
+    }
+
+    #[test]
+    fn verify_quotes() {
+        let citations = quoted_citations();
+        assert!(!citations.is_empty());
+        for (name, basis) in citations {
+            let Some(quote) = basis.quote else {
+                panic!("{name} is in quoted_citations() but has no quote attached");
+            };
+            let extracted = extract(&basis);
+            let expected = normalize(quote);
+            assert!(
+                extracted.contains(&expected),
+                "{name}'s quote does not match spec/rfc/{}: \n  quote:     {expected:?}\n  extracted: {extracted:?}",
+                basis.lines,
+            );
+        }
+    }
+
+    #[test]
+    fn every_matrix_characteristic_basis_has_a_quote() {
+        // Every Basis this file defines specifically to back a
+        // crate::matrix::derive characteristic must carry a quote -- a
+        // citation added later without one would silently escape
+        // verification.
+        for (name, basis) in quoted_citations() {
+            assert!(basis.quote.is_some(), "{name} has no quote attached");
+        }
+    }
+}

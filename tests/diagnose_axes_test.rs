@@ -93,8 +93,22 @@ async fn all_seven_axes_are_known_against_the_default_server() {
 
     let profile = run_profile(&handle.base_url, true).await;
 
-    assert_eq!(profile.observations.len(), 7, "all seven axes must report");
-    for obs in &profile.observations {
+    // The profile carries the seven static axes plus the schema-derived
+    // matrix's 389 instances (crate::matrix) -- assert on the former by id,
+    // not on the collection's total length.
+    let static_ids: std::collections::HashSet<&str> =
+        scim_diagnose::axes::AXES.iter().map(|a| a.id).collect();
+    let static_observed: Vec<_> = profile
+        .observations
+        .iter()
+        .filter(|o| static_ids.contains(o.axis.as_str()))
+        .collect();
+    assert_eq!(
+        static_observed.len(),
+        7,
+        "all seven static axes must report"
+    );
+    for obs in &static_observed {
         match &obs.value {
             Value::Known(_) => {}
             other => panic!(
