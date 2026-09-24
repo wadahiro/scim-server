@@ -184,10 +184,13 @@ async fn test_include_user_groups_tenant_override() {
     // Override for specific tenant: false
     if let Some(tenant) = app_config.tenants.get_mut(2) {
         // tenant with id: 3 (index 2)
-        tenant.compatibility = Some(CompatibilityConfig {
-            include_user_groups: false,
-            ..Default::default()
-        });
+        tenant.compatibility = Some(
+            CompatibilityConfig {
+                include_user_groups: false,
+                ..Default::default()
+            }
+            .into(),
+        );
     }
 
     let app = setup_test_app(app_config).await.unwrap();

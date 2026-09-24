@@ -37,9 +37,6 @@ ACME_TOKEN=secret123 GLOBEX_USER=admin GLOBEX_PASSWORD=pass cargo run -- -c my-c
 
 # Custom config file location
 cargo run -- -c production.yaml
-
-# Validate configuration without running
-cargo run -- -c config.yaml --validate
 ```
 
 ### Testing
@@ -150,9 +147,9 @@ server:
   port: 3000
 
 backend:
-  backend_type: "database"
+  type: "database"
   database:
-    db_type: "postgresql"  # or "sqlite"
+    type: "postgresql"  # or "sqlite"
     url: "postgresql://user:${DB_PASSWORD}@localhost:5432/scim"
     max_connections: 10
 
@@ -161,7 +158,7 @@ tenants:
   - id: 1
     path: "/scim/v2"
     auth:
-      auth_type: "bearer"
+      type: "bearer"
       token: "${SCIM_SERVER_TOKEN:-sample-bearer-token}"
 
   # Host-specific tenant with default Host header resolution
@@ -169,7 +166,7 @@ tenants:
     path: "/api/scim"
     host: "api.example.com"
     auth:
-      auth_type: "basic"
+      type: "basic"
       basic:
         username: "${API_USER:-admin}"
         password: "${API_PASSWORD:-password}"
@@ -181,7 +178,7 @@ tenants:
     host_resolution:
       type: "host"
     auth:
-      auth_type: "bearer"
+      type: "bearer"
       token: "${TENANT1_TOKEN:-tenant1-token}"
 
   # Host-specific tenant with Forwarded header resolution (behind proxy)
@@ -192,7 +189,7 @@ tenants:
       type: "forwarded"
       trusted_proxies: ["192.168.1.100", "10.0.0.0/8"]
     auth:
-      auth_type: "basic"
+      type: "basic"
       basic:
         username: "${TENANT2_USER:-tenant2user}"
         password: "${TENANT2_PASS:-tenant2pass}"
@@ -202,26 +199,30 @@ tenants:
     path: "/scim/token"
     host: "token.company.com"
     auth:
-      auth_type: "token"
+      type: "token"
       token: "${TOKEN_SCIM_TOKEN:-token_xxxxxxxxxxxxxxxxxxxx}"
 
   # Host-specific tenant with X-Forwarded headers (behind load balancer)
+  # NOTE: each tenant needs a distinct `path`. Routes are registered per path
+  # only -- `host` is matched later, inside the handler -- so two tenants
+  # sharing a path make the server panic at startup with
+  # "Overlapping method route", even when their `host` values differ.
   - id: 30
-    path: "/api/scim"
+    path: "/api/scim-lb"
     host: "api.loadbalancer.com"
     host_resolution:
       type: "xforwarded"
       trusted_proxies: ["172.16.0.0/12"]
     auth:
-      auth_type: "bearer"
+      type: "bearer"
       token: "${API_TOKEN:-api-token}"
 
   # Tenant with custom endpoints and override base URL
   - id: 40
-    path: "/scim/v2"
+    path: "/scim/public"
     override_base_url: "https://public.example.com"  # Forces response URLs
     auth:
-      auth_type: "bearer"
+      type: "bearer"
       token: "${CUSTOM_TOKEN:-custom-token}"
     custom_endpoints:
       # Static JSON response endpoint
@@ -255,13 +256,13 @@ tenants:
   - id: 50
     path: "/dev/scim"
     auth:
-      auth_type: "unauthenticated"
+      type: "unauthenticated"
       
   # Tenant with custom compatibility settings
   - id: 60
     path: "/legacy/scim"
     auth:
-      auth_type: "bearer"
+      type: "bearer"
       token: "${LEGACY_TOKEN:-legacy-token}"
     compatibility:
       meta_datetime_format: "epoch"        # Legacy system uses timestamps
@@ -288,7 +289,7 @@ The server supports multiple authentication methods that can be configured per t
 Standard OAuth 2.0 Bearer token authentication (RFC 6750):
 ```yaml
 auth:
-  auth_type: "bearer"
+  type: "bearer"
   token: "${BEARER_TOKEN:-default-token}"
 ```
 - **Usage**: `Authorization: Bearer <token>`
@@ -299,7 +300,7 @@ auth:
 Alternative token format for systems that don't use Bearer prefix:
 ```yaml
 auth:
-  auth_type: "token"
+  type: "token"
   token: "${API_TOKEN:-token_xxxxxxxxxxxxxxxxxxxx}"
 ```
 - **Usage**: `Authorization: token <token>`
@@ -310,7 +311,7 @@ auth:
 Standard HTTP Basic authentication (RFC 7617):
 ```yaml
 auth:
-  auth_type: "basic"
+  type: "basic"
   basic:
     username: "${API_USER:-admin}"
     password: "${API_PASSWORD:-password}"
@@ -323,7 +324,7 @@ auth:
 No authentication required - useful for development and testing:
 ```yaml
 auth:
-  auth_type: "unauthenticated"
+  type: "unauthenticated"
 ```
 - **Usage**: No Authorization header required
 - **WARNING**: Never use in production environments

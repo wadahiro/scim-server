@@ -42,7 +42,11 @@ impl SqliteUserUpdater {
             })?;
 
         if count > 0 {
-            return Err(AppError::BadRequest("User already exists".to_string()));
+            // RFC 7644 §3.12 Table 9 "uniqueness" applies to PUT (§3.5.1) the
+            // same as POST (§3.3); RFC 7643 §7 permits 400 for a uniqueness
+            // violation, but this server uses 409 + scimType "uniqueness"
+            // for consistency with the create path (see user_insert_impl.rs).
+            return Err(AppError::Conflict("User already exists".to_string()));
         }
 
         Ok(())
@@ -106,20 +110,23 @@ pub fn map_database_error(e: sqlx::Error, resource_type: &str) -> AppError {
         sqlx::Error::Database(db_err) => {
             let error_message = db_err.message();
 
-            // Handle unique constraint violations
+            // Handle unique constraint violations. RFC 7644 §3.12 Table 9
+            // "uniqueness" applies to PUT (§3.5.1) the same as POST (§3.3);
+            // 409 + scimType "uniqueness" for consistency with the create
+            // path (see user_insert_impl.rs / group_insert_impl.rs).
             if error_message.contains("UNIQUE constraint failed") {
                 if error_message.contains("username") {
-                    return AppError::BadRequest(format!(
+                    return AppError::Conflict(format!(
                         "A {} with this username already exists",
                         resource_type.to_lowercase()
                     ));
                 } else if error_message.contains("external_id") {
-                    return AppError::BadRequest(format!(
+                    return AppError::Conflict(format!(
                         "A {} with this external ID already exists",
                         resource_type.to_lowercase()
                     ));
                 }
-                return AppError::BadRequest(format!("{} already exists", resource_type));
+                return AppError::Conflict(format!("{} already exists", resource_type));
             }
 
             // Handle other database errors

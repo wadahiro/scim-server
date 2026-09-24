@@ -115,6 +115,70 @@ pub fn validate_addresses_primary_constraint(addresses: Option<&Vec<Value>>) -> 
     Ok(())
 }
 
+/// Validates that each `addresses` element uses the JSON type RFC 7643
+/// §4.1.2 declares for its sub-attributes: `String` for `formatted`,
+/// `streetAddress`, `locality`, `region`, `postalCode`, `country`, and
+/// `type`; `Boolean` for `primary`.
+///
+/// `addresses` is modeled as raw JSON on the `crate::models::User` request
+/// wrapper (see that field's doc comment) rather than on the inner, typed
+/// `scim_v2::models::user::User`, so it bypasses the type checking that
+/// already rejects e.g. a numeric `name.givenName` or `emails.value` during
+/// deserialization into that typed struct (RFC 7643 §2.3: Attribute Data
+/// Types). This restores equivalent type checking -- and the same
+/// `invalidSyntax` `scimType` -- for `addresses`.
+pub fn validate_addresses_types(
+    addresses: Option<&Vec<Value>>,
+) -> Result<(), (axum::http::StatusCode, axum::Json<Value>)> {
+    const STRING_SUB_ATTRIBUTES: &[&str] = &[
+        "formatted",
+        "streetAddress",
+        "locality",
+        "region",
+        "postalCode",
+        "country",
+        "type",
+    ];
+
+    let Some(addresses) = addresses else {
+        return Ok(());
+    };
+
+    for address in addresses {
+        let Value::Object(obj) = address else {
+            return Err(crate::error::scim_error_response(
+                axum::http::StatusCode::BAD_REQUEST,
+                Some("invalidSyntax"),
+                "Each element of 'addresses' must be a JSON object",
+            ));
+        };
+
+        for field in STRING_SUB_ATTRIBUTES {
+            if let Some(value) = obj.get(*field) {
+                if !value.is_string() {
+                    return Err(crate::error::scim_error_response(
+                        axum::http::StatusCode::BAD_REQUEST,
+                        Some("invalidSyntax"),
+                        &format!("'addresses[].{}' must be a string", field),
+                    ));
+                }
+            }
+        }
+
+        if let Some(value) = obj.get("primary") {
+            if !value.is_boolean() {
+                return Err(crate::error::scim_error_response(
+                    axum::http::StatusCode::BAD_REQUEST,
+                    Some("invalidSyntax"),
+                    "'addresses[].primary' must be a boolean",
+                ));
+            }
+        }
+    }
+
+    Ok(())
+}
+
 /// Multi-valued complex attributes whose entries are identified by a
 /// `(type, value)` pair, per RFC 7643 §2.4 ("A service provider SHOULD NOT
 /// return the same value more than once within a multi-valued attribute").

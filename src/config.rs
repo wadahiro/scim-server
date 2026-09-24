@@ -54,7 +54,7 @@ pub struct TenantConfig {
     #[serde(default)]
     pub custom_endpoints: Vec<CustomEndpoint>,
     #[serde(default)]
-    pub compatibility: Option<CompatibilityConfig>,
+    pub compatibility: Option<CompatibilityOverride>,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -135,6 +135,7 @@ pub struct BasicAuthConfig {
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
+#[serde(deny_unknown_fields)]
 pub struct CompatibilityConfig {
     #[serde(default = "default_meta_datetime_format")]
     pub meta_datetime_format: String,
@@ -190,6 +191,78 @@ impl Default for CompatibilityConfig {
             support_group_displayname_filter: default_support_group_displayname_filter(),
             support_patch_replace_empty_array: default_support_patch_replace_empty_array(),
             support_patch_replace_empty_value: default_support_patch_replace_empty_value(),
+        }
+    }
+}
+
+/// Tenant-level partial override of the global `compatibility:` block.
+///
+/// Every field is optional: an absent field inherits the global value
+/// rather than reverting to this struct's own default. This is the whole
+/// point of having a distinct type from `CompatibilityConfig` -- see
+/// `AppConfig::get_effective_compatibility`, which merges a tenant's
+/// override field-by-field over the global `CompatibilityConfig` instead
+/// of replacing it wholesale.
+#[derive(Debug, Deserialize, Serialize, Clone, Default)]
+#[serde(deny_unknown_fields)]
+pub struct CompatibilityOverride {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub meta_datetime_format: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub show_empty_groups_members: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub include_user_groups: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub support_group_members_filter: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub support_group_displayname_filter: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub support_patch_replace_empty_array: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub support_patch_replace_empty_value: Option<bool>,
+}
+
+impl CompatibilityOverride {
+    /// Field-level merge: every `Some` in `self` wins, every `None`
+    /// inherits the corresponding value from `base`.
+    pub fn apply_to(&self, base: &CompatibilityConfig) -> CompatibilityConfig {
+        CompatibilityConfig {
+            meta_datetime_format: self
+                .meta_datetime_format
+                .clone()
+                .unwrap_or_else(|| base.meta_datetime_format.clone()),
+            show_empty_groups_members: self
+                .show_empty_groups_members
+                .unwrap_or(base.show_empty_groups_members),
+            include_user_groups: self.include_user_groups.unwrap_or(base.include_user_groups),
+            support_group_members_filter: self
+                .support_group_members_filter
+                .unwrap_or(base.support_group_members_filter),
+            support_group_displayname_filter: self
+                .support_group_displayname_filter
+                .unwrap_or(base.support_group_displayname_filter),
+            support_patch_replace_empty_array: self
+                .support_patch_replace_empty_array
+                .unwrap_or(base.support_patch_replace_empty_array),
+            support_patch_replace_empty_value: self
+                .support_patch_replace_empty_value
+                .unwrap_or(base.support_patch_replace_empty_value),
+        }
+    }
+}
+
+/// Lets a caller (e.g. a test) express "override every field" from a full
+/// `CompatibilityConfig`, by wrapping each field in `Some`.
+impl From<CompatibilityConfig> for CompatibilityOverride {
+    fn from(config: CompatibilityConfig) -> Self {
+        Self {
+            meta_datetime_format: Some(config.meta_datetime_format),
+            show_empty_groups_members: Some(config.show_empty_groups_members),
+            include_user_groups: Some(config.include_user_groups),
+            support_group_members_filter: Some(config.support_group_members_filter),
+            support_group_displayname_filter: Some(config.support_group_displayname_filter),
+            support_patch_replace_empty_array: Some(config.support_patch_replace_empty_array),
+            support_patch_replace_empty_value: Some(config.support_patch_replace_empty_value),
         }
     }
 }
@@ -576,7 +649,51 @@ impl AppConfig {
             return Err("Configuration must contain at least one tenant".to_string());
         }
 
+        app_config.validate_meta_datetime_formats()?;
+
         Ok(app_config)
+    }
+
+    /// Reject any `meta_datetime_format` value other than the two
+    /// recognized spellings ("rfc3339", "epoch"). The comparison is
+    /// exact/case-sensitive, matching the consumer in `utils.rs`
+    /// (`if format_type == "epoch"`), so config authors get an
+    /// unambiguous, single accepted spelling for each value instead of a
+    /// value silently falling through to rfc3339.
+    ///
+    /// Validates both the global `compatibility:` block and every
+    /// tenant's `compatibility:` override (when present).
+    fn validate_meta_datetime_formats(&self) -> Result<(), String> {
+        const VALID_VALUES: [&str; 2] = ["rfc3339", "epoch"];
+
+        fn check(value: &str, where_: &str) -> Result<(), String> {
+            if VALID_VALUES.contains(&value) {
+                Ok(())
+            } else {
+                Err(format!(
+                    "Invalid meta_datetime_format {:?} in {}: must be one of {:?}",
+                    value, where_, VALID_VALUES
+                ))
+            }
+        }
+
+        check(
+            &self.compatibility.meta_datetime_format,
+            "the global compatibility block",
+        )?;
+
+        for tenant in &self.tenants {
+            if let Some(ref tenant_override) = tenant.compatibility {
+                if let Some(ref value) = tenant_override.meta_datetime_format {
+                    check(
+                        value,
+                        &format!("tenant id {}'s compatibility block", tenant.id),
+                    )?;
+                }
+            }
+        }
+
+        Ok(())
     }
 
     /// Create default configuration for in-memory SQLite with anonymous access
@@ -727,15 +844,18 @@ impl AppConfig {
 
     /// Get effective compatibility configuration for a tenant
     ///
-    /// Tenant-specific settings override global settings.
-    /// If no tenant-specific settings exist, use global settings.
-    pub fn get_effective_compatibility(&self, tenant_id: u32) -> &CompatibilityConfig {
+    /// The tenant's `compatibility` block (if present) is merged
+    /// field-by-field over the global `compatibility` block: a field the
+    /// tenant left unspecified inherits the global value, and only fields
+    /// the tenant explicitly set are overridden. If the tenant has no
+    /// `compatibility` block at all, the global config applies unchanged.
+    pub fn get_effective_compatibility(&self, tenant_id: u32) -> CompatibilityConfig {
         if let Some(tenant) = self.tenants.iter().find(|t| t.id == tenant_id) {
-            if let Some(ref tenant_compatibility) = tenant.compatibility {
-                return tenant_compatibility;
+            if let Some(ref tenant_override) = tenant.compatibility {
+                return tenant_override.apply_to(&self.compatibility);
             }
         }
-        &self.compatibility
+        self.compatibility.clone()
     }
 }
 

@@ -399,7 +399,7 @@ pub async fn schemas(
     let tenant_id = tenant_info.tenant_id;
     let compatibility = app_config.get_effective_compatibility(tenant_id);
 
-    let resources = build_schema_resources(&tenant_info, compatibility);
+    let resources = build_schema_resources(&tenant_info, &compatibility);
 
     let schemas = json!({
         "schemas": [SCIM_API_MESSAGES_LIST_RESPONSE],
@@ -424,7 +424,7 @@ pub async fn schema_by_id(
     let tenant_id = tenant_info.tenant_id;
     let compatibility = app_config.get_effective_compatibility(tenant_id);
 
-    let resources = build_schema_resources(&tenant_info, compatibility);
+    let resources = build_schema_resources(&tenant_info, &compatibility);
 
     match resources
         .into_iter()

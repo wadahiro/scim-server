@@ -105,6 +105,11 @@ impl UserPatchProcessor {
         crate::schema::dedupe_multivalued_attributes(&mut deduped_json);
         user = serde_json::from_value(deduped_json).map_err(AppError::Serialization)?;
 
+        // Clear any client-forged readOnly enterprise-manager sub-attributes
+        // a PATCH operation may have written (e.g. a "replace" of the whole
+        // "manager" complex attribute, which is itself readWrite).
+        Self::strip_readonly_manager_subattributes(&mut user);
+
         // Prepare user data for database storage
         let prepared = Self::prepare_user_for_patch(id, &user)?;
 
@@ -189,6 +194,29 @@ impl UserPatchProcessor {
     /// resource is read back, so nothing needs to be set here.
     fn set_user_metadata(user: &mut User, _timestamp: &DateTime<Utc>) {
         user.base.meta = None;
+    }
+
+    /// Clear client-forged values for the Enterprise User extension's
+    /// readOnly `manager` sub-attributes (`$ref`, `displayName`).
+    ///
+    /// `/Schemas` declares `manager.$ref` and `manager.displayName`
+    /// mutability "readOnly" (only `manager.value` is client-settable, see
+    /// `src/schema/definitions.rs`). RFC 7644 §3.5.1's readOnly-ignored rule
+    /// applies equally to PATCH (§3.5.2 incorporates §2.2/§2.3 of RFC 7643
+    /// for mutability), but nothing on the write path enforced it for these
+    /// two sub-attributes, so a client-forged `$ref`/`displayName` (e.g. via
+    /// a "replace" of the whole `manager` complex attribute, which is itself
+    /// readWrite) round-tripped into storage and the response unchanged.
+    /// This server has no manager-resolution feature to compute a
+    /// legitimate value for them, so they are always cleared rather than
+    /// merely left as submitted.
+    fn strip_readonly_manager_subattributes(user: &mut User) {
+        if let Some(enterprise) = user.base.enterprise_user.as_mut() {
+            if let Some(manager) = enterprise.manager.as_mut() {
+                manager.ref_ = None;
+                manager.display_name = None;
+            }
+        }
     }
 
     /// Finalize user after database patch

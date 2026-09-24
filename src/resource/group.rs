@@ -190,6 +190,108 @@ async fn validate_group_members(
     Ok(())
 }
 
+/// Parses `externalId` from a Group create/update request body.
+///
+/// RFC 7643 §3.1 declares `externalId` "A String that is an identifier for
+/// the resource". `create_group`/`update_group` previously read it with
+/// `payload.get("externalId").and_then(|v| v.as_str())`, which silently
+/// treats a wrong-typed value (e.g. a JSON number) the same as an absent
+/// one -- the client's value is dropped instead of the request being
+/// rejected. This distinguishes "absent" (`Ok(None)`) from "present but not
+/// a string" (rejected with `invalidSyntax`).
+fn parse_group_external_id(
+    payload: &serde_json::Value,
+) -> Result<Option<String>, (StatusCode, Json<serde_json::Value>)> {
+    match payload.get("externalId") {
+        None | Some(serde_json::Value::Null) => Ok(None),
+        Some(serde_json::Value::String(s)) => Ok(Some(s.clone())),
+        Some(_) => Err(scim_error_response(
+            StatusCode::BAD_REQUEST,
+            Some("invalidSyntax"),
+            "'externalId' must be a string",
+        )),
+    }
+}
+
+/// Reads one optional `String` sub-attribute of a `members[]` element,
+/// rejecting a present-but-wrong-typed value instead of silently treating
+/// it as absent.
+fn optional_member_string_field(
+    member: &serde_json::Map<String, serde_json::Value>,
+    field: &str,
+) -> Result<Option<String>, (StatusCode, Json<serde_json::Value>)> {
+    match member.get(field) {
+        None | Some(serde_json::Value::Null) => Ok(None),
+        Some(serde_json::Value::String(s)) => Ok(Some(s.clone())),
+        Some(_) => Err(scim_error_response(
+            StatusCode::BAD_REQUEST,
+            Some("invalidSyntax"),
+            &format!("'members[].{}' must be a string", field),
+        )),
+    }
+}
+
+/// Parses the `members` array of a Group create/update request body.
+///
+/// RFC 7643 §4.2 declares `members.value`, `members.$ref`,
+/// `members.display`, and `members.type` all `String` (§2.3: Attribute
+/// Data Types). `create_group`/`update_group` previously built each
+/// `Member` with `.and_then(|v| v.as_str())` inside a `filter_map`, which
+/// silently dropped a whole element when `value` was present but
+/// wrong-typed, and silently dropped `$ref`/`display`/`type` individually
+/// when they were wrong-typed -- accepting the request (201/200) instead of
+/// rejecting the malformed input. This rejects any such type mismatch with
+/// `invalidSyntax`. An element with no `value` at all is still skipped,
+/// matching the server's prior behavior for that (distinct) case.
+fn parse_group_members(
+    payload: &serde_json::Value,
+) -> Result<Option<Vec<scim_v2::models::group::Member>>, (StatusCode, Json<serde_json::Value>)> {
+    let members_array = match payload.get("members") {
+        None | Some(serde_json::Value::Null) => return Ok(None),
+        Some(serde_json::Value::Array(arr)) => arr,
+        Some(_) => {
+            return Err(scim_error_response(
+                StatusCode::BAD_REQUEST,
+                Some("invalidSyntax"),
+                "'members' must be an array",
+            ))
+        }
+    };
+
+    let mut members = Vec::with_capacity(members_array.len());
+    for member_value in members_array {
+        let member_obj = member_value.as_object().ok_or_else(|| {
+            scim_error_response(
+                StatusCode::BAD_REQUEST,
+                Some("invalidSyntax"),
+                "Each element of 'members' must be a JSON object",
+            )
+        })?;
+
+        let value = optional_member_string_field(member_obj, "value")?;
+        let ref_ = optional_member_string_field(member_obj, "$ref")?;
+        let display = optional_member_string_field(member_obj, "display")?;
+        let type_ = optional_member_string_field(member_obj, "type")?;
+
+        if value.is_none() {
+            continue;
+        }
+
+        members.push(scim_v2::models::group::Member {
+            value,
+            ref_,
+            display,
+            type_,
+        });
+    }
+
+    Ok(if members.is_empty() {
+        None
+    } else {
+        Some(members)
+    })
+}
+
 // Helper function to apply attribute filtering to groups and create list response
 fn create_filtered_group_list_response(
     groups: Vec<Group>,
@@ -223,9 +325,18 @@ fn create_filtered_group_list_response(
 pub async fn create_group(
     State((backend, app_config)): State<AppState>,
     Extension(tenant_info): Extension<TenantInfo>,
+    Query(params): Query<HashMap<String, String>>,
     ScimJson(payload): ScimJson<serde_json::Value>,
 ) -> Result<Response, (StatusCode, Json<serde_json::Value>)> {
     let tenant_id = tenant_info.tenant_id;
+
+    // RFC 7644 §3.9: clients MAY request a partial resource representation
+    // on any operation that returns a resource within the response --
+    // POST included, not just GET.
+    let attribute_filter = AttributeFilter::from_params(
+        params.get("attributes").map(String::as_str),
+        params.get("excludedAttributes").map(String::as_str),
+    );
 
     // Create a Group from the JSON payload
     let mut group = Group::default();
@@ -249,30 +360,10 @@ pub async fn create_group(
             .collect();
     }
 
-    if let Some(external_id) = payload.get("externalId").and_then(|v| v.as_str()) {
-        group.external_id = Some(external_id.to_string());
-    }
+    group.external_id = parse_group_external_id(&payload)?;
 
     // Extract members with proper structure
-    if let Some(members_array) = payload.get("members").and_then(|v| v.as_array()) {
-        let members: Vec<scim_v2::models::group::Member> = members_array
-            .iter()
-            .filter_map(|m| {
-                m.get("value").and_then(|v| v.as_str()).map(|value| {
-                    scim_v2::models::group::Member {
-                        value: Some(value.to_string()),
-                        ref_: m.get("$ref").and_then(|v| v.as_str()).map(String::from),
-                        display: m.get("display").and_then(|v| v.as_str()).map(String::from),
-                        type_: m.get("type").and_then(|v| v.as_str()).map(String::from),
-                    }
-                })
-            })
-            .collect();
-
-        if !members.is_empty() {
-            group.base.members = Some(members);
-        }
-    }
+    group.base.members = parse_group_members(&payload)?;
 
     // Validate that all group members exist before creating the group
     validate_group_members(&backend, tenant_id, &group.base.members).await?;
@@ -308,7 +399,8 @@ pub async fn create_group(
                 )
             })?;
 
-            let cleaned_group_json = AttributeFilter::remove_null_fields(&group_json);
+            let cleaned_group_json =
+                attribute_filter.apply_to_resource(&group_json, ResourceType::Group);
 
             // Create response with Location and ETag headers
             let mut headers = HeaderMap::new();
@@ -689,6 +781,7 @@ pub async fn update_group(
     Extension(tenant_info): Extension<TenantInfo>,
     headers: HeaderMap,
     uri: Uri,
+    Query(params): Query<HashMap<String, String>>,
     ScimJson(payload): ScimJson<serde_json::Value>,
 ) -> Result<Response, (StatusCode, Json<serde_json::Value>)> {
     let tenant_id = tenant_info.tenant_id;
@@ -705,13 +798,33 @@ pub async fn update_group(
         }
     };
 
+    // RFC 7644 §3.5.1: "Unless otherwise specified, a successful PUT
+    // operation returns a 200 ... the entire resource", subject to the
+    // §3.9 attribute-filtering query parameters like every other operation
+    // that returns a resource within the response.
+    let attribute_filter = AttributeFilter::from_params(
+        params.get("attributes").map(String::as_str),
+        params.get("excludedAttributes").map(String::as_str),
+    );
+
     // Convert JSON payload to Group - similar to create
     let mut group = Group::default();
     group.base.id = id.clone();
 
-    // Extract fields
+    // Extract fields. `displayName` is required (RFC 7643 §4.2: "A
+    // human-readable name for the Group. REQUIRED."), the same as
+    // `create_group` enforces -- a PUT replaces the whole resource
+    // (RFC 7644 §3.5.1), so it must satisfy the same required-attribute
+    // constraint rather than silently falling back to `Group::default()`'s
+    // placeholder `display_name`.
     if let Some(display_name) = payload.get("displayName").and_then(|v| v.as_str()) {
         group.base.display_name = display_name.to_string();
+    } else {
+        return Err(scim_error_response(
+            StatusCode::BAD_REQUEST,
+            Some("invalidValue"),
+            "displayName is required",
+        ));
     }
 
     if let Some(schemas) = payload.get("schemas").and_then(|v| v.as_array()) {
@@ -721,30 +834,10 @@ pub async fn update_group(
             .collect();
     }
 
-    if let Some(external_id) = payload.get("externalId").and_then(|v| v.as_str()) {
-        group.external_id = Some(external_id.to_string());
-    }
+    group.external_id = parse_group_external_id(&payload)?;
 
     // Extract members
-    if let Some(members_array) = payload.get("members").and_then(|v| v.as_array()) {
-        let members: Vec<scim_v2::models::group::Member> = members_array
-            .iter()
-            .filter_map(|m| {
-                m.get("value").and_then(|v| v.as_str()).map(|value| {
-                    scim_v2::models::group::Member {
-                        value: Some(value.to_string()),
-                        ref_: m.get("$ref").and_then(|v| v.as_str()).map(String::from),
-                        display: m.get("display").and_then(|v| v.as_str()).map(String::from),
-                        type_: m.get("type").and_then(|v| v.as_str()).map(String::from),
-                    }
-                })
-            })
-            .collect();
-
-        if !members.is_empty() {
-            group.base.members = Some(members);
-        }
-    }
+    group.base.members = parse_group_members(&payload)?;
 
     // Validate that all group members exist before updating the group
     validate_group_members(&backend, tenant_id, &group.base.members).await?;
@@ -813,7 +906,8 @@ pub async fn update_group(
                 )
             })?;
 
-            let cleaned_group_json = AttributeFilter::remove_null_fields(&group_json);
+            let cleaned_group_json =
+                attribute_filter.apply_to_resource(&group_json, ResourceType::Group);
 
             // Build response with ETag header (Phase 2: ETag response headers)
             let mut headers = HeaderMap::new();
@@ -919,6 +1013,7 @@ pub async fn patch_group(
     Extension(tenant_info): Extension<TenantInfo>,
     headers: HeaderMap,
     uri: Uri,
+    Query(params): Query<HashMap<String, String>>,
     ScimJson(patch_ops): ScimJson<ScimPatchOp>,
 ) -> Result<Response, (StatusCode, Json<serde_json::Value>)> {
     let tenant_id = tenant_info.tenant_id;
@@ -934,6 +1029,14 @@ pub async fn patch_group(
             ))
         }
     };
+
+    // RFC 7644 §3.5.2: a successful PATCH's 200 OK response body is
+    // "subject to the 'attributes' query parameter (see Section 3.9)",
+    // same as every other operation returning a resource.
+    let attribute_filter = AttributeFilter::from_params(
+        params.get("attributes").map(String::as_str),
+        params.get("excludedAttributes").map(String::as_str),
+    );
 
     // Phase 3: Handle conditional requests (If-Match) - Optimistic Concurrency Control
     if let Some(if_match) = headers.get("if-match") {
@@ -1031,12 +1134,20 @@ pub async fn patch_group(
                     "Serialization error",
                 )
             })?;
+            let op_value = operation.value.as_ref().unwrap_or(&serde_json::Value::Null);
+            // RFC 7644 §3.5.2: reject an operation targeting a readOnly
+            // attribute, or an immutable attribute that already holds a
+            // different value, rather than silently ignoring it (contrast
+            // POST/PUT, where a readOnly value is ignored per §3.3/§3.5.1).
+            scim_path
+                .check_patch_mutability(crate::parser::ResourceType::Group, &group_json, op_value)
+                .map_err(|e| e.to_response())?;
             scim_path
                 .apply_operation_with_compatibility(
                     &mut group_json,
                     &operation.op,
-                    operation.value.as_ref().unwrap_or(&serde_json::Value::Null),
-                    compatibility,
+                    op_value,
+                    &compatibility,
                 )
                 .map_err(|e| e.to_response())?;
             crate::schema::validate_required_attributes_present(
@@ -1056,7 +1167,7 @@ pub async fn patch_group(
     }
 
     match backend
-        .patch_group(tenant_id, &id, &patch_ops, compatibility)
+        .patch_group(tenant_id, &id, &patch_ops, &compatibility)
         .await
     {
         Ok(Some(mut group)) => {
@@ -1084,7 +1195,8 @@ pub async fn patch_group(
                 )
             })?;
 
-            let cleaned_group_json = AttributeFilter::remove_null_fields(&group_json);
+            let cleaned_group_json =
+                attribute_filter.apply_to_resource(&group_json, ResourceType::Group);
 
             // Build response with ETag header (Phase 2: ETag response headers)
             let mut headers = HeaderMap::new();

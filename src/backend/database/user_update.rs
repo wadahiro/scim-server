@@ -55,6 +55,9 @@ impl UserUpdateProcessor {
         let timestamp = Utc::now();
         Self::set_user_metadata(&mut user, &timestamp);
 
+        // Clear any client-forged readOnly enterprise-manager sub-attributes.
+        Self::strip_readonly_manager_subattributes(&mut user);
+
         // RFC 7643 §2.4: de-duplicate (type, value) pairs in multi-valued
         // complex attributes before they are ever stored or echoed back.
         let mut deduped_json = serde_json::to_value(&user).map_err(AppError::Serialization)?;
@@ -121,6 +124,27 @@ impl UserUpdateProcessor {
     /// here.
     fn set_user_metadata(user: &mut User, _timestamp: &DateTime<Utc>) {
         user.base.meta = None;
+    }
+
+    /// Clear client-forged values for the Enterprise User extension's
+    /// readOnly `manager` sub-attributes (`$ref`, `displayName`).
+    ///
+    /// `/Schemas` declares `manager.$ref` and `manager.displayName`
+    /// mutability "readOnly" (only `manager.value` is client-settable, see
+    /// `src/schema/definitions.rs`). RFC 7644 §3.5.1 requires the server to
+    /// ignore client-supplied values for readOnly attributes on PUT, but
+    /// nothing on the write path enforced that for these two sub-attributes,
+    /// so a client-forged `$ref`/`displayName` round-tripped into storage
+    /// and the response unchanged. This server has no manager-resolution
+    /// feature to compute a legitimate value for them, so they are always
+    /// cleared rather than merely left as submitted.
+    fn strip_readonly_manager_subattributes(user: &mut User) {
+        if let Some(enterprise) = user.base.enterprise_user.as_mut() {
+            if let Some(manager) = enterprise.manager.as_mut() {
+                manager.ref_ = None;
+                manager.display_name = None;
+            }
+        }
     }
 
     /// Finalize user after database update

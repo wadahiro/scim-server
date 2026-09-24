@@ -18,7 +18,8 @@ use crate::models::{ScimListResponse, ScimPatchOp, User};
 use crate::parser::filter_parser::{parse_filter, validate_filter_attribute_types};
 use crate::parser::{ResourceType, SortSpec};
 use crate::schema::{
-    should_fetch_external_attributes, validate_addresses_primary_constraint, validate_user,
+    should_fetch_external_attributes, validate_addresses_primary_constraint,
+    validate_addresses_types, validate_user,
 };
 
 type AppState = (Arc<dyn ScimBackend>, Arc<AppConfig>);
@@ -147,9 +148,18 @@ fn create_filtered_user_list_response(
 pub async fn create_user(
     State((backend, app_config)): State<AppState>,
     Extension(tenant_info): Extension<TenantInfo>,
+    Query(params): Query<HashMap<String, String>>,
     ScimJson(payload): ScimJson<serde_json::Value>,
 ) -> Result<Response, (StatusCode, Json<serde_json::Value>)> {
     let tenant_id = tenant_info.tenant_id;
+
+    // RFC 7644 §3.9: clients MAY request a partial resource representation
+    // on any operation that returns a resource within the response --
+    // POST included, not just GET.
+    let attribute_filter = AttributeFilter::from_params(
+        params.get("attributes").map(String::as_str),
+        params.get("excludedAttributes").map(String::as_str),
+    );
 
     // Convert JSON payload to our User model
     let user: User = match serde_json::from_value(payload) {
@@ -170,10 +180,12 @@ pub async fn create_user(
 
     // `addresses` is deserialized into `User::addresses` (raw JSON) rather
     // than `User::base.addresses`, so `validate_user` above never sees it.
-    // Enforce the RFC 7643 §2.4 primary constraint for it separately.
+    // Enforce the RFC 7643 §2.4 primary constraint, and RFC 7643 §2.3/§4.1.2
+    // per-sub-attribute types, for it separately.
     if let Err(e) = validate_addresses_primary_constraint(user.addresses.as_ref()) {
         return Err(e.to_response());
     }
+    validate_addresses_types(user.addresses.as_ref())?;
 
     match backend.create_user(tenant_id, &user).await {
         Ok(mut created_user) => {
@@ -218,7 +230,8 @@ pub async fn create_user(
                 )
             })?;
 
-            let cleaned_user_json = AttributeFilter::remove_null_fields(&user_json);
+            let cleaned_user_json =
+                attribute_filter.apply_to_resource(&user_json, ResourceType::User);
 
             // Create response with Location and ETag headers
             let mut headers = HeaderMap::new();
@@ -619,6 +632,7 @@ pub async fn update_user(
     Extension(tenant_info): Extension<TenantInfo>,
     headers: HeaderMap,
     uri: Uri,
+    Query(params): Query<HashMap<String, String>>,
     ScimJson(payload): ScimJson<serde_json::Value>,
 ) -> Result<Response, (StatusCode, Json<serde_json::Value>)> {
     let tenant_id = tenant_info.tenant_id;
@@ -634,6 +648,15 @@ pub async fn update_user(
             ))
         }
     };
+
+    // RFC 7644 §3.5.1: "Unless otherwise specified, a successful PUT
+    // operation returns a 200 ... the entire resource", subject to the
+    // §3.9 attribute-filtering query parameters like every other operation
+    // that returns a resource within the response.
+    let attribute_filter = AttributeFilter::from_params(
+        params.get("attributes").map(String::as_str),
+        params.get("excludedAttributes").map(String::as_str),
+    );
 
     // Convert JSON payload to our User model
     let user: User = match serde_json::from_value(payload) {
@@ -654,10 +677,12 @@ pub async fn update_user(
 
     // `addresses` is deserialized into `User::addresses` (raw JSON) rather
     // than `User::base.addresses`, so `validate_user` above never sees it.
-    // Enforce the RFC 7643 §2.4 primary constraint for it separately.
+    // Enforce the RFC 7643 §2.4 primary constraint, and RFC 7643 §2.3/§4.1.2
+    // per-sub-attribute types, for it separately.
     if let Err(e) = validate_addresses_primary_constraint(user.addresses.as_ref()) {
         return Err(e.to_response());
     }
+    validate_addresses_types(user.addresses.as_ref())?;
 
     // Phase 3: Handle conditional requests (If-Match) - Optimistic Concurrency Control
     if let Some(if_match) = headers.get("if-match") {
@@ -725,7 +750,8 @@ pub async fn update_user(
                 )
             })?;
 
-            let cleaned_user_json = AttributeFilter::remove_null_fields(&user_json);
+            let cleaned_user_json =
+                attribute_filter.apply_to_resource(&user_json, ResourceType::User);
 
             // Build response with ETag header (Phase 2: ETag response headers)
             let mut headers = HeaderMap::new();
@@ -831,6 +857,7 @@ pub async fn patch_user(
     Extension(tenant_info): Extension<TenantInfo>,
     headers: HeaderMap,
     uri: Uri,
+    Query(params): Query<HashMap<String, String>>,
     ScimJson(patch_ops): ScimJson<ScimPatchOp>,
 ) -> Result<Response, (StatusCode, Json<serde_json::Value>)> {
     let tenant_id = tenant_info.tenant_id;
@@ -846,6 +873,14 @@ pub async fn patch_user(
             ))
         }
     };
+
+    // RFC 7644 §3.5.2: a successful PATCH's 200 OK response body is
+    // "subject to the 'attributes' query parameter (see Section 3.9)",
+    // same as every other operation returning a resource.
+    let attribute_filter = AttributeFilter::from_params(
+        params.get("attributes").map(String::as_str),
+        params.get("excludedAttributes").map(String::as_str),
+    );
 
     // Phase 3: Handle conditional requests (If-Match) - Optimistic Concurrency Control
     if let Some(if_match) = headers.get("if-match") {
@@ -919,8 +954,46 @@ pub async fn patch_user(
         }
     }
 
+    // RFC 7644 §3.5.2: reject any operation whose `path` targets a readOnly
+    // attribute, or an immutable attribute that already holds a different
+    // value, before applying it -- PATCH must reject such an operation
+    // rather than silently ignore it, unlike POST/PUT (where a readOnly
+    // value in the request body is ignored per §3.3/§3.5.1). Checked
+    // against a prospective JSON that folds in each prior operation in
+    // this request, so a later operation's check reflects an earlier
+    // one's effect; the backend re-applies the operations for the actual
+    // write.
+    if let Ok(Some(current_user)) = backend.find_user_by_id(tenant_id, &id, false).await {
+        let mut prospective_json = serde_json::to_value(&current_user).map_err(|_| {
+            scim_error_response(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                None,
+                "Serialization error",
+            )
+        })?;
+        for operation in &patch_ops.operations {
+            let scim_path = crate::parser::patch_parser::ScimPath::parse(
+                &operation.path.clone().unwrap_or_default(),
+                ResourceType::User,
+            )
+            .map_err(|e| e.to_response())?;
+            let op_value = operation.value.as_ref().unwrap_or(&Value::Null);
+            scim_path
+                .check_patch_mutability(ResourceType::User, &prospective_json, op_value)
+                .map_err(|e| e.to_response())?;
+            scim_path
+                .apply_operation_with_compatibility(
+                    &mut prospective_json,
+                    &operation.op,
+                    op_value,
+                    &compatibility,
+                )
+                .map_err(|e| e.to_response())?;
+        }
+    }
+
     match backend
-        .patch_user(tenant_id, &id, &patch_ops, compatibility)
+        .patch_user(tenant_id, &id, &patch_ops, &compatibility)
         .await
     {
         Ok(Some(mut user)) => {
@@ -951,7 +1024,8 @@ pub async fn patch_user(
                 )
             })?;
 
-            let cleaned_user_json = AttributeFilter::remove_null_fields(&user_json);
+            let cleaned_user_json =
+                attribute_filter.apply_to_resource(&user_json, ResourceType::User);
 
             // Build response with ETag header (Phase 2: ETag response headers)
             let mut headers = HeaderMap::new();
