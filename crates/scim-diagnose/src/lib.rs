@@ -22,9 +22,11 @@
 //!                     ^
 //!                     | (gated by Cost / --allow-writes, and by
 //!                     |  capability::Capabilities for the two filter axes)
-//!                 axes::AXES (16 static axes: 7 CompatibilityConfig
+//!                 axes::AXES (32 static axes: 7 CompatibilityConfig
 //!                 dimensions + 9 ported from feat/rfc-extract's
-//!                 uniqueness/sequence/atomicity/conditional templates)
+//!                 uniqueness/sequence/atomicity/conditional templates +
+//!                 16 ported from feat/rfc-extract's etag.rs, RFC 7644
+//!                 §3.14 ETag/conditional-request family)
 //! ```
 
 pub mod axes;

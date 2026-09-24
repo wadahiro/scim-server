@@ -1,23 +1,31 @@
-//! The sixteen static behavioural axes: `scim-server`'s seven
+//! The thirty-two static behavioural axes: `scim-server`'s seven
 //! `CompatibilityConfig` knobs (`src/config.rs`, documented in
 //! `CLAUDE.md`), each traced back to the real provider behaviour it exists
 //! to emulate, plus nine more ported from `feat/rfc-extract`'s
 //! `crates/scim-conformance/src/templates/{status,sequence,atomicity,
 //! conditional}.rs` (the `uniqueness_scimtype` family, 6 instances, and
 //! `patch_sequential_application`/`patch_atomicity`/`patch_primary_demotion`,
-//! 1 instance each).
+//! 1 instance each), plus sixteen more ported from that branch's
+//! `crates/scim-conformance/src/etag.rs` (RFC 7644 §3.14 ETag/conditional-
+//! request family -- see the `etag family` section below for the four
+//! groups).
 //!
 //! Ported from `feat/rfc-extract`'s `crates/scim-conformance/src/probes.rs`
-//! (the original seven) and `.../templates/*.rs` (the nine added here) --
-//! the HTTP-probing logic per axis is taken over close to 1:1; what
-//! changes is the *shape* of the result. That branch's probes returned a
-//! schema-matrix `Outcome` (`Verdict::{Pass,Fail,Skip,Error}` against a
-//! single fixed expectation, via a `Requirement`/ledger citation this
-//! crate does not carry over -- see `crate::rfc`'s module docs). This
-//! crate's axes instead classify the observed value against `Axis::known`
-//! (see `crate::axis::Value`) and let `crate::render` decide, per axis,
-//! whether a given value is a fault -- using each axis's own
-//! `RfcPosition` rather than a single verdict baked into the probe.
+//! (the original seven), `.../templates/*.rs` (the nine ported next), and
+//! `.../etag.rs` (the sixteen ported last) -- the HTTP-probing logic per
+//! axis is taken over close to 1:1; what changes is the *shape* of the
+//! result. That branch's probes returned a schema-matrix `Outcome`
+//! (`Verdict::{Pass,Fail,Skip,Error}` against a single fixed expectation,
+//! via a `Requirement`/ledger citation this crate does not carry over --
+//! see `crate::rfc`'s module docs). This crate's axes instead classify the
+//! observed value against `Axis::known` (see `crate::axis::Value`) and let
+//! `crate::render` decide, per axis, whether a given value is a fault --
+//! using each axis's own `RfcPosition` rather than a single verdict baked
+//! into the probe. The source branch's `etag.rs` additionally used a
+//! `Keyword` (`Must`/`Should`/`May`) per row to decide `Fail` vs. `Info`;
+//! this crate's `RfcPosition::Mandated { keyword, .. }` (`Must`/`Should`)
+//! and `RfcPosition::Permitted`/`RfcPosition::Silent` (never a fault) carry
+//! that same distinction (see `crate::rfc`'s module docs).
 
 use serde_json::{json, Value as Json};
 
@@ -284,12 +292,301 @@ pub const PATCH_PRIMARY_DEMOTION: Axis = Axis {
     ],
 };
 
-/// All sixteen axes, in the fixed order they're probed in ([`run_all`]) and
-/// reported in (`crate::render`): the original seven `CompatibilityConfig`
-/// axes, then the nine ported from `feat/rfc-extract`'s
-/// `templates/{status,sequence,atomicity,conditional}.rs` (the six
-/// `uniqueness_scimtype` instances, then `patch_sequential_application`,
-/// `patch_atomicity`, `patch_primary_demotion`).
+// -------------------------------------------------------------- etag family
+//
+// Ported from `feat/rfc-extract`'s `crates/scim-conformance/src/etag.rs`
+// (RFC 7644 §3.14, Versioning Resources -- ETags and conditional
+// requests). Sixteen axes in four groups; see each group's own comment
+// below for its shape. Every axis is gated on `Capability::Etag`: a
+// provider that advertises `etag.supported: false` skips every one of
+// these sixteen with `Unobservable::CapabilityNotAdvertised("etag")` and no
+// request is sent (not even a fixture POST) -- see each probe fn below and
+// `crate::runner`'s wiring. A provider that *advertises* etag support (or
+// says nothing, which this crate never treats as "unsupported" -- see
+// `crate::capability`'s module docs) but does not actually honor
+// `If-Match`/`If-None-Match` is a different, and more interesting, case
+// than "not advertised": the probe still runs, and an observed value like
+// `"accepted_despite_stale"` is `Value::Known` and judged a real
+// `RfcPosition::Mandated`/`Must` fault by `crate::render::is_fault` --
+// never silently folded into a gated skip.
+
+/// Group 1 (4 axes): one POST, read once. All four reuse
+/// [`crate::rfc::ETAG_REPRESENTATION`] (RFC 7644 §3.14,
+/// `rfc7644.txt:3963-3969`) -- one sentence carrying three different RFC
+/// 2119 keywords (MAY weak-ETags, MUST header, SHOULD meta.version), the
+/// same way the source branch's `etag.rs::representation` reused one `Key`
+/// shape across all four rows.
+const ETAG_PRESENCE_KNOWN: &[&str] = &["present", "absent"];
+
+pub const ETAG_RESPONSE_HEADER: Axis = Axis {
+    id: "etag_response_header",
+    about: "whether a POST response carries an ETag HTTP header",
+    rfc: RfcPosition::Mandated {
+        basis: crate::rfc::ETAG_REPRESENTATION,
+        keyword: Keyword::Must,
+        expected: "present",
+    },
+    knob: None,
+    cost: Cost::NeedsUser,
+    known: ETAG_PRESENCE_KNOWN,
+};
+
+pub const ETAG_META_VERSION: Axis = Axis {
+    id: "etag_meta_version",
+    about: "whether a POST response body carries meta.version",
+    rfc: RfcPosition::Mandated {
+        basis: crate::rfc::ETAG_REPRESENTATION,
+        keyword: Keyword::Should,
+        expected: "present",
+    },
+    knob: None,
+    cost: Cost::NeedsUser,
+    known: ETAG_PRESENCE_KNOWN,
+};
+
+/// The `Must` here is not itself stated by [`crate::rfc::ETAG_REPRESENTATION`]'s
+/// sentence (which only establishes that a header MUST exist and a
+/// meta.version SHOULD) -- it follows from the RFC's own worked example
+/// (`rfc7644.txt:4003-4037`), which shows `ETag: W/"e180ee84f0671b1"` and
+/// `"version":"W\/\"e180ee84f0671b1\""` as the identical string. A provider
+/// that emits both but disagrees between them cannot be relied on by a
+/// client comparing one against the other, so this is still judged `Must`
+/// -- but the citation reused here documents what both fields existing
+/// means, not the equality requirement itself, which is why this axis is
+/// not given its own `quote`.
+pub const ETAG_CONSISTENCY: Axis = Axis {
+    id: "etag_consistency",
+    about: "whether the ETag header and meta.version, when both present, are the identical string",
+    rfc: RfcPosition::Mandated {
+        basis: crate::rfc::ETAG_REPRESENTATION,
+        keyword: Keyword::Must,
+        expected: "consistent",
+    },
+    knob: None,
+    cost: Cost::NeedsUser,
+    known: &["consistent", "inconsistent"],
+};
+
+pub const ETAG_FORM: Axis = Axis {
+    id: "etag_form",
+    about: "weak (W/\"...\") vs strong (\"...\") ETag form",
+    rfc: RfcPosition::Permitted {
+        basis: crate::rfc::ETAG_REPRESENTATION,
+    },
+    knob: None,
+    cost: Cost::NeedsUser,
+    known: &["weak", "strong"],
+};
+
+/// Group 2 (3 axes): `GET x If-None-Match` in `{current, stale, *}` ->
+/// `{304 empty body, 200, 304}` per RFC 7644 §3.14
+/// (`rfc7644.txt:4051-4052`, [`crate::rfc::ETAG_CONDITIONAL_READ`]). Each
+/// axis is independent (its own fixture), matching this crate's
+/// established per-axis-probe cost model (`uniqueness_scimtype` already
+/// spends 2 POSTs per axis x 6) rather than the source branch's
+/// request-chaining design.
+const ETAG_CONDITIONAL_READ_KNOWN: &[&str] = &[
+    "not_modified_empty_body",
+    "not_modified_nonempty_body",
+    "ok_200",
+];
+
+pub const ETAG_CONDITIONAL_READ_CURRENT: Axis = Axis {
+    id: "etag_conditional_read/current",
+    about: "GET with If-None-Match set to the resource's real current ETag",
+    rfc: RfcPosition::Mandated {
+        basis: crate::rfc::ETAG_CONDITIONAL_READ,
+        keyword: Keyword::Must,
+        expected: "not_modified_empty_body",
+    },
+    knob: None,
+    cost: Cost::NeedsUser,
+    known: ETAG_CONDITIONAL_READ_KNOWN,
+};
+
+pub const ETAG_CONDITIONAL_READ_STALE: Axis = Axis {
+    id: "etag_conditional_read/stale",
+    about: "GET with If-None-Match set to a genuinely superseded ETag",
+    rfc: RfcPosition::Mandated {
+        basis: crate::rfc::ETAG_CONDITIONAL_READ,
+        keyword: Keyword::Must,
+        expected: "ok_200",
+    },
+    knob: None,
+    cost: Cost::NeedsUser,
+    known: ETAG_CONDITIONAL_READ_KNOWN,
+};
+
+pub const ETAG_CONDITIONAL_READ_STAR: Axis = Axis {
+    id: "etag_conditional_read/star",
+    about: "GET with If-None-Match: * against an existing resource",
+    rfc: RfcPosition::Mandated {
+        basis: crate::rfc::ETAG_CONDITIONAL_READ,
+        keyword: Keyword::Must,
+        expected: "not_modified_empty_body",
+    },
+    knob: None,
+    cost: Cost::NeedsUser,
+    known: ETAG_CONDITIONAL_READ_KNOWN,
+};
+
+/// Group 3 (6 axes): `{PUT, PATCH} x If-Match` in `{current, stale, *}` ->
+/// `{2xx (version advances), 412, 2xx}` per RFC 7644 §3.14
+/// (`rfc7644.txt:4054-4058`, [`crate::rfc::ETAG_CONDITIONAL_WRITE`]), which
+/// names exactly these two methods. For `current`, this crate additionally
+/// requires the version to *advance* -- not just a 2xx -- because that is
+/// the lost-update protection actually firing (RFC 7644 §3.14,
+/// `rfc7644.txt:3966-3967`: "ensuring that clients do not inadvertently
+/// overwrite each other's changes"), not merely a status code. The three
+/// PATCH axes are additionally gated on `Capability::Patch`, matching every
+/// other PATCH-dependent axis in this crate (`uniqueness_scimtype/*/PATCH`,
+/// `patch_sequential_application`, etc).
+const ETAG_CONDITIONAL_WRITE_CURRENT_KNOWN: &[&str] =
+    &["accepted_version_advanced", "accepted_version_not_advanced"];
+const ETAG_CONDITIONAL_WRITE_STALE_KNOWN: &[&str] =
+    &["precondition_failed_412", "accepted_despite_stale"];
+const ETAG_CONDITIONAL_WRITE_STAR_KNOWN: &[&str] = &["accepted", "rejected"];
+
+pub const ETAG_CONDITIONAL_WRITE_PUT_CURRENT: Axis = Axis {
+    id: "etag_conditional_write/PUT/current",
+    about: "PUT with If-Match set to the resource's real current ETag",
+    rfc: RfcPosition::Mandated {
+        basis: crate::rfc::ETAG_CONDITIONAL_WRITE,
+        keyword: Keyword::Must,
+        expected: "accepted_version_advanced",
+    },
+    knob: None,
+    cost: Cost::NeedsUser,
+    known: ETAG_CONDITIONAL_WRITE_CURRENT_KNOWN,
+};
+
+pub const ETAG_CONDITIONAL_WRITE_PUT_STALE: Axis = Axis {
+    id: "etag_conditional_write/PUT/stale",
+    about: "PUT with If-Match set to a genuinely superseded ETag",
+    rfc: RfcPosition::Mandated {
+        basis: crate::rfc::ETAG_CONDITIONAL_WRITE,
+        keyword: Keyword::Must,
+        expected: "precondition_failed_412",
+    },
+    knob: None,
+    cost: Cost::NeedsUser,
+    known: ETAG_CONDITIONAL_WRITE_STALE_KNOWN,
+};
+
+pub const ETAG_CONDITIONAL_WRITE_PUT_STAR: Axis = Axis {
+    id: "etag_conditional_write/PUT/star",
+    about: "PUT with If-Match: * against an existing resource",
+    rfc: RfcPosition::Mandated {
+        basis: crate::rfc::ETAG_CONDITIONAL_WRITE,
+        keyword: Keyword::Must,
+        expected: "accepted",
+    },
+    knob: None,
+    cost: Cost::NeedsUser,
+    known: ETAG_CONDITIONAL_WRITE_STAR_KNOWN,
+};
+
+pub const ETAG_CONDITIONAL_WRITE_PATCH_CURRENT: Axis = Axis {
+    id: "etag_conditional_write/PATCH/current",
+    about: "PATCH with If-Match set to the resource's real current ETag",
+    rfc: RfcPosition::Mandated {
+        basis: crate::rfc::ETAG_CONDITIONAL_WRITE,
+        keyword: Keyword::Must,
+        expected: "accepted_version_advanced",
+    },
+    knob: None,
+    cost: Cost::NeedsUser,
+    known: ETAG_CONDITIONAL_WRITE_CURRENT_KNOWN,
+};
+
+pub const ETAG_CONDITIONAL_WRITE_PATCH_STALE: Axis = Axis {
+    id: "etag_conditional_write/PATCH/stale",
+    about: "PATCH with If-Match set to a genuinely superseded ETag",
+    rfc: RfcPosition::Mandated {
+        basis: crate::rfc::ETAG_CONDITIONAL_WRITE,
+        keyword: Keyword::Must,
+        expected: "precondition_failed_412",
+    },
+    knob: None,
+    cost: Cost::NeedsUser,
+    known: ETAG_CONDITIONAL_WRITE_STALE_KNOWN,
+};
+
+pub const ETAG_CONDITIONAL_WRITE_PATCH_STAR: Axis = Axis {
+    id: "etag_conditional_write/PATCH/star",
+    about: "PATCH with If-Match: * against an existing resource",
+    rfc: RfcPosition::Mandated {
+        basis: crate::rfc::ETAG_CONDITIONAL_WRITE,
+        keyword: Keyword::Must,
+        expected: "accepted",
+    },
+    knob: None,
+    cost: Cost::NeedsUser,
+    known: ETAG_CONDITIONAL_WRITE_STAR_KNOWN,
+};
+
+/// Group 4 (3 axes): `DELETE x If-Match` in `{current, stale, *}`. *Not*
+/// named by RFC 7644 §3.14, whose `If-Match` sentence
+/// (`crate::rfc::ETAG_CONDITIONAL_WRITE`) lists only PUT and PATCH -- the
+/// only place DELETE is mentioned alongside a 412 outcome at all is Table 8
+/// "SCIM HTTP Status Code Usage" (`rfc7644.txt:3779-3781`,
+/// [`crate::rfc::ETAG_TABLE8_PRECONDITION_FAILED`]), which only names the
+/// status code a server that *does* implement DELETE preconditions should
+/// use -- it does not itself require that DELETE support them. So these
+/// three axes are `RfcPosition::Silent`: never a fault either way,
+/// regardless of what's observed (a non-412 on a stale tag is recorded,
+/// not judged) -- what this axis exists to report is what providers that
+/// *do* implement DELETE preconditions actually do, not to hold every
+/// provider to a rule §3.14 never states for this method. This is the one
+/// axis group in the family whose authority is weaker than the rest; see
+/// `crate::rfc::ETAG_TABLE8_PRECONDITION_FAILED`'s own doc comment for the
+/// full reasoning behind choosing `Silent` over `Permitted` here.
+pub const ETAG_DELETE_IF_MATCH_CURRENT: Axis = Axis {
+    id: "etag_delete_if_match/current",
+    about: "DELETE with If-Match set to the resource's real current ETag (not itself named by \
+            §3.14 -- see doc comment)",
+    rfc: RfcPosition::Silent {
+        basis: Some(crate::rfc::ETAG_TABLE8_PRECONDITION_FAILED),
+    },
+    knob: None,
+    cost: Cost::NeedsUser,
+    known: ETAG_CONDITIONAL_WRITE_STAR_KNOWN,
+};
+
+pub const ETAG_DELETE_IF_MATCH_STALE: Axis = Axis {
+    id: "etag_delete_if_match/stale",
+    about: "DELETE with If-Match set to a genuinely superseded ETag (not itself named by §3.14 \
+            -- see doc comment)",
+    rfc: RfcPosition::Silent {
+        basis: Some(crate::rfc::ETAG_TABLE8_PRECONDITION_FAILED),
+    },
+    knob: None,
+    cost: Cost::NeedsUser,
+    known: ETAG_CONDITIONAL_WRITE_STALE_KNOWN,
+};
+
+pub const ETAG_DELETE_IF_MATCH_STAR: Axis = Axis {
+    id: "etag_delete_if_match/star",
+    about: "DELETE with If-Match: * against an existing resource (not itself named by §3.14 -- \
+            see doc comment)",
+    rfc: RfcPosition::Silent {
+        basis: Some(crate::rfc::ETAG_TABLE8_PRECONDITION_FAILED),
+    },
+    knob: None,
+    cost: Cost::NeedsUser,
+    known: ETAG_CONDITIONAL_WRITE_STAR_KNOWN,
+};
+
+/// All thirty-two axes, in the fixed order they're probed in
+/// ([`run_all`]) and reported in (`crate::render`): the original seven
+/// `CompatibilityConfig` axes, then the nine ported from
+/// `feat/rfc-extract`'s `templates/{status,sequence,atomicity,
+/// conditional}.rs` (the six `uniqueness_scimtype` instances, then
+/// `patch_sequential_application`, `patch_atomicity`,
+/// `patch_primary_demotion`), then the sixteen ported from that branch's
+/// `etag.rs` (RFC 7644 §3.14 ETag/conditional-request family: 4
+/// representation + 3 conditional-read + 6 conditional-write + 3
+/// DELETE x If-Match).
 pub const AXES: &[Axis] = &[
     META_DATETIME_FORMAT,
     EMPTY_MULTIVALUED_RENDERING,
@@ -307,6 +604,22 @@ pub const AXES: &[Axis] = &[
     PATCH_SEQUENTIAL_APPLICATION,
     PATCH_ATOMICITY,
     PATCH_PRIMARY_DEMOTION,
+    ETAG_RESPONSE_HEADER,
+    ETAG_META_VERSION,
+    ETAG_CONSISTENCY,
+    ETAG_FORM,
+    ETAG_CONDITIONAL_READ_CURRENT,
+    ETAG_CONDITIONAL_READ_STALE,
+    ETAG_CONDITIONAL_READ_STAR,
+    ETAG_CONDITIONAL_WRITE_PUT_CURRENT,
+    ETAG_CONDITIONAL_WRITE_PUT_STALE,
+    ETAG_CONDITIONAL_WRITE_PUT_STAR,
+    ETAG_CONDITIONAL_WRITE_PATCH_CURRENT,
+    ETAG_CONDITIONAL_WRITE_PATCH_STALE,
+    ETAG_CONDITIONAL_WRITE_PATCH_STAR,
+    ETAG_DELETE_IF_MATCH_CURRENT,
+    ETAG_DELETE_IF_MATCH_STALE,
+    ETAG_DELETE_IF_MATCH_STAR,
 ];
 
 // ---------------------------------------------------------------- probes
@@ -1434,11 +1747,810 @@ pub(crate) async fn probe_patch_primary_demotion(
     }
 }
 
-/// Runs all sixteen axis probes, in the fixed [`AXES`] order, against
+// ------------------------------------------------------------- etag probes
+//
+// Ported from `feat/rfc-extract`'s `crates/scim-conformance/src/etag.rs`;
+// the request/assert logic is taken over close to 1:1 (`etag_header`,
+// `meta_version`, `etag_form`, the unconditional-bump-to-produce-a-stale-
+// tag technique), reshaped into sixteen independent, self-contained probe
+// fns (one fixture apiece) to match this crate's established per-axis-probe
+// pattern (`crate::runner::run`'s `match axis.id` dispatch needs one
+// standalone fn per axis, unlike the source branch's single threaded
+// `run_all` that chained one fixture through the whole family).
+
+fn etag_header(r: &ScimResponse) -> Option<String> {
+    r.headers
+        .get("ETag")
+        .and_then(|v| v.to_str().ok())
+        .map(String::from)
+}
+
+fn meta_version(r: &ScimResponse) -> Option<String> {
+    body_of(r)
+        .pointer("/meta/version")
+        .and_then(Json::as_str)
+        .map(String::from)
+}
+
+/// The header value, falling back to `meta.version` if the header is
+/// somehow missing but the body carries a version anyway.
+fn etag_of(r: &ScimResponse) -> Option<String> {
+    etag_header(r).or_else(|| meta_version(r))
+}
+
+/// `W/"..."` -> weak, `"..."` (no `W/` prefix) -> strong. Per RFC 7232
+/// §2.3 (incorporated by reference via RFC 7644 §3.14's opening sentence,
+/// not itself vendored in `spec/rfc/` -- see `crate::rfc::ETAG_REPRESENTATION`'s
+/// doc comment).
+fn etag_form(etag: &str) -> &'static str {
+    if etag.starts_with("W/") {
+        "weak"
+    } else {
+        "strong"
+    }
+}
+
+/// POSTs a baseline User, noting it in `bk` for cleanup if creation
+/// succeeded at all (even a fixture this crate goes on to judge a failure
+/// is still cleaned up: `id()` succeeding is enough to register it).
+async fn create_baseline_fixture(client: &ScimClient, bk: &mut Bookkeeping) -> ScimResponse {
+    let r = safe(client.post("/Users", &make_baseline(Resource::User))).await;
+    if let Some(id) = r.id() {
+        bk.note("/Users", id);
+    }
+    r
+}
+
+/// Creates a baseline User and returns its id, its ETag/meta.version at
+/// creation (whichever [`etag_of`] finds), and the creating exchange (for
+/// evidence) -- the shared first step of every etag axis below. `Err`
+/// carries a ready-to-return `Observation` for `axis` on any failure
+/// (POST failed, no id, or no observable ETag/meta.version at all), so
+/// every probe can `match ... { Ok(v) => v, Err(obs) => return obs }`.
+async fn etag_fixture(
+    axis: &Axis,
+    client: &ScimClient,
+    bk: &mut Bookkeeping,
+) -> Result<(String, String, crate::client::Exchange), Observation> {
+    let r = create_baseline_fixture(client, bk).await;
+    if !is_2xx(r.status) {
+        return Err(Observation {
+            axis: axis.id.to_string(),
+            value: Value::Unobservable(Unobservable::ProbeFailed(format!(
+                "baseline POST failed: {} {}",
+                r.status,
+                truncate(&r.raw, 200)
+            ))),
+            evidence: vec![r.exchange.clone()],
+            detail: String::new(),
+        });
+    }
+    let Some(id) = r.id() else {
+        return Err(Observation {
+            axis: axis.id.to_string(),
+            value: Value::Unobservable(Unobservable::ProbeFailed(
+                "baseline POST succeeded but returned no id".to_string(),
+            )),
+            evidence: vec![r.exchange.clone()],
+            detail: String::new(),
+        });
+    };
+    let Some(etag) = etag_of(&r) else {
+        return Err(Observation {
+            axis: axis.id.to_string(),
+            value: Value::Unobservable(Unobservable::ProbeFailed(
+                "baseline POST succeeded but carried no ETag/meta.version".to_string(),
+            )),
+            evidence: vec![r.exchange.clone()],
+            detail: String::new(),
+        });
+    };
+    Ok((id, etag, r.exchange.clone()))
+}
+
+/// Sends a real, unconditional PUT (nickName set to a fresh value) to move
+/// `id`'s version on -- the only honest way to produce a genuinely *stale*
+/// ETag to test against, rather than fabricating one (mirrors the source
+/// branch's `conditional_read`/`conditional_write_triple` technique).
+/// Falls back to a follow-up GET if the PUT response itself carried no
+/// observable ETag/meta.version (a 204-shaped write, say), so a body-less
+/// success is never misread as "the write produced no new tag."
+async fn bump_unconditional(client: &ScimClient, id: &str) -> Option<String> {
+    let path = format!("/Users/{id}");
+    let got = safe(client.get(&path)).await;
+    let mut body = body_of(&got);
+    body["nickName"] = json!(format!("n-{}", short_uid()));
+    let r = safe(client.put(&path, &body)).await;
+    if let Some(e) = etag_of(&r) {
+        return Some(e);
+    }
+    let got2 = safe(client.get(&path)).await;
+    etag_of(&got2)
+}
+
+/// The ETag/meta.version a conditional write left `id` at: prefers `r`'s
+/// own response, falling back to a follow-up GET if `r` carried neither
+/// (the same body-less-response guard as [`bump_unconditional`]) -- so
+/// "the version didn't advance" is only ever concluded from an actual
+/// comparison, never from a response simply not echoing a header back.
+async fn resolve_etag_after(client: &ScimClient, id: &str, r: &ScimResponse) -> Option<String> {
+    if let Some(e) = etag_of(r) {
+        return Some(e);
+    }
+    let got = safe(client.get(&format!("/Users/{id}"))).await;
+    etag_of(&got)
+}
+
+/// One conditional PUT or PATCH against `id` with `If-Match: if_match`.
+/// PUT resends the current full representation (needs a fresh GET each
+/// time -- PUT is a full replace); PATCH needs no prior state.
+async fn send_conditional_write(
+    client: &ScimClient,
+    id: &str,
+    is_patch: bool,
+    if_match: &str,
+) -> ScimResponse {
+    let path = format!("/Users/{id}");
+    if is_patch {
+        let body = json!({
+            "schemas": [PATCHOP_URN],
+            "Operations": [
+                {"op": "replace", "path": "nickName", "value": format!("n-{}", short_uid())},
+            ],
+        });
+        safe(client.patch_with_headers(&path, &body, &[("If-Match", if_match)])).await
+    } else {
+        let got = safe(client.get(&path)).await;
+        let mut body = body_of(&got);
+        body["nickName"] = json!(format!("n-{}", short_uid()));
+        safe(client.put_with_headers(&path, &body, &[("If-Match", if_match)])).await
+    }
+}
+
+fn read_case_token(status: u16, body_empty: bool) -> String {
+    match status {
+        304 if body_empty => "not_modified_empty_body".to_string(),
+        304 => "not_modified_nonempty_body".to_string(),
+        200 => "ok_200".to_string(),
+        other => format!("status_{other}"),
+    }
+}
+
+fn write_current_token(status: u16, advanced: bool) -> String {
+    if is_2xx(status) && advanced {
+        "accepted_version_advanced".to_string()
+    } else if is_2xx(status) {
+        "accepted_version_not_advanced".to_string()
+    } else {
+        format!("status_{status}")
+    }
+}
+
+fn write_stale_token(status: u16) -> String {
+    if status == 412 {
+        "precondition_failed_412".to_string()
+    } else if is_2xx(status) {
+        "accepted_despite_stale".to_string()
+    } else {
+        format!("status_{status}")
+    }
+}
+
+fn write_star_token(status: u16) -> &'static str {
+    if is_2xx(status) {
+        "accepted"
+    } else {
+        "rejected"
+    }
+}
+
+// -- group 1: representation --
+
+pub(crate) async fn probe_etag_response_header(
+    client: &ScimClient,
+    bk: &mut Bookkeeping,
+    caps: &Capabilities,
+) -> Observation {
+    let axis = &ETAG_RESPONSE_HEADER;
+    if caps.get(Capability::Etag) == Some(false) {
+        return unobservable(axis, Unobservable::CapabilityNotAdvertised("etag"));
+    }
+    let r = create_baseline_fixture(client, bk).await;
+    if !is_2xx(r.status) {
+        return Observation {
+            axis: axis.id.to_string(),
+            value: Value::Unobservable(Unobservable::ProbeFailed(format!(
+                "baseline POST failed: {} {}",
+                r.status,
+                truncate(&r.raw, 200)
+            ))),
+            evidence: vec![r.exchange.clone()],
+            detail: String::new(),
+        };
+    }
+    let header = etag_header(&r);
+    let token = if header.is_some() {
+        "present"
+    } else {
+        "absent"
+    };
+    let detail = match &header {
+        Some(h) => format!(
+            "ETag header present: {h:?}; RFC 7644 §3.14: \"When supported, SCIM ETags MUST be \
+             specified as an HTTP header\""
+        ),
+        None => "ETag header absent from the POST response; RFC 7644 §3.14: \"When supported, \
+                  SCIM ETags MUST be specified as an HTTP header\""
+            .to_string(),
+    };
+    Observation {
+        axis: axis.id.to_string(),
+        value: known_or_unknown(axis, token),
+        evidence: vec![r.exchange.clone()],
+        detail,
+    }
+}
+
+pub(crate) async fn probe_etag_meta_version(
+    client: &ScimClient,
+    bk: &mut Bookkeeping,
+    caps: &Capabilities,
+) -> Observation {
+    let axis = &ETAG_META_VERSION;
+    if caps.get(Capability::Etag) == Some(false) {
+        return unobservable(axis, Unobservable::CapabilityNotAdvertised("etag"));
+    }
+    let r = create_baseline_fixture(client, bk).await;
+    if !is_2xx(r.status) {
+        return Observation {
+            axis: axis.id.to_string(),
+            value: Value::Unobservable(Unobservable::ProbeFailed(format!(
+                "baseline POST failed: {} {}",
+                r.status,
+                truncate(&r.raw, 200)
+            ))),
+            evidence: vec![r.exchange.clone()],
+            detail: String::new(),
+        };
+    }
+    let version = meta_version(&r);
+    let token = if version.is_some() {
+        "present"
+    } else {
+        "absent"
+    };
+    let detail = match &version {
+        Some(v) => format!(
+            "meta.version present: {v:?}; RFC 7644 §3.14: \"... and SHOULD be specified within \
+             the 'version' attribute\" -- a SHOULD, so absence here is recorded, never a fault"
+        ),
+        None => "meta.version absent from the POST response body; RFC 7644 §3.14's SHOULD, so \
+                  this is recorded, never a fault"
+            .to_string(),
+    };
+    Observation {
+        axis: axis.id.to_string(),
+        value: known_or_unknown(axis, token),
+        evidence: vec![r.exchange.clone()],
+        detail,
+    }
+}
+
+pub(crate) async fn probe_etag_consistency(
+    client: &ScimClient,
+    bk: &mut Bookkeeping,
+    caps: &Capabilities,
+) -> Observation {
+    let axis = &ETAG_CONSISTENCY;
+    if caps.get(Capability::Etag) == Some(false) {
+        return unobservable(axis, Unobservable::CapabilityNotAdvertised("etag"));
+    }
+    let r = create_baseline_fixture(client, bk).await;
+    if !is_2xx(r.status) {
+        return Observation {
+            axis: axis.id.to_string(),
+            value: Value::Unobservable(Unobservable::ProbeFailed(format!(
+                "baseline POST failed: {} {}",
+                r.status,
+                truncate(&r.raw, 200)
+            ))),
+            evidence: vec![r.exchange.clone()],
+            detail: String::new(),
+        };
+    }
+    let header = etag_header(&r);
+    let version = meta_version(&r);
+    match (&header, &version) {
+        (Some(h), Some(v)) => {
+            let token = if h == v { "consistent" } else { "inconsistent" };
+            Observation {
+                axis: axis.id.to_string(),
+                value: known_or_unknown(axis, token),
+                evidence: vec![r.exchange.clone()],
+                detail: format!(
+                    "ETag={h:?} meta.version={v:?}; the RFC's own worked example \
+                     (rfc7644.txt:4003-4037) shows both as the identical string"
+                ),
+            }
+        }
+        _ => Observation {
+            axis: axis.id.to_string(),
+            value: Value::Unobservable(Unobservable::ProbeFailed(format!(
+                "cannot compare: ETag header={header:?} meta.version={version:?} (at least one \
+                 absent -- see etag_response_header/etag_meta_version)"
+            ))),
+            evidence: vec![r.exchange.clone()],
+            detail: String::new(),
+        },
+    }
+}
+
+pub(crate) async fn probe_etag_form(
+    client: &ScimClient,
+    bk: &mut Bookkeeping,
+    caps: &Capabilities,
+) -> Observation {
+    let axis = &ETAG_FORM;
+    if caps.get(Capability::Etag) == Some(false) {
+        return unobservable(axis, Unobservable::CapabilityNotAdvertised("etag"));
+    }
+    let r = create_baseline_fixture(client, bk).await;
+    if !is_2xx(r.status) {
+        return Observation {
+            axis: axis.id.to_string(),
+            value: Value::Unobservable(Unobservable::ProbeFailed(format!(
+                "baseline POST failed: {} {}",
+                r.status,
+                truncate(&r.raw, 200)
+            ))),
+            evidence: vec![r.exchange.clone()],
+            detail: String::new(),
+        };
+    }
+    let Some(header) = etag_header(&r) else {
+        return Observation {
+            axis: axis.id.to_string(),
+            value: Value::Unobservable(Unobservable::ProbeFailed(
+                "no ETag header to classify -- see etag_response_header".to_string(),
+            )),
+            evidence: vec![r.exchange.clone()],
+            detail: String::new(),
+        };
+    };
+    let form = etag_form(&header);
+    Observation {
+        axis: axis.id.to_string(),
+        value: known_or_unknown(axis, form),
+        evidence: vec![r.exchange.clone()],
+        detail: format!(
+            "ETag {header:?} is a {form} ETag; RFC 7644 §3.14 permits either (\"MAY support \
+             weak ETags\")"
+        ),
+    }
+}
+
+// -- group 2: conditional read --
+
+pub(crate) async fn probe_etag_conditional_read_current(
+    client: &ScimClient,
+    bk: &mut Bookkeeping,
+    caps: &Capabilities,
+) -> Observation {
+    let axis = &ETAG_CONDITIONAL_READ_CURRENT;
+    if caps.get(Capability::Etag) == Some(false) {
+        return unobservable(axis, Unobservable::CapabilityNotAdvertised("etag"));
+    }
+    let (id, _etag_at_creation, create_exchange) = match etag_fixture(axis, client, bk).await {
+        Ok(v) => v,
+        Err(obs) => return obs,
+    };
+    // `_etag_at_creation` is deliberately unused past this point: the bump
+    // below immediately supersedes it, and this probe only needs the
+    // resulting *current* ETag. Kept in the tuple only for symmetry with
+    // the sibling probes' `etag_fixture` call.
+    let Some(current_etag) = bump_unconditional(client, &id).await else {
+        return Observation {
+            axis: axis.id.to_string(),
+            value: Value::Unobservable(Unobservable::ProbeFailed(
+                "unconditional bump PUT failed or returned no ETag/meta.version; cannot \
+                 establish a genuinely current ETag to test"
+                    .to_string(),
+            )),
+            evidence: vec![create_exchange],
+            detail: String::new(),
+        };
+    };
+    let path = format!("/Users/{id}");
+    let r = safe(client.get_with_headers(&path, &[("If-None-Match", &current_etag)])).await;
+    let token = read_case_token(r.status, r.raw.is_empty());
+    Observation {
+        axis: axis.id.to_string(),
+        value: known_or_unknown(axis, &token),
+        evidence: vec![create_exchange, r.exchange.clone()],
+        detail: format!(
+            "If-None-Match: {current_etag:?} (the resource's real current ETag) -> status={} \
+             body_len={} (rfc7644.txt:4051-4052 requires an empty body with a 304 response)",
+            r.status,
+            r.raw.len()
+        ),
+    }
+}
+
+pub(crate) async fn probe_etag_conditional_read_stale(
+    client: &ScimClient,
+    bk: &mut Bookkeeping,
+    caps: &Capabilities,
+) -> Observation {
+    let axis = &ETAG_CONDITIONAL_READ_STALE;
+    if caps.get(Capability::Etag) == Some(false) {
+        return unobservable(axis, Unobservable::CapabilityNotAdvertised("etag"));
+    }
+    let (id, etag_at_creation, create_exchange) = match etag_fixture(axis, client, bk).await {
+        Ok(v) => v,
+        Err(obs) => return obs,
+    };
+    let Some(bumped) = bump_unconditional(client, &id).await else {
+        return Observation {
+            axis: axis.id.to_string(),
+            value: Value::Unobservable(Unobservable::ProbeFailed(
+                "unconditional bump PUT failed or returned no ETag/meta.version; cannot \
+                 establish a genuinely stale ETag to test"
+                    .to_string(),
+            )),
+            evidence: vec![create_exchange],
+            detail: String::new(),
+        };
+    };
+    if bumped == etag_at_creation {
+        return Observation {
+            axis: axis.id.to_string(),
+            value: Value::Unobservable(Unobservable::ProbeFailed(format!(
+                "version did not advance after an unconditional write ({etag_at_creation:?} == \
+                 {bumped:?}); no genuinely stale ETag to test -- see \
+                 etag_conditional_write/PUT/current for whether the version advances at all"
+            ))),
+            evidence: vec![create_exchange],
+            detail: String::new(),
+        };
+    }
+    let path = format!("/Users/{id}");
+    let r = safe(client.get_with_headers(&path, &[("If-None-Match", &etag_at_creation)])).await;
+    let token = read_case_token(r.status, r.raw.is_empty());
+    Observation {
+        axis: axis.id.to_string(),
+        value: known_or_unknown(axis, &token),
+        evidence: vec![create_exchange, r.exchange.clone()],
+        detail: format!(
+            "If-None-Match: {etag_at_creation:?} is now stale (the unconditional bump advanced \
+             the version to {bumped:?}) -> status={}, expected 200",
+            r.status
+        ),
+    }
+}
+
+pub(crate) async fn probe_etag_conditional_read_star(
+    client: &ScimClient,
+    bk: &mut Bookkeeping,
+    caps: &Capabilities,
+) -> Observation {
+    let axis = &ETAG_CONDITIONAL_READ_STAR;
+    if caps.get(Capability::Etag) == Some(false) {
+        return unobservable(axis, Unobservable::CapabilityNotAdvertised("etag"));
+    }
+    let (id, _etag, create_exchange) = match etag_fixture(axis, client, bk).await {
+        Ok(v) => v,
+        Err(obs) => return obs,
+    };
+    let path = format!("/Users/{id}");
+    let r = safe(client.get_with_headers(&path, &[("If-None-Match", "*")])).await;
+    let token = read_case_token(r.status, r.raw.is_empty());
+    Observation {
+        axis: axis.id.to_string(),
+        value: known_or_unknown(axis, &token),
+        evidence: vec![create_exchange, r.exchange.clone()],
+        detail: format!(
+            "If-None-Match: * matches any existing representation -> status={} body_len={}, \
+             expected an empty body with a 304 response",
+            r.status,
+            r.raw.len()
+        ),
+    }
+}
+
+// -- group 3: conditional write --
+
+async fn probe_conditional_write_current(
+    axis: &'static Axis,
+    client: &ScimClient,
+    bk: &mut Bookkeeping,
+    is_patch: bool,
+) -> Observation {
+    let (id, etag, create_exchange) = match etag_fixture(axis, client, bk).await {
+        Ok(v) => v,
+        Err(obs) => return obs,
+    };
+    let r = send_conditional_write(client, &id, is_patch, &etag).await;
+    let new_etag = resolve_etag_after(client, &id, &r).await;
+    let advanced = new_etag.as_deref().is_some_and(|e| e != etag);
+    let token = write_current_token(r.status, advanced);
+    Observation {
+        axis: axis.id.to_string(),
+        value: known_or_unknown(axis, &token),
+        evidence: vec![create_exchange, r.exchange.clone()],
+        detail: format!(
+            "{} If-Match: {etag:?} (the resource's real current ETag) -> status={} \
+             new_etag={new_etag:?} advanced={advanced} (rfc7644.txt:3966-3967: \"ensuring that \
+             clients do not inadvertently overwrite each other's changes\")",
+            if is_patch { "PATCH" } else { "PUT" },
+            r.status,
+        ),
+    }
+}
+
+async fn probe_conditional_write_stale(
+    axis: &'static Axis,
+    client: &ScimClient,
+    bk: &mut Bookkeeping,
+    is_patch: bool,
+) -> Observation {
+    let (id, etag, create_exchange) = match etag_fixture(axis, client, bk).await {
+        Ok(v) => v,
+        Err(obs) => return obs,
+    };
+    let Some(bumped) = bump_unconditional(client, &id).await else {
+        return Observation {
+            axis: axis.id.to_string(),
+            value: Value::Unobservable(Unobservable::ProbeFailed(
+                "unconditional bump PUT failed or returned no ETag/meta.version; cannot \
+                 establish a genuinely stale ETag to test"
+                    .to_string(),
+            )),
+            evidence: vec![create_exchange],
+            detail: String::new(),
+        };
+    };
+    if bumped == etag {
+        return Observation {
+            axis: axis.id.to_string(),
+            value: Value::Unobservable(Unobservable::ProbeFailed(format!(
+                "version did not advance after an unconditional write ({etag:?} == {bumped:?}); \
+                 no genuinely stale ETag to test"
+            ))),
+            evidence: vec![create_exchange],
+            detail: String::new(),
+        };
+    }
+    let r = send_conditional_write(client, &id, is_patch, &etag).await;
+    let token = write_stale_token(r.status);
+    Observation {
+        axis: axis.id.to_string(),
+        value: known_or_unknown(axis, &token),
+        evidence: vec![create_exchange, r.exchange.clone()],
+        detail: format!(
+            "{} If-Match: {etag:?} is now stale (bumped to {bumped:?}) -> status={}, expected 412",
+            if is_patch { "PATCH" } else { "PUT" },
+            r.status,
+        ),
+    }
+}
+
+async fn probe_conditional_write_star(
+    axis: &'static Axis,
+    client: &ScimClient,
+    bk: &mut Bookkeeping,
+    is_patch: bool,
+) -> Observation {
+    let (id, _etag, create_exchange) = match etag_fixture(axis, client, bk).await {
+        Ok(v) => v,
+        Err(obs) => return obs,
+    };
+    let r = send_conditional_write(client, &id, is_patch, "*").await;
+    let token = write_star_token(r.status);
+    Observation {
+        axis: axis.id.to_string(),
+        value: known_or_unknown(axis, token),
+        evidence: vec![create_exchange, r.exchange.clone()],
+        detail: format!(
+            "{} If-Match: * matches any existing representation -> status={}, expected 2xx",
+            if is_patch { "PATCH" } else { "PUT" },
+            r.status,
+        ),
+    }
+}
+
+pub(crate) async fn probe_etag_conditional_write_put_current(
+    client: &ScimClient,
+    bk: &mut Bookkeeping,
+    caps: &Capabilities,
+) -> Observation {
+    let axis = &ETAG_CONDITIONAL_WRITE_PUT_CURRENT;
+    if caps.get(Capability::Etag) == Some(false) {
+        return unobservable(axis, Unobservable::CapabilityNotAdvertised("etag"));
+    }
+    probe_conditional_write_current(axis, client, bk, false).await
+}
+
+pub(crate) async fn probe_etag_conditional_write_put_stale(
+    client: &ScimClient,
+    bk: &mut Bookkeeping,
+    caps: &Capabilities,
+) -> Observation {
+    let axis = &ETAG_CONDITIONAL_WRITE_PUT_STALE;
+    if caps.get(Capability::Etag) == Some(false) {
+        return unobservable(axis, Unobservable::CapabilityNotAdvertised("etag"));
+    }
+    probe_conditional_write_stale(axis, client, bk, false).await
+}
+
+pub(crate) async fn probe_etag_conditional_write_put_star(
+    client: &ScimClient,
+    bk: &mut Bookkeeping,
+    caps: &Capabilities,
+) -> Observation {
+    let axis = &ETAG_CONDITIONAL_WRITE_PUT_STAR;
+    if caps.get(Capability::Etag) == Some(false) {
+        return unobservable(axis, Unobservable::CapabilityNotAdvertised("etag"));
+    }
+    probe_conditional_write_star(axis, client, bk, false).await
+}
+
+pub(crate) async fn probe_etag_conditional_write_patch_current(
+    client: &ScimClient,
+    bk: &mut Bookkeeping,
+    caps: &Capabilities,
+) -> Observation {
+    let axis = &ETAG_CONDITIONAL_WRITE_PATCH_CURRENT;
+    if caps.get(Capability::Etag) == Some(false) {
+        return unobservable(axis, Unobservable::CapabilityNotAdvertised("etag"));
+    }
+    if caps.get(Capability::Patch) == Some(false) {
+        return unobservable(axis, Unobservable::CapabilityNotAdvertised("patch"));
+    }
+    probe_conditional_write_current(axis, client, bk, true).await
+}
+
+pub(crate) async fn probe_etag_conditional_write_patch_stale(
+    client: &ScimClient,
+    bk: &mut Bookkeeping,
+    caps: &Capabilities,
+) -> Observation {
+    let axis = &ETAG_CONDITIONAL_WRITE_PATCH_STALE;
+    if caps.get(Capability::Etag) == Some(false) {
+        return unobservable(axis, Unobservable::CapabilityNotAdvertised("etag"));
+    }
+    if caps.get(Capability::Patch) == Some(false) {
+        return unobservable(axis, Unobservable::CapabilityNotAdvertised("patch"));
+    }
+    probe_conditional_write_stale(axis, client, bk, true).await
+}
+
+pub(crate) async fn probe_etag_conditional_write_patch_star(
+    client: &ScimClient,
+    bk: &mut Bookkeeping,
+    caps: &Capabilities,
+) -> Observation {
+    let axis = &ETAG_CONDITIONAL_WRITE_PATCH_STAR;
+    if caps.get(Capability::Etag) == Some(false) {
+        return unobservable(axis, Unobservable::CapabilityNotAdvertised("etag"));
+    }
+    if caps.get(Capability::Patch) == Some(false) {
+        return unobservable(axis, Unobservable::CapabilityNotAdvertised("patch"));
+    }
+    probe_conditional_write_star(axis, client, bk, true).await
+}
+
+// -- group 4: DELETE x If-Match --
+
+pub(crate) async fn probe_etag_delete_if_match_current(
+    client: &ScimClient,
+    bk: &mut Bookkeeping,
+    caps: &Capabilities,
+) -> Observation {
+    let axis = &ETAG_DELETE_IF_MATCH_CURRENT;
+    if caps.get(Capability::Etag) == Some(false) {
+        return unobservable(axis, Unobservable::CapabilityNotAdvertised("etag"));
+    }
+    let (id, etag, create_exchange) = match etag_fixture(axis, client, bk).await {
+        Ok(v) => v,
+        Err(obs) => return obs,
+    };
+    let r = safe(client.delete_with_headers(&format!("/Users/{id}"), &[("If-Match", &etag)])).await;
+    let token = write_star_token(r.status);
+    Observation {
+        axis: axis.id.to_string(),
+        value: known_or_unknown(axis, token),
+        evidence: vec![create_exchange, r.exchange.clone()],
+        detail: format!(
+            "DELETE If-Match: {etag:?} (real current ETag) -> status={}; not §3.14-mandated \
+             (names only PUT/PATCH) -- see Table 8 (rfc7644.txt:3779-3781); recorded, never a \
+             fault",
+            r.status
+        ),
+    }
+}
+
+pub(crate) async fn probe_etag_delete_if_match_stale(
+    client: &ScimClient,
+    bk: &mut Bookkeeping,
+    caps: &Capabilities,
+) -> Observation {
+    let axis = &ETAG_DELETE_IF_MATCH_STALE;
+    if caps.get(Capability::Etag) == Some(false) {
+        return unobservable(axis, Unobservable::CapabilityNotAdvertised("etag"));
+    }
+    let (id, etag, create_exchange) = match etag_fixture(axis, client, bk).await {
+        Ok(v) => v,
+        Err(obs) => return obs,
+    };
+    let Some(bumped) = bump_unconditional(client, &id).await else {
+        return Observation {
+            axis: axis.id.to_string(),
+            value: Value::Unobservable(Unobservable::ProbeFailed(
+                "unconditional bump PUT failed or returned no ETag/meta.version; cannot \
+                 establish a genuinely stale ETag to test"
+                    .to_string(),
+            )),
+            evidence: vec![create_exchange],
+            detail: String::new(),
+        };
+    };
+    if bumped == etag {
+        return Observation {
+            axis: axis.id.to_string(),
+            value: Value::Unobservable(Unobservable::ProbeFailed(format!(
+                "version did not advance after an unconditional write ({etag:?} == {bumped:?}); \
+                 no genuinely stale ETag to test"
+            ))),
+            evidence: vec![create_exchange],
+            detail: String::new(),
+        };
+    }
+    let r = safe(client.delete_with_headers(&format!("/Users/{id}"), &[("If-Match", &etag)])).await;
+    let token = write_stale_token(r.status);
+    Observation {
+        axis: axis.id.to_string(),
+        value: known_or_unknown(axis, &token),
+        evidence: vec![create_exchange, r.exchange.clone()],
+        detail: format!(
+            "DELETE If-Match: {etag:?} is now stale (bumped to {bumped:?}) -> status={}; not \
+             §3.14-mandated -- see Table 8 (rfc7644.txt:3779-3781); recorded, never a fault",
+            r.status
+        ),
+    }
+}
+
+pub(crate) async fn probe_etag_delete_if_match_star(
+    client: &ScimClient,
+    bk: &mut Bookkeeping,
+    caps: &Capabilities,
+) -> Observation {
+    let axis = &ETAG_DELETE_IF_MATCH_STAR;
+    if caps.get(Capability::Etag) == Some(false) {
+        return unobservable(axis, Unobservable::CapabilityNotAdvertised("etag"));
+    }
+    let (id, _etag, create_exchange) = match etag_fixture(axis, client, bk).await {
+        Ok(v) => v,
+        Err(obs) => return obs,
+    };
+    let r = safe(client.delete_with_headers(&format!("/Users/{id}"), &[("If-Match", "*")])).await;
+    let token = write_star_token(r.status);
+    Observation {
+        axis: axis.id.to_string(),
+        value: known_or_unknown(axis, token),
+        evidence: vec![create_exchange, r.exchange.clone()],
+        detail: format!(
+            "DELETE If-Match: * matches any existing representation -> status={}; not \
+             §3.14-mandated -- see Table 8 (rfc7644.txt:3779-3781); recorded, never a fault",
+            r.status
+        ),
+    }
+}
+
+/// Runs all thirty-two axis probes, in the fixed [`AXES`] order, against
 /// `client`. Deterministic: no probe depends on another's outcome, only on
 /// the provider's own advertised capabilities (the two filter probes, the
-/// two PATCH probes, and the four new PATCH-based probes below). Cleans up
-/// every fixture it created afterward, best-effort, the same way
+/// PATCH-gated probes, and every `etag_*` probe below). Cleans up every
+/// fixture it created afterward, best-effort, the same way
 /// `crate::runner`'s caller expects.
 ///
 /// Callers that only want the `Cost::DiscoveryOnly` subset, or that want
@@ -1467,6 +2579,22 @@ pub async fn run_all(client: &mut ScimClient) -> Vec<Observation> {
         probe_patch_sequential_application(client, &mut bk, &caps).await,
         probe_patch_atomicity(client, &mut bk, &caps).await,
         probe_patch_primary_demotion(client, &mut bk, &caps).await,
+        probe_etag_response_header(client, &mut bk, &caps).await,
+        probe_etag_meta_version(client, &mut bk, &caps).await,
+        probe_etag_consistency(client, &mut bk, &caps).await,
+        probe_etag_form(client, &mut bk, &caps).await,
+        probe_etag_conditional_read_current(client, &mut bk, &caps).await,
+        probe_etag_conditional_read_stale(client, &mut bk, &caps).await,
+        probe_etag_conditional_read_star(client, &mut bk, &caps).await,
+        probe_etag_conditional_write_put_current(client, &mut bk, &caps).await,
+        probe_etag_conditional_write_put_stale(client, &mut bk, &caps).await,
+        probe_etag_conditional_write_put_star(client, &mut bk, &caps).await,
+        probe_etag_conditional_write_patch_current(client, &mut bk, &caps).await,
+        probe_etag_conditional_write_patch_stale(client, &mut bk, &caps).await,
+        probe_etag_conditional_write_patch_star(client, &mut bk, &caps).await,
+        probe_etag_delete_if_match_current(client, &mut bk, &caps).await,
+        probe_etag_delete_if_match_stale(client, &mut bk, &caps).await,
+        probe_etag_delete_if_match_star(client, &mut bk, &caps).await,
     ];
 
     cleanup(client, &bk).await;
@@ -1475,4 +2603,121 @@ pub async fn run_all(client: &mut ScimClient) -> Vec<Observation> {
 
 async fn capability_or_unknown(client: &ScimClient) -> Capabilities {
     crate::capability::fetch(client).await
+}
+
+#[cfg(test)]
+mod etag_token_tests {
+    use super::*;
+
+    #[test]
+    fn read_case_token_classifies_the_three_expected_shapes_and_falls_through_for_others() {
+        assert_eq!(read_case_token(304, true), "not_modified_empty_body");
+        assert_eq!(read_case_token(304, false), "not_modified_nonempty_body");
+        assert_eq!(read_case_token(200, false), "ok_200");
+        assert_eq!(read_case_token(404, true), "status_404");
+    }
+
+    #[test]
+    fn write_current_token_requires_both_2xx_and_advanced() {
+        assert_eq!(write_current_token(200, true), "accepted_version_advanced");
+        assert_eq!(
+            write_current_token(200, false),
+            "accepted_version_not_advanced"
+        );
+        assert_eq!(write_current_token(400, false), "status_400");
+    }
+
+    /// The "advertised and not honoured" case this family exists to catch:
+    /// a server that reports `etag.supported: true` but silently accepts a
+    /// write against a stale `If-Match` instead of returning 412. The
+    /// token this produces (`"accepted_despite_stale"`) is in
+    /// `ETAG_CONDITIONAL_WRITE_STALE_KNOWN`, i.e. `Value::Known`, not
+    /// `Value::Unknown` or any `Unobservable` variant -- so
+    /// `crate::render::is_fault` judges it against the axis's
+    /// `RfcPosition::Mandated { keyword: Must, expected:
+    /// "precondition_failed_412", .. }` and reports a real violation, the
+    /// same way any other Known-but-wrong value would. This is what
+    /// distinguishes "advertised but not honoured" from
+    /// `Unobservable::CapabilityNotAdvertised("etag")` (a provider that
+    /// said `etag.supported: false` up front, and for which this whole
+    /// family is skipped before a single request is sent -- see
+    /// `probe_etag_conditional_write_put_stale`'s capability gate).
+    #[test]
+    fn write_stale_token_names_the_lost_update_case_and_it_is_known_not_unknown() {
+        assert_eq!(write_stale_token(412), "precondition_failed_412");
+        let lost_update_token = write_stale_token(200);
+        assert_eq!(lost_update_token, "accepted_despite_stale");
+        assert!(
+            ETAG_CONDITIONAL_WRITE_PUT_STALE
+                .known
+                .contains(&lost_update_token.as_str()),
+            "the lost-update token must be in `known` so it renders as Value::Known, not \
+             Value::Unknown -- a provider that ignores If-Match is a named fault, not a \
+             discovery"
+        );
+        assert_eq!(write_stale_token(500), "status_500");
+    }
+
+    #[test]
+    fn write_star_token_is_a_plain_2xx_check() {
+        assert_eq!(write_star_token(204), "accepted");
+        assert_eq!(write_star_token(400), "rejected");
+    }
+
+    #[test]
+    fn etag_form_classifies_weak_and_strong() {
+        assert_eq!(etag_form("W/\"1\""), "weak");
+        assert_eq!(etag_form("\"1\""), "strong");
+    }
+
+    /// The "advertised but not honoured" claim, checked through the real
+    /// `crate::render::is_fault` (made `pub(crate)` specifically for this
+    /// test -- see its own doc comment) rather than a reimplementation of
+    /// its `match`: a production predicate copied into a test is exactly
+    /// what let an earlier invariant on this branch pass while production
+    /// was broken (see `CLAUDE.md`). Three observations against the same
+    /// axis exercise the three-way distinction this family's gating is
+    /// supposed to draw: a named, judged fault; a conforming value; and
+    /// "never sent a request at all."
+    #[test]
+    fn advertised_but_not_honoured_is_judged_a_fault_by_the_real_render_predicate() {
+        let axis = &ETAG_CONDITIONAL_WRITE_PUT_STALE;
+        let obs_of = |value: Value| Observation {
+            axis: axis.id.to_string(),
+            value,
+            evidence: Vec::new(),
+            detail: String::new(),
+        };
+
+        // Advertised (etag.supported != false) but not honoured: the
+        // server accepted a write against a stale If-Match instead of
+        // returning 412. This is a real, named Must-violation -- not a
+        // gated skip and not silently folded into "not advertised".
+        assert_eq!(
+            crate::render::is_fault(axis, &obs_of(Value::Known("accepted_despite_stale"))),
+            Some(true),
+            "a server that accepts a write against a stale If-Match instead of returning 412 \
+             must be judged a Must-violation"
+        );
+
+        // Advertised and honoured: conforms.
+        assert_eq!(
+            crate::render::is_fault(axis, &obs_of(Value::Known("precondition_failed_412"))),
+            Some(false),
+        );
+
+        // Not advertised at all (etag.supported: false): the probe never
+        // ran, so there is nothing to judge -- distinct from both cases
+        // above, and this is the case that must never be reported as a
+        // fault just because it also isn't "conforms".
+        assert_eq!(
+            crate::render::is_fault(
+                axis,
+                &obs_of(Value::Unobservable(Unobservable::CapabilityNotAdvertised(
+                    "etag"
+                )))
+            ),
+            None,
+        );
+    }
 }

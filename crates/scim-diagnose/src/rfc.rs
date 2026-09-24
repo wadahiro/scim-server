@@ -31,10 +31,15 @@ pub struct Basis {
     /// space, leading/trailing trimmed). `None` for a citation this crate
     /// does not verify word-for-word -- scoped to the eight
     /// `crate::matrix` derived-family characteristic citations (plus their
-    /// PUT/PATCH/Table-9 variants), per the brief; the seven static axes'
-    /// citations, which cite `Silent`/`Permitted`/broader passages rather
-    /// than a single defining sentence, are not covered. Checked against
-    /// the actual file by `tests::verify_quotes` (`crate::rfc::tests`).
+    /// PUT/PATCH/Table-9 variants), per the brief, plus the three §3.14
+    /// etag citations (`ETAG_REPRESENTATION`, `ETAG_CONDITIONAL_READ`,
+    /// `ETAG_CONDITIONAL_WRITE`), each of which quotes a single literal
+    /// RFC 2119 sentence its `Mandated` axes rest on directly; every other
+    /// static axis's citation (the original seven, `uniqueness_scimtype`/
+    /// `patch_*`, and the etag family's Table 8/DELETE basis) cites
+    /// `Silent`/`Permitted`/broader passages rather than a single defining
+    /// sentence, and is not covered. Checked against the actual file by
+    /// `tests::verify_quotes` (`crate::rfc::tests`).
     pub quote: Option<&'static str>,
 }
 
@@ -449,18 +454,126 @@ pub const PROBE_PATCH_ATOMICITY: Basis = Basis {
     quote: None,
 };
 
+// -------------------------------------------------------------- etag family
+//
+// Back the 16 `etag_*` static axes in `crate::axes`, ported from
+// `feat/rfc-extract`'s `crates/scim-conformance/src/etag.rs`. Unlike the
+// nine `uniqueness_scimtype`/`patch_*` axes above (none of whose bases
+// carry a `quote`, matching this file's general convention that quotes are
+// scoped to the eight matrix-derived-family citations), these three carry a
+// verbatim `quote` and are added to `quoted_citations()` below: each cites
+// a single, short, literal RFC 2119 sentence this family's `Mandated`
+// positions rest on directly (unlike e.g. `PROBE_META_DATETIME`, whose
+// `Must` rests on a type-encoding rule spread across a longer passage), so
+// there is a natural sentence to pin and verify. Verified the same way as
+// every other constant in this file: `sed -n '<range>p' spec/rfc/<doc>.txt`.
+
+/// RFC 7644 §3.14 (`rfc7644.txt:3963-3969`). Governs all four
+/// "representation" axes (`etag_response_header`, `etag_meta_version`,
+/// `etag_consistency`, `etag_form`), reused verbatim the way the source
+/// branch's `etag.rs::representation` reused one `Key` shape across all
+/// four rows (`clone_shape()`): the ETag-header MUST, the meta.version
+/// SHOULD, and the weak-ETag MAY are three different keywords in the *same*
+/// sentence, so one citation legitimately backs three different
+/// `RfcPosition`s (`Mandated`/`Must`, `Mandated`/`Should`, `Permitted`/MAY
+/// respectively). `etag_consistency`'s `Must` (ETag header and meta.version
+/// must be the *same* string) is not itself stated by this sentence --
+/// it follows from the RFC's own worked example
+/// (`rfc7644.txt:4003-4037`, e.g. `ETag: W/"e180ee84f0671b1"` and
+/// `"version":"W\/\"e180ee84f0671b1\""` being the identical string) -- so
+/// that axis reuses this same `Basis` for the fields it *does* establish
+/// (both a header and a meta.version may exist) but the consistency
+/// requirement itself is inferred, not quoted; see
+/// `crate::axes::ETAG_CONSISTENCY`'s own doc comment.
+pub const ETAG_REPRESENTATION: Basis = Basis {
+    doc: "RFC 7644",
+    section: "3.14",
+    lines: "rfc7644.txt:3963-3969",
+    quote: Some(
+        "Service providers MAY support weak ETags as the preferred mechanism for performing \
+         conditional retrievals and ensuring that clients do not inadvertently overwrite each \
+         other's changes, respectively. When supported, SCIM ETags MUST be specified as an \
+         HTTP header and SHOULD be specified within the 'version' attribute contained in the \
+         resource's 'meta' attribute.",
+    ),
+};
+
+/// RFC 7644 §3.14 (`rfc7644.txt:4051-4052`): "If the resource has not
+/// changed, the service provider simply returns an empty body with a 304
+/// (Not Modified) response code." Governs the three `etag_conditional_read`
+/// axes (`GET x If-None-Match` in `{current, stale, *}`).
+pub const ETAG_CONDITIONAL_READ: Basis = Basis {
+    doc: "RFC 7644",
+    section: "3.14",
+    lines: "rfc7644.txt:4051-4052",
+    quote: Some(
+        "If the resource has not changed, the service provider simply returns an empty body \
+         with a 304 (Not Modified) response code.",
+    ),
+};
+
+/// RFC 7644 §3.14 (`rfc7644.txt:4054-4058`): "If the service provider
+/// supports versioning of resources, the client MAY supply an If-Match
+/// header (Section 3.1 of [RFC7232]) for PUT and PATCH operations to ensure
+/// that the requested operation succeeds only if the supplied ETag matches
+/// the latest service provider resource, e.g., If-Match:
+/// W/"e180ee84f0671b1"." Names PUT and PATCH only -- DELETE is not named
+/// here; see `ETAG_TABLE8_PRECONDITION_FAILED` for the weaker, non-fault
+/// basis the DELETE axes cite instead. Governs the six
+/// `etag_conditional_write` axes (`{PUT, PATCH} x If-Match` in
+/// `{current, stale, *}`).
+pub const ETAG_CONDITIONAL_WRITE: Basis = Basis {
+    doc: "RFC 7644",
+    section: "3.14",
+    lines: "rfc7644.txt:4054-4058",
+    quote: Some(
+        "If the service provider supports versioning of resources, the client MAY supply an \
+         If-Match header (Section 3.1 of [RFC7232]) for PUT and PATCH operations to ensure \
+         that the requested operation succeeds only if the supplied ETag matches the latest \
+         service provider resource, e.g., If-Match: W/\"e180ee84f0671b1\".",
+    ),
+};
+
+/// RFC 7644 §3.12 Table 8 "SCIM HTTP Status Code Usage"
+/// (`rfc7644.txt:3779-3781`): "412 (Precondition Failed) | PUT, PATCH,
+/// DELETE | Failed to update. Resource has changed on the server." The one
+/// place in the vendored text that mentions DELETE alongside a 412
+/// precondition outcome at all -- but it only names the status code a
+/// server that *does* implement DELETE preconditions should use, the same
+/// way it does for PUT/PATCH; it does not itself require that DELETE
+/// support preconditions, and `ETAG_CONDITIONAL_WRITE`'s own §3.14 sentence
+/// (the section that actually introduces `If-Match` and says which methods
+/// honor it) names only PUT and PATCH. So the three `etag_delete_if_match`
+/// axes are `RfcPosition::Silent` (never a fault, either way), citing this
+/// table as informational -- what a server that *chooses* to implement
+/// DELETE preconditions would use -- not as a `Permitted` axis (this text
+/// does not present DELETE-precondition-support-or-not as an explicit
+/// named choice the way e.g. `PROBE_EMPTY_MEMBERS_SHAPE` names omission vs.
+/// `[]` as two explicitly equivalent representations). No `quote` field:
+/// unlike the three constants above, this is a pipe-table row rather than a
+/// sentence backing a `Mandated` position, matching this file's existing
+/// convention of leaving `Silent` bases unquoted.
+pub const ETAG_TABLE8_PRECONDITION_FAILED: Basis = Basis {
+    doc: "RFC 7644",
+    section: "3.12",
+    lines: "rfc7644.txt:3779-3781",
+    quote: None,
+};
+
 // -------------------------------------------------------- quote verification
 //
 // Part 5: every `Basis` with a `quote` attached is re-derived from the
 // vendored RFC text at `lines` and checked to match word-for-word -- so a
 // citation can never silently drift from the text it claims to quote.
 // Scoped to the definitional citations above (the eight `crate::matrix`
-// characteristics plus their PUT/PATCH/Table-9 variants); `Silent` axes
-// have no defining sentence to quote, so they carry no `quote` and are
-// skipped (ported concept from `feat/rfc-extract`'s `ledger.rs`
-// `verify_quotes`, adapted: that version verified ledger-derived citations
-// against a YAML requirement's own span; this one verifies a `Basis`
-// constant's `quote` field against its own `lines`).
+// characteristics plus their PUT/PATCH/Table-9 variants, plus the three
+// §3.14 etag citations, which each quote a single literal RFC 2119
+// sentence); `Silent`/`Permitted` axes generally have no single defining
+// sentence to quote, so they carry no `quote` and are skipped (ported
+// concept from `feat/rfc-extract`'s `ledger.rs` `verify_quotes`, adapted:
+// that version verified ledger-derived citations against a YAML
+// requirement's own span; this one verifies a `Basis` constant's `quote`
+// field against its own `lines`).
 
 #[cfg(test)]
 mod quote_tests {
@@ -532,6 +645,9 @@ mod quote_tests {
             ("UNIQUENESS", UNIQUENESS),
             ("RETURNED_NEVER", RETURNED_NEVER),
             ("TYPE", TYPE),
+            ("ETAG_REPRESENTATION", ETAG_REPRESENTATION),
+            ("ETAG_CONDITIONAL_READ", ETAG_CONDITIONAL_READ),
+            ("ETAG_CONDITIONAL_WRITE", ETAG_CONDITIONAL_WRITE),
         ]
     }
 

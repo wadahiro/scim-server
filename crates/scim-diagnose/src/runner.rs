@@ -1,4 +1,4 @@
-//! Drives all sixteen [`crate::axes::AXES`] against a live target and
+//! Drives all thirty-two [`crate::axes::AXES`] against a live target and
 //! assembles the resulting [`Profile`]. New here (no direct source-branch
 //! equivalent -- that branch's `probes::run_all` had no write-budget
 //! concept, since every probe it ran was always allowed to write): the
@@ -86,6 +86,48 @@ pub async fn run(client: &mut ScimClient, target: &str, allow_writes: bool) -> P
             "patch_atomicity" => axes::probe_patch_atomicity(client, &mut bk, &caps).await,
             "patch_primary_demotion" => {
                 axes::probe_patch_primary_demotion(client, &mut bk, &caps).await
+            }
+            "etag_response_header" => {
+                axes::probe_etag_response_header(client, &mut bk, &caps).await
+            }
+            "etag_meta_version" => axes::probe_etag_meta_version(client, &mut bk, &caps).await,
+            "etag_consistency" => axes::probe_etag_consistency(client, &mut bk, &caps).await,
+            "etag_form" => axes::probe_etag_form(client, &mut bk, &caps).await,
+            "etag_conditional_read/current" => {
+                axes::probe_etag_conditional_read_current(client, &mut bk, &caps).await
+            }
+            "etag_conditional_read/stale" => {
+                axes::probe_etag_conditional_read_stale(client, &mut bk, &caps).await
+            }
+            "etag_conditional_read/star" => {
+                axes::probe_etag_conditional_read_star(client, &mut bk, &caps).await
+            }
+            "etag_conditional_write/PUT/current" => {
+                axes::probe_etag_conditional_write_put_current(client, &mut bk, &caps).await
+            }
+            "etag_conditional_write/PUT/stale" => {
+                axes::probe_etag_conditional_write_put_stale(client, &mut bk, &caps).await
+            }
+            "etag_conditional_write/PUT/star" => {
+                axes::probe_etag_conditional_write_put_star(client, &mut bk, &caps).await
+            }
+            "etag_conditional_write/PATCH/current" => {
+                axes::probe_etag_conditional_write_patch_current(client, &mut bk, &caps).await
+            }
+            "etag_conditional_write/PATCH/stale" => {
+                axes::probe_etag_conditional_write_patch_stale(client, &mut bk, &caps).await
+            }
+            "etag_conditional_write/PATCH/star" => {
+                axes::probe_etag_conditional_write_patch_star(client, &mut bk, &caps).await
+            }
+            "etag_delete_if_match/current" => {
+                axes::probe_etag_delete_if_match_current(client, &mut bk, &caps).await
+            }
+            "etag_delete_if_match/stale" => {
+                axes::probe_etag_delete_if_match_stale(client, &mut bk, &caps).await
+            }
+            "etag_delete_if_match/star" => {
+                axes::probe_etag_delete_if_match_star(client, &mut bk, &caps).await
             }
             other => unreachable!("axis {other} has no probe wired in crate::runner::run"),
         };

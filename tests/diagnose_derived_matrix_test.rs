@@ -116,14 +116,16 @@ async fn decl_and_instance_counts_are_pinned() {
     let ids: HashSet<&str> = axes.iter().map(|a| a.id.as_str()).collect();
     assert_eq!(ids.len(), axes.len(), "every generated id must be unique");
 
-    // Total axes = the 16 static axes (crate::axes::AXES: the original 7
-    // CompatibilityConfig axes plus the 9 ported from feat/rfc-extract's
-    // uniqueness/sequence/atomicity/conditional templates) + the 389
-    // schema-derived instances = 405.
+    // Total axes = the 32 static axes (crate::axes::AXES: the original 7
+    // CompatibilityConfig axes, plus the 9 ported from feat/rfc-extract's
+    // uniqueness/sequence/atomicity/conditional templates, plus the 16
+    // ported from feat/rfc-extract's etag.rs -- RFC 7644 §3.14
+    // ETag/conditional-request family) + the 389 schema-derived instances
+    // = 421.
     assert_eq!(
         scim_diagnose::axes::AXES.len() + INSTANCE_COUNT,
-        405,
-        "total axes (static + schema-derived) must be pinned at 405"
+        421,
+        "total axes (static + schema-derived) must be pinned at 421"
     );
 
     handle.shutdown().await;

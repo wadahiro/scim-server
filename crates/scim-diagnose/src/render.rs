@@ -22,7 +22,16 @@ fn axis_for(id: &str) -> Option<&'static Axis> {
 /// Whether `obs`'s value is a fault against `axis`'s `RfcPosition` --
 /// `None` when the axis has no fixed expectation to violate (`Permitted`,
 /// `Silent`, or the value itself is `Unobservable`).
-fn is_fault(axis: &Axis, obs: &Observation) -> Option<bool> {
+///
+/// `pub(crate)` (not `fn`, the way every other helper in this module stays
+/// private) specifically so `crate::axes::etag_token_tests` can exercise
+/// this actual predicate -- the one that decides whether an "advertised
+/// but not honoured" `etag_conditional_write/*/stale` observation
+/// (`Known("accepted_despite_stale")`) really does render as a fault --
+/// rather than a copy of its `match` reimplemented in the test. See that
+/// module's doc comment and `CLAUDE.md`'s "never duplicate production
+/// logic in a test" rule.
+pub(crate) fn is_fault(axis: &Axis, obs: &Observation) -> Option<bool> {
     let Value::Known(v) = &obs.value else {
         return None;
     };

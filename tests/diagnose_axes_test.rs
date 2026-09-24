@@ -1,23 +1,28 @@
-//! Integration tests for `scim-diagnose`'s sixteen static behavioural axes
-//! (the original seven `CompatibilityConfig` axes plus the nine ported
+//! Integration tests for `scim-diagnose`'s thirty-two static behavioural
+//! axes (the original seven `CompatibilityConfig` axes, the nine ported
 //! from `feat/rfc-extract`'s uniqueness/sequence/atomicity/conditional
-//! templates), run against this repo's own server
-//! (`common::spawn_real_server`, a real HTTP listener --
-//! `scim_diagnose::ScimClient` speaks real HTTP, not `axum_test`'s
-//! in-process transport).
+//! templates, and the sixteen ported from that branch's `etag.rs`), run
+//! against this repo's own server (`common::spawn_real_server`, a real
+//! HTTP listener -- `scim_diagnose::ScimClient` speaks real HTTP, not
+//! `axum_test`'s in-process transport).
 //!
-//! Three things are asserted:
+//! Four things are asserted:
 //!
 //! 1. Against a default-`CompatibilityConfig` server, every one of the
-//!    sixteen axes observes a `Value::Known` value (not `Unobservable`) --
-//!    the tool can actually see `scim-server`'s own behaviour end to end.
+//!    thirty-two axes observes a `Value::Known` value (not `Unobservable`)
+//!    -- the tool can actually see `scim-server`'s own behaviour end to
+//!    end.
 //! 2. The tool's core claim: start the server with a **non-default**
 //!    `CompatibilityConfig`, assert the profile changes to match it, and
 //!    that `compatibility_config()` round-trips -- the YAML it emits names
 //!    the same knob values the server was actually started with.
-//! 3. The nine new axes' actual observed values against this repo's own
-//!    server -- what `scim-server` really does for uniqueness scimType,
-//!    PATCH sequencing, atomicity, and primary demotion.
+//! 3. The nine `uniqueness_scimtype`/`patch_*` axes' actual observed values
+//!    against this repo's own server -- what `scim-server` really does for
+//!    uniqueness scimType, PATCH sequencing, atomicity, and primary
+//!    demotion.
+//! 4. The sixteen `etag_*` axes' actual observed values against this
+//!    repo's own server -- what `scim-server` really does for the RFC 7644
+//!    §3.14 ETag/conditional-request family.
 
 mod common;
 
@@ -93,14 +98,14 @@ async fn run_profile(base_url: &str, allow_writes: bool) -> scim_diagnose::Profi
 }
 
 #[tokio::test]
-async fn all_sixteen_axes_are_known_against_the_default_server() {
+async fn all_thirty_two_axes_are_known_against_the_default_server() {
     let handle = spawn_real_server(base_app_config(CompatibilityConfig::default())).await;
 
     let profile = run_profile(&handle.base_url, true).await;
 
-    // The profile carries the sixteen static axes plus the schema-derived
-    // matrix's 389 instances (crate::matrix) -- assert on the former by id,
-    // not on the collection's total length.
+    // The profile carries the thirty-two static axes plus the
+    // schema-derived matrix's 389 instances (crate::matrix) -- assert on
+    // the former by id, not on the collection's total length.
     let static_ids: std::collections::HashSet<&str> =
         scim_diagnose::axes::AXES.iter().map(|a| a.id).collect();
     let static_observed: Vec<_> = profile
@@ -110,8 +115,8 @@ async fn all_sixteen_axes_are_known_against_the_default_server() {
         .collect();
     assert_eq!(
         static_observed.len(),
-        16,
-        "all sixteen static axes must report"
+        32,
+        "all thirty-two static axes must report"
     );
     for obs in &static_observed {
         match &obs.value {
@@ -176,6 +181,92 @@ async fn new_nine_axes_observed_values_against_this_server() {
     expect_known("patch_sequential_application", "b");
     expect_known("patch_atomicity", "rejected_and_unchanged");
     expect_known("patch_primary_demotion", "new_primary_only");
+
+    handle.shutdown().await;
+}
+
+/// The sixteen `etag_*` axes' actual observed values against this repo's
+/// own reference server -- printed to stdout (visible with `cargo test --
+/// --nocapture`), the "observed value for each of the 16 against this
+/// server" evidence for the ETag/conditional-request family. `scim-server`
+/// implements RFC 7644 §3.14 fully (weak ETags, `meta.version`,
+/// conditional GET/PUT/PATCH/DELETE -- see `tests/etag_version_test.rs`),
+/// so every `Mandated` axis here is expected to report the RFC-preferred
+/// token, and the two non-`Mandated` axes (`etag_form`, `etag_delete_if_match/*`)
+/// their actual, non-judged observations.
+#[tokio::test]
+async fn etag_family_observed_values_against_this_server() {
+    let handle = spawn_real_server(base_app_config(CompatibilityConfig::default())).await;
+
+    let profile = run_profile(&handle.base_url, true).await;
+
+    let etag_axis_ids = [
+        "etag_response_header",
+        "etag_meta_version",
+        "etag_consistency",
+        "etag_form",
+        "etag_conditional_read/current",
+        "etag_conditional_read/stale",
+        "etag_conditional_read/star",
+        "etag_conditional_write/PUT/current",
+        "etag_conditional_write/PUT/stale",
+        "etag_conditional_write/PUT/star",
+        "etag_conditional_write/PATCH/current",
+        "etag_conditional_write/PATCH/stale",
+        "etag_conditional_write/PATCH/star",
+        "etag_delete_if_match/current",
+        "etag_delete_if_match/stale",
+        "etag_delete_if_match/star",
+    ];
+    for axis_id in etag_axis_ids {
+        let obs = profile
+            .get(axis_id)
+            .unwrap_or_else(|| panic!("axis {axis_id} missing from profile"));
+        println!("{axis_id}: {:?} ({})", obs.value, obs.detail);
+        assert!(
+            matches!(obs.value, Value::Known(_)),
+            "axis {axis_id} expected a Known value against scim-server's own default server, \
+             got {:?} (detail: {})",
+            obs.value,
+            obs.detail
+        );
+    }
+
+    let expect_known = |axis_id: &str, expected: &str| {
+        let obs = profile.get(axis_id).unwrap();
+        match &obs.value {
+            Value::Known(v) => assert_eq!(*v, expected, "axis {axis_id}: detail: {}", obs.detail),
+            other => panic!("axis {axis_id}: expected Known({expected:?}), got {other:?}"),
+        }
+    };
+    expect_known("etag_response_header", "present");
+    expect_known("etag_meta_version", "present");
+    expect_known("etag_consistency", "consistent");
+    expect_known("etag_form", "weak");
+    expect_known("etag_conditional_read/current", "not_modified_empty_body");
+    expect_known("etag_conditional_read/stale", "ok_200");
+    expect_known("etag_conditional_read/star", "not_modified_empty_body");
+    expect_known(
+        "etag_conditional_write/PUT/current",
+        "accepted_version_advanced",
+    );
+    expect_known(
+        "etag_conditional_write/PUT/stale",
+        "precondition_failed_412",
+    );
+    expect_known("etag_conditional_write/PUT/star", "accepted");
+    expect_known(
+        "etag_conditional_write/PATCH/current",
+        "accepted_version_advanced",
+    );
+    expect_known(
+        "etag_conditional_write/PATCH/stale",
+        "precondition_failed_412",
+    );
+    expect_known("etag_conditional_write/PATCH/star", "accepted");
+    expect_known("etag_delete_if_match/current", "accepted");
+    expect_known("etag_delete_if_match/stale", "precondition_failed_412");
+    expect_known("etag_delete_if_match/star", "accepted");
 
     handle.shutdown().await;
 }
