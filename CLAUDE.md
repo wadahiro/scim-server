@@ -37,6 +37,9 @@ ACME_TOKEN=secret123 GLOBEX_USER=admin GLOBEX_PASSWORD=pass cargo run -- -c my-c
 
 # Custom config file location
 cargo run -- -c production.yaml
+
+# Validate configuration without running
+cargo run -- -c config.yaml --validate
 ```
 
 ### Testing

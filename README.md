@@ -83,6 +83,16 @@ export TENANT1_TOKEN="tenant1-bearer-token"
 cargo run -- -c config.yaml
 ```
 
+### Validating a Configuration
+
+Check a configuration file for problems without starting the server -- no database file or tables are created, no port is bound:
+
+```bash
+cargo run -- -c config.yaml --validate
+```
+
+This reports every problem found (not just the first), such as an unsupported `auth.type`, a `bearer`/`token` auth block with no token, two tenants resolving to the same route path, or an invalid `trusted_proxies` entry. Exit code is `0` if valid, non-zero otherwise. Run with no `-c` to validate the built-in zero-config defaults.
+
 ## ⚙️ Configuration
 
 ### YAML Configuration
@@ -153,8 +163,13 @@ tenants:
       token: "${TOKEN_SCIM_TOKEN:-token_xxxxxxxxxxxxxxxxxxxx}"
 
   # Host-specific tenant with X-Forwarded headers (behind load balancer)
+  #
+  # NOTE: this path must not collide with another tenant's path -- routes
+  # are registered per path only, so two tenants sharing a path panic the
+  # server at startup ("Overlapping method route") even with different
+  # `host` values. Tenant 2 already owns "/api/scim", hence "-lb" here.
   - id: 30
-    path: "/api/scim"
+    path: "/api/scim-lb"
     host: "api.loadbalancer.com"
     host_resolution:
       type: "xforwarded"
@@ -164,8 +179,9 @@ tenants:
       token: "${API_TOKEN:-api-token}"
 
   # Tenant with custom endpoints and override base URL
+  # NOTE: distinct from tenant 1's "/scim/v2" -- see the routing note above.
   - id: 40
-    path: "/scim/v2"
+    path: "/scim/public"
     override_base_url: "https://public.example.com"  # Forces response URLs
     auth:
       type: "bearer"
