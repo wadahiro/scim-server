@@ -8,8 +8,11 @@
 //! This module is a rewrite for the profile shape (see the brief this
 //! crate was built from -- "expect to rewrite most of it").
 
+use std::collections::BTreeMap;
+
 use crate::axes::AXES;
 use crate::axis::{Axis, Observation, Profile, Value};
+use crate::matrix::{self, Method};
 use crate::rfc::{self, Keyword, RfcPosition};
 
 fn axis_for(id: &str) -> Option<&'static Axis> {
@@ -110,7 +113,121 @@ pub fn render_profile(profile: &Profile) -> String {
         out.push('\n');
     }
 
+    render_derived_summary(profile, &mut out);
+
     out
+}
+
+/// Parses a `DerivedAxis::id`/`Observation::axis` string
+/// (`"<family_prefix>/<Resource>.<attr path>/<method>"`) into its three
+/// components. `None` for anything that isn't a derived id (the seven
+/// static axes' ids, which contain no `/`).
+fn parse_derived_id(axis: &str) -> Option<(&str, &str, &str)> {
+    let mut parts = axis.splitn(3, '/');
+    let family = parts.next()?;
+    let attr = parts.next()?;
+    let method = parts.next()?;
+    Some((family, attr, method))
+}
+
+/// 389 individual lines is unusable against a real provider (see the brief
+/// this was built from). `profile_json` still records every instance
+/// individually -- that's what makes it diffable and evidence-bearing --
+/// but the text view aggregates: one line per (family x method x observed
+/// value) with a count, then the instances that deviate from their
+/// (family, method)'s majority value listed individually. A provider that
+/// ignores readOnly on PATCH across the board reads as one line; a
+/// provider that does it for exactly one attribute reads as a one-line
+/// exception worth looking at. A family whose majority value is itself a
+/// fault is flagged as a compatibility-option candidate -- every derived
+/// family has `knob: None` (none of these eight characteristics has a
+/// `CompatibilityConfig` field today), so a consistent non-conforming
+/// majority is exactly the signal the brief calls "the tool's purpose, not
+/// a footnote."
+fn render_derived_summary(profile: &Profile, out: &mut String) {
+    // family_prefix -> method_str -> observed token -> matching observations
+    let mut groups: BTreeMap<&str, BTreeMap<&str, BTreeMap<String, Vec<&Observation>>>> =
+        BTreeMap::new();
+    for obs in &profile.observations {
+        let Some((family_prefix, _attr, method_str)) = parse_derived_id(&obs.axis) else {
+            continue;
+        };
+        if matrix::family_for(&obs.axis).is_none() {
+            continue;
+        }
+        groups
+            .entry(family_prefix)
+            .or_default()
+            .entry(method_str)
+            .or_default()
+            .entry(value_token(&obs.value))
+            .or_default()
+            .push(obs);
+    }
+    if groups.is_empty() {
+        return;
+    }
+
+    let total: usize = groups
+        .values()
+        .flat_map(|by_method| by_method.values())
+        .flat_map(|by_value| by_value.values())
+        .map(|v| v.len())
+        .sum();
+    out.push_str("schema-derived characteristics\n");
+    out.push_str(&format!(
+        "  {total} instances across {} families, aggregated by family x method x observed \
+         value (see --format json for every individual instance)\n\n",
+        groups.len()
+    ));
+
+    for (family_prefix, by_method) in &groups {
+        out.push_str(&format!("{family_prefix}\n"));
+        if let Some(family) = matrix::DERIVED_FAMILIES
+            .iter()
+            .find(|f| f.id_prefix == *family_prefix)
+        {
+            out.push_str(&format!("  about: {}\n", family.about));
+        }
+        for (method_str, by_value) in by_method {
+            let majority = by_value.iter().max_by_key(|(_, obs)| obs.len());
+            let line = by_value
+                .iter()
+                .map(|(token, obs)| format!("{token} x{}", obs.len()))
+                .collect::<Vec<_>>()
+                .join(", ");
+            out.push_str(&format!("  {method_str}: {line}"));
+
+            let is_fault_fn = Method::parse(method_str)
+                .and_then(|m| matrix::known_and_fault_for(family_prefix, m))
+                .map(|(_, f)| f);
+            if let (Some((maj_token, _)), Some(is_fault)) = (majority, is_fault_fn) {
+                if is_fault(maj_token) {
+                    out.push_str(&format!(
+                        " -- ** majority value {maj_token:?} is non-conforming; no knob covers \
+                         {family_prefix} -- candidate for a new compatibility option **"
+                    ));
+                }
+            }
+            out.push('\n');
+
+            if let Some((maj_token, _)) = majority {
+                for (token, obs_list) in by_value {
+                    if token == maj_token {
+                        continue;
+                    }
+                    for obs in obs_list {
+                        out.push_str(&format!("    deviates: {} -> {token}", obs.axis));
+                        if !obs.detail.is_empty() {
+                            out.push_str(&format!(" ({})", obs.detail));
+                        }
+                        out.push('\n');
+                    }
+                }
+            }
+        }
+        out.push('\n');
+    }
 }
 
 // --------------------------------------------------------------- json view
