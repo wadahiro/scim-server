@@ -104,7 +104,9 @@ fn self_declared_token(declared: &str, present: bool) -> String {
 pub const GROUP_MEMBERS_FILTER: Axis = Axis {
     id: "group_members_filter",
     about: "whether filter=members[value eq \"...\"] is processed",
-    rfc: RfcPosition::Silent,
+    rfc: RfcPosition::Silent {
+        basis: Some(crate::rfc::PROBE_GROUP_FILTER),
+    },
     knob: Some("support_group_members_filter"),
     cost: Cost::NeedsUserAndGroup,
     known: &["processed", "rejected_400"],
@@ -113,7 +115,9 @@ pub const GROUP_MEMBERS_FILTER: Axis = Axis {
 pub const GROUP_DISPLAYNAME_FILTER: Axis = Axis {
     id: "group_displayname_filter",
     about: "whether filter=displayName eq \"...\" is processed",
-    rfc: RfcPosition::Silent,
+    rfc: RfcPosition::Silent {
+        basis: Some(crate::rfc::PROBE_GROUP_FILTER),
+    },
     knob: Some("support_group_displayname_filter"),
     cost: Cost::NeedsUserAndGroup,
     known: &["processed", "rejected_400"],
@@ -135,7 +139,7 @@ pub const PATCH_REPLACE_EMPTY_ARRAY: Axis = Axis {
 pub const PATCH_REPLACE_EMPTY_VALUE: Axis = Axis {
     id: "patch_replace_empty_value",
     about: "whether PATCH replace with value: [{\"value\":\"\"}] clears a multi-valued attribute",
-    rfc: RfcPosition::Silent,
+    rfc: RfcPosition::Silent { basis: None },
     knob: Some("support_patch_replace_empty_value"),
     cost: Cost::NeedsUser,
     known: &["stored_as_sent", "rejected_400", "cleared"],
@@ -167,7 +171,9 @@ const UNIQUENESS_SCIMTYPE_KNOWN: &[&str] = &["uniqueness", "invalidValue", "none
 pub const UNIQUENESS_SCIMTYPE_USER_POST: Axis = Axis {
     id: "uniqueness_scimtype/User/POST",
     about: "scimType (or outright acceptance) a POST of a duplicate userName produces",
-    rfc: RfcPosition::Silent,
+    rfc: RfcPosition::Silent {
+        basis: Some(crate::rfc::PROBE_UNIQUENESS_SCIMTYPE),
+    },
     knob: None,
     cost: Cost::NeedsUser,
     known: UNIQUENESS_SCIMTYPE_KNOWN,
@@ -176,7 +182,9 @@ pub const UNIQUENESS_SCIMTYPE_USER_POST: Axis = Axis {
 pub const UNIQUENESS_SCIMTYPE_USER_PUT: Axis = Axis {
     id: "uniqueness_scimtype/User/PUT",
     about: "scimType (or outright acceptance) a PUT that sets userName to another User's value produces",
-    rfc: RfcPosition::Silent,
+    rfc: RfcPosition::Silent {
+        basis: Some(crate::rfc::PROBE_UNIQUENESS_SCIMTYPE),
+    },
     knob: None,
     cost: Cost::NeedsUser,
     known: UNIQUENESS_SCIMTYPE_KNOWN,
@@ -185,7 +193,9 @@ pub const UNIQUENESS_SCIMTYPE_USER_PUT: Axis = Axis {
 pub const UNIQUENESS_SCIMTYPE_USER_PATCH: Axis = Axis {
     id: "uniqueness_scimtype/User/PATCH",
     about: "scimType (or outright acceptance) a PATCH replace that sets userName to another User's value produces",
-    rfc: RfcPosition::Silent,
+    rfc: RfcPosition::Silent {
+        basis: Some(crate::rfc::PROBE_UNIQUENESS_SCIMTYPE),
+    },
     knob: None,
     cost: Cost::NeedsUser,
     known: UNIQUENESS_SCIMTYPE_KNOWN,
@@ -194,7 +204,9 @@ pub const UNIQUENESS_SCIMTYPE_USER_PATCH: Axis = Axis {
 pub const UNIQUENESS_SCIMTYPE_GROUP_POST: Axis = Axis {
     id: "uniqueness_scimtype/Group/POST",
     about: "scimType (or outright acceptance) a POST of a duplicate displayName produces",
-    rfc: RfcPosition::Silent,
+    rfc: RfcPosition::Silent {
+        basis: Some(crate::rfc::PROBE_UNIQUENESS_SCIMTYPE),
+    },
     knob: None,
     cost: Cost::NeedsUserAndGroup,
     known: UNIQUENESS_SCIMTYPE_KNOWN,
@@ -203,7 +215,9 @@ pub const UNIQUENESS_SCIMTYPE_GROUP_POST: Axis = Axis {
 pub const UNIQUENESS_SCIMTYPE_GROUP_PUT: Axis = Axis {
     id: "uniqueness_scimtype/Group/PUT",
     about: "scimType (or outright acceptance) a PUT that sets displayName to another Group's value produces",
-    rfc: RfcPosition::Silent,
+    rfc: RfcPosition::Silent {
+        basis: Some(crate::rfc::PROBE_UNIQUENESS_SCIMTYPE),
+    },
     knob: None,
     cost: Cost::NeedsUserAndGroup,
     known: UNIQUENESS_SCIMTYPE_KNOWN,
@@ -212,7 +226,9 @@ pub const UNIQUENESS_SCIMTYPE_GROUP_PUT: Axis = Axis {
 pub const UNIQUENESS_SCIMTYPE_GROUP_PATCH: Axis = Axis {
     id: "uniqueness_scimtype/Group/PATCH",
     about: "scimType (or outright acceptance) a PATCH replace that sets displayName to another Group's value produces",
-    rfc: RfcPosition::Silent,
+    rfc: RfcPosition::Silent {
+        basis: Some(crate::rfc::PROBE_UNIQUENESS_SCIMTYPE),
+    },
     knob: None,
     cost: Cost::NeedsUserAndGroup,
     known: UNIQUENESS_SCIMTYPE_KNOWN,

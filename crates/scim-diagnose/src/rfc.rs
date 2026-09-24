@@ -89,7 +89,13 @@ pub enum RfcPosition {
     /// The RFC does not regulate this dimension at all. The most valuable
     /// case: an emulation option here has no "correct" RFC value to match,
     /// only providers to match.
-    Silent,
+    ///
+    /// `basis` is the passage that *establishes* the silence -- the text
+    /// that makes the behaviour optional or leaves the vocabulary open --
+    /// so a reader can audit the classification instead of taking "the RFC
+    /// says nothing" on trust. `None` only when no single passage can be
+    /// pointed at, i.e. the RFC is silent by pure omission.
+    Silent { basis: Option<Basis> },
     /// The RFC does not mandate a value directly; it defines the *meaning*
     /// of a characteristic the target itself declares, and the declaration
     /// binds the target. A provider that declares `returned: default` for
@@ -107,7 +113,7 @@ impl RfcPosition {
         match self {
             RfcPosition::Mandated { basis, .. } => Some(*basis),
             RfcPosition::Permitted { basis } => Some(*basis),
-            RfcPosition::Silent => None,
+            RfcPosition::Silent { basis } => *basis,
             RfcPosition::SelfDeclared { basis, .. } => Some(*basis),
         }
     }

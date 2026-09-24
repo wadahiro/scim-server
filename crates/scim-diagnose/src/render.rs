@@ -30,7 +30,7 @@ fn is_fault(axis: &Axis, obs: &Observation) -> Option<bool> {
         RfcPosition::Mandated {
             keyword, expected, ..
         } => Some(keyword.is_fault(*v == expected)),
-        RfcPosition::Permitted { .. } | RfcPosition::Silent => None,
+        RfcPosition::Permitted { .. } | RfcPosition::Silent { .. } => None,
         RfcPosition::SelfDeclared { .. } => Some(rfc::self_declared_is_fault(v)),
     }
 }
@@ -80,9 +80,16 @@ pub fn render_profile(profile: &Profile) -> String {
                     "  rfc:    permitted (either value conforms) -- {basis}\n"
                 ));
             }
-            RfcPosition::Silent => {
-                out.push_str("  rfc:    silent -- not regulated by RFC 7643/7644\n");
-            }
+            RfcPosition::Silent { basis } => match basis {
+                // Show what established the silence, so the classification
+                // is auditable rather than an assertion.
+                Some(b) => out.push_str(&format!(
+                    "  rfc:    silent (left open by the text) -- {b}\n"
+                )),
+                None => out.push_str(
+                    "  rfc:    silent -- not regulated by RFC 7643/7644 (no single passage)\n",
+                ),
+            },
             RfcPosition::SelfDeclared { basis, declares } => {
                 out.push_str(&format!(
                     "  rfc:    self-declared (bound by the target's own declaration of {declares}) -- {basis}\n"
