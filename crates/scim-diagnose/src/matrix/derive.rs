@@ -774,7 +774,7 @@ mod tests {
     #[test]
     fn writable_attribute_gets_type_wrong_and_type_valid_on_post_and_put() {
         let username = decl("userName", Mutability::ReadWrite);
-        let tw = expand_type_wrong(&[username.clone()]);
+        let tw = expand_type_wrong(std::slice::from_ref(&username));
         let tv = expand_type_valid(&[username]);
         assert_eq!(
             tw.iter().map(|a| a.method).collect::<Vec<_>>(),

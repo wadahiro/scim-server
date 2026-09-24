@@ -21,4 +21,6 @@ pub use derive::{
     expand_all, family_for, is_container_skip, is_group_member_ref, is_group_member_subattr,
     known_and_fault_for, resource_label, DerivedAxis, DerivedFamily, Method, DERIVED_FAMILIES,
 };
-pub use exec::run_derived_family;
+pub use exec::{
+    build_patch_request, patch_targets_decl_precisely, run_derived_family, PatchRequestPlan,
+};

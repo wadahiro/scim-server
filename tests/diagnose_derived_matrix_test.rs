@@ -22,7 +22,9 @@ use std::time::Duration;
 use common::spawn_real_server;
 use scim_diagnose::axis::Value as ObservedValue;
 use scim_diagnose::client::{Auth, ClientConfig, ScimClient};
-use scim_diagnose::matrix::{expand_all, run_derived_family, DerivedAxis, Method};
+use scim_diagnose::matrix::{
+    build_patch_request, expand_all, run_derived_family, DerivedAxis, Method, PatchRequestPlan,
+};
 use scim_diagnose::schema::{decls_from_schemas, AttrDecl, AttrType, Resource};
 use scim_server::config::{
     AppConfig, AuthConfig, BackendConfig, CompatibilityConfig, DatabaseConfig, ServerConfig,
@@ -235,53 +237,37 @@ fn assert_patch_targets_decl(decl: &AttrDecl, universe: &[&AttrDecl], raw_path: 
 /// their own request-construction logic closely enough to prove the
 /// *shape* is sound -- see this file's module doc comment for what a
 /// placeholder filter value does and does not prove.
+/// Asks the **production** request builder what it would send for this
+/// instance, then extracts the `path` it chose. Calling
+/// `matrix::build_patch_request` rather than re-deriving the rule here is
+/// the whole point: a copy of the logic in the test would keep passing
+/// while production drifted away from it, which is precisely the failure
+/// this invariant exists to catch.
+///
+/// `None` means production reported `Unavailable` -- it refuses to compose a
+/// request that cannot isolate the attribute, and the executor turns that
+/// into `Unobservable`. There is nothing to check in that case.
 fn build_patch_path_for(instance: &DerivedAxis, universe: &[&AttrDecl]) -> Option<String> {
     let decl = &instance.decl;
     let placeholder: Value = json!("11111111-1111-1111-1111-111111111111");
+    let new_value: Value = json!("forged-by-the-targeting-invariant");
 
-    let top_multi = decl.top_multi_valued;
-    let precise = !(decl.depth() > 1 && top_multi) || container_is_readonly(decl, universe);
-
-    let segs: Vec<&str> = decl.path.split('.').collect();
-    let dotted = if decl.resource == Resource::EnterpriseUser {
-        format!("{ENTERPRISE_URN}:{}", decl.path)
-    } else {
-        decl.path.clone()
-    };
-    // Mirrors matrix::exec's real `patch_path`: a sub-attribute of a
-    // top-level multi-valued complex attribute always falls back to the
-    // *container-level* path here (never the dotted sub-attribute path) --
-    // that fallback is sound only when `precise` holds (the container
-    // itself is readOnly), which `build_patch_request` gates on before
-    // ever reaching this container-level form.
-    let container_level_path = if segs.len() > 1 && top_multi {
-        Some(if decl.resource == Resource::EnterpriseUser {
-            format!("{ENTERPRISE_URN}:{}", segs[0])
-        } else {
-            segs[0].to_string()
-        })
-    } else {
-        None
+    // Try with a filter value available first; fall back to none so the
+    // `Unavailable` branch is exercised for instances that have no
+    // identifying sibling to filter on.
+    let plan = match build_patch_request(decl, universe, Some(&placeholder), new_value.clone()) {
+        PatchRequestPlan::Unavailable(_) => build_patch_request(decl, universe, None, new_value),
+        plan => plan,
     };
 
-    if precise {
-        Some(container_level_path.unwrap_or(dotted))
-    } else if segs.len() > 1 {
-        let top_prefixed = if decl.resource == Resource::EnterpriseUser {
-            format!("{ENTERPRISE_URN}:{}", segs[0])
-        } else {
-            segs[0].to_string()
-        };
-        let filter_str = match &placeholder {
-            Value::String(s) => s.clone(),
-            other => other.to_string(),
-        };
-        Some(format!(
-            "{top_prefixed}[value eq \"{filter_str}\"].{}",
-            segs[1]
-        ))
-    } else {
-        None
+    match plan {
+        PatchRequestPlan::Body(body) => Some(
+            body["Operations"][0]["path"]
+                .as_str()
+                .expect("production build_patch_request must always set Operations[0].path")
+                .to_string(),
+        ),
+        PatchRequestPlan::Unavailable(_) => None,
     }
 }
 

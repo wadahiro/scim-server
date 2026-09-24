@@ -246,12 +246,24 @@ fn value_filtered_patch_request(decl: &AttrDecl, filter_value: &Json, new_value:
     })
 }
 
-enum PatchRequestPlan {
+/// The outcome of composing the PATCH request for one derived instance.
+///
+/// `Unavailable` is not a failure: it is the honest answer when no request
+/// can isolate the declared attribute, and the caller must report the
+/// instance `Unobservable` rather than judging a request that proves
+/// nothing (see `build_patch_request`).
+pub enum PatchRequestPlan {
     Body(Json),
     Unavailable(&'static str),
 }
 
-fn build_patch_request(
+/// Composes the PATCH request for one derived instance -- the single entry
+/// point the executors use, so the targeting invariant in
+/// `tests/diagnose_derived_matrix_test.rs` can assert against *this*
+/// function rather than a copy of its logic. Duplicating the rule in the
+/// test would let production drift away from it unnoticed, which is exactly
+/// the failure the invariant exists to catch.
+pub fn build_patch_request(
     decl: &AttrDecl,
     universe: &[&AttrDecl],
     filter_value: Option<&Json>,
