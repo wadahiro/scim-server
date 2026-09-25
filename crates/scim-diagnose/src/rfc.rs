@@ -33,13 +33,16 @@ pub struct Basis {
     /// `crate::matrix` derived-family characteristic citations (plus their
     /// PUT/PATCH/Table-9 variants), per the brief, plus the three §3.14
     /// etag citations (`ETAG_REPRESENTATION`, `ETAG_CONDITIONAL_READ`,
-    /// `ETAG_CONDITIONAL_WRITE`), each of which quotes a single literal
-    /// RFC 2119 sentence its `Mandated` axes rest on directly; every other
-    /// static axis's citation (the original seven, `uniqueness_scimtype`/
-    /// `patch_*`, and the etag family's Table 8/DELETE basis) cites
-    /// `Silent`/`Permitted`/broader passages rather than a single defining
-    /// sentence, and is not covered. Checked against the actual file by
-    /// `tests::verify_quotes` (`crate::rfc::tests`).
+    /// `ETAG_CONDITIONAL_WRITE`) and the four `attribute_projection`
+    /// citations (`PROJECTION_ATTRIBUTES_PARAM`, `PROJECTION_PATCH_CROSSREF`,
+    /// `PROJECTION_PUT_UNLESS_OTHERWISE`, `PROJECTION_POST_BODY_SHOULD`),
+    /// each of which quotes a single literal RFC 2119 sentence its
+    /// `Mandated` axes rest on directly; every other static axis's citation
+    /// (the original seven, `uniqueness_scimtype`/`patch_*`, and the etag
+    /// family's Table 8/DELETE basis) cites `Silent`/`Permitted`/broader
+    /// passages rather than a single defining sentence, and is not covered.
+    /// Checked against the actual file by `tests::verify_quotes`
+    /// (`crate::rfc::tests`).
     pub quote: Option<&'static str>,
 }
 
@@ -257,6 +260,142 @@ pub const PROBE_PATCH_REPLACE_EMPTY_ARRAY: Basis = Basis {
     section: "3.5.2.3",
     lines: "rfc7644.txt:2372-2373",
     quote: None,
+};
+
+// ------------------------------------------------------ attribute_projection family
+//
+// Back `crate::matrix::projection`'s `attribute_projection` family (ported
+// from `feat/rfc-extract`'s `crates/scim-conformance/src/templates/
+// projection.rs`, whose own citation was that branch's ledger-derived "p27"
+// requirement -- this crate has no ledger, so the citation is recreated
+// here as ordinary `Basis` constants, verified the same way as every other
+// constant in this file). Four constants, one per HTTP method the family
+// probes, because -- unlike every `DerivedFamily` in `crate::rfc`'s
+// previous section, which cites one passage per *characteristic* regardless
+// of method -- this family's *citation* genuinely differs by method: PATCH
+// carries an explicit textual cross-reference to the general rule, PUT
+// inherits it only through an implicit "unless otherwise specified"
+// carve-out, and POST's citation rests on a SHOULD that only gates whether
+// a representation is returned at all, not on whether §3.9's own MUST
+// applies once one is. All four are nonetheless judged `Keyword::Must` --
+// see `crate::matrix::projection::rfc_for_method`'s doc comment for why the
+// asymmetry lives in *which passage* backs the obligation rather than in a
+// softer fault threshold for POST.
+
+/// RFC 7644 §3.9 (`rfc7644.txt:3591-3608`): the parameter's own definition
+/// -- widened from the brief's `3591-3600` (the general preamble plus the
+/// `attributes` clause alone) to also include `excludedAttributes`' own
+/// MUST sentence at `3605-3607`, since this family judges GET control
+/// instances for *both* query parameters against this one constant, and
+/// citing only the `attributes` half for an `excludedAttributes` instance
+/// would be citing text that never mentions the parameter under test.
+/// "Clients MAY request a partial resource representation on any operation
+/// that returns a resource within the response ... attributes When
+/// specified ... each resource returned MUST contain the minimum set of
+/// resource attributes and any attributes or sub-attributes explicitly
+/// requested by the 'attributes' parameter. ... excludedAttributes When
+/// specified, each resource returned MUST contain the minimum set of
+/// resource attributes. Additionally, the default set of attributes minus
+/// those attributes listed in 'excludedAttributes' is returned." This is
+/// the family's general basis -- binding on its own for GET (RFC 7644
+/// §3.4.2.5's attribute filtering already implements it there; this
+/// control cell just confirms it) and the foundation every other method's
+/// citation below builds on.
+pub const PROJECTION_ATTRIBUTES_PARAM: Basis = Basis {
+    doc: "RFC 7644",
+    section: "3.9",
+    lines: "rfc7644.txt:3591-3608",
+    quote: Some(
+        "Clients MAY request a partial resource representation on any operation that returns \
+         a resource within the response by specifying either of the mutually exclusive URL \
+         query parameters \"attributes\" or \"excludedAttributes\", as follows: attributes \
+         When specified, the default list of attributes SHALL be overridden, and each resource \
+         returned MUST contain the minimum set of resource attributes and any attributes or \
+         sub-attributes explicitly requested by the \"attributes\" parameter.",
+    ),
+};
+
+/// RFC 7644 §3.5.2 (`rfc7644.txt:1939-1944`): PATCH's own explicit
+/// cross-reference to §3.9 -- "the server either MUST return a 200 OK
+/// response code and the entire resource within the response body, subject
+/// to the 'attributes' query parameter (see Section 3.9) ... The server
+/// MUST return a 200 OK if the 'attributes' parameter is specified in the
+/// request." The strongest of the three write-method citations: PATCH is
+/// the only one of the three the RFC names by number pointing straight at
+/// §3.9, rather than leaving the connection to be inferred. The final
+/// sentence's own MUST (a 200, not 204, whenever `attributes` is supplied)
+/// is a *status-code* requirement, not a projection requirement -- a target
+/// that answers 204 with `attributes` set fails that sentence, not this
+/// family's own check, so `crate::matrix::projection` records that case as
+/// `Unobservable::ProbeFailed` (no representation to judge) rather than as
+/// a projection fault.
+pub const PROJECTION_PATCH_CROSSREF: Basis = Basis {
+    doc: "RFC 7644",
+    section: "3.5.2",
+    lines: "rfc7644.txt:1939-1944",
+    quote: Some(
+        "On successful completion, the server either MUST return a 200 OK response code and \
+         the entire resource within the response body, subject to the \"attributes\" query \
+         parameter (see Section 3.9), or MAY return HTTP status code 204 (No Content) and the \
+         appropriate response headers for a successful PATCH request. The server MUST return a \
+         200 OK if the \"attributes\" parameter is specified in the request.",
+    ),
+};
+
+/// RFC 7644 §3.5.1 (`rfc7644.txt:1687-1690`): "Unless otherwise specified,
+/// a successful PUT operation returns a 200 OK response code and the
+/// entire resource within the response body, enabling the client to
+/// correlate the client's and the service provider's views of the updated
+/// resource." Unlike PATCH's sentence, this never names §3.9 or the
+/// `attributes` parameter at all -- what it supplies is the "unless
+/// otherwise specified" opening that lets §3.9's own MAY/MUST language
+/// override PUT's default full-representation return. The obligation PUT
+/// is held to is still an unconditional MUST (§3.9's own wording carries no
+/// softening for PUT specifically), so this is modeled `Keyword::Must`
+/// too -- but the citation backing it is this indirect carve-out, not a
+/// named cross-reference, which is the asymmetry
+/// `crate::matrix::projection` keeps distinct from PATCH's.
+pub const PROJECTION_PUT_UNLESS_OTHERWISE: Basis = Basis {
+    doc: "RFC 7644",
+    section: "3.5.1",
+    lines: "rfc7644.txt:1687-1690",
+    quote: Some(
+        "Unless otherwise specified, a successful PUT operation returns a 200 OK response code \
+         and the entire resource within the response body, enabling the client to correlate \
+         the client's and the service provider's views of the updated resource.",
+    ),
+};
+
+/// RFC 7644 §3.3 (`rfc7644.txt:601-604`): "When the service provider
+/// successfully creates the new resource, an HTTP response SHALL be
+/// returned with HTTP status code 201 (Created). The response body SHOULD
+/// contain the service provider's representation of the newly created
+/// resource." Unlike PUT and PATCH, POST is not even obligated to return a
+/// representation at all -- only a SHOULD -- and that is the asymmetry this
+/// citation carries: §3.9's own MUST only binds "any operation that
+/// returns a resource within the response," and for POST that premise
+/// itself rests on a SHOULD rather than a MUST.
+///
+/// This does *not* soften the obligation once POST *has* returned a
+/// representation, though: at that point the premise is satisfied and
+/// §3.9's MUST applies to POST exactly as it does to PUT/PATCH/GET, so
+/// `crate::matrix::projection` still models POST as `Keyword::Must` -- a
+/// leaked attribute on POST is a `VIOLATION` the same as on any other
+/// method. What actually differs for POST is upstream of that: a POST that
+/// returns no representation at all is not a projection fault either way
+/// (nothing to judge), a case `crate::matrix::projection::judge` records as
+/// `Value::Known("no_body")` rather than by discounting a body that *was*
+/// returned. This constant exists to make that distinction citable, not to
+/// back a different fault threshold.
+pub const PROJECTION_POST_BODY_SHOULD: Basis = Basis {
+    doc: "RFC 7644",
+    section: "3.3",
+    lines: "rfc7644.txt:601-604",
+    quote: Some(
+        "When the service provider successfully creates the new resource, an HTTP response \
+         SHALL be returned with HTTP status code 201 (Created). The response body SHOULD \
+         contain the service provider's representation of the newly created resource.",
+    ),
 };
 
 // --------------------------------------------- crate::matrix derived-family citations
@@ -649,6 +788,13 @@ mod quote_tests {
             ("ETAG_REPRESENTATION", ETAG_REPRESENTATION),
             ("ETAG_CONDITIONAL_READ", ETAG_CONDITIONAL_READ),
             ("ETAG_CONDITIONAL_WRITE", ETAG_CONDITIONAL_WRITE),
+            ("PROJECTION_ATTRIBUTES_PARAM", PROJECTION_ATTRIBUTES_PARAM),
+            ("PROJECTION_PATCH_CROSSREF", PROJECTION_PATCH_CROSSREF),
+            (
+                "PROJECTION_PUT_UNLESS_OTHERWISE",
+                PROJECTION_PUT_UNLESS_OTHERWISE,
+            ),
+            ("PROJECTION_POST_BODY_SHOULD", PROJECTION_POST_BODY_SHOULD),
         ]
     }
 

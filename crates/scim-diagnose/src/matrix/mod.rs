@@ -16,6 +16,7 @@
 
 pub mod derive;
 pub mod exec;
+pub mod projection;
 
 pub use derive::{
     expand_all, family_for, is_container_skip, is_group_member_ref, is_group_member_subattr,
@@ -23,4 +24,10 @@ pub use derive::{
 };
 pub use exec::{
     build_patch_request, patch_targets_decl_precisely, run_derived_family, PatchRequestPlan,
+};
+pub use projection::{
+    expand as expand_projection, is_fault_token as projection_is_fault,
+    known_and_fault_for as projection_known_and_fault_for, pick_pair as projection_pick_pair,
+    run as run_projection, targets_from as projection_targets_from, Param as ProjectionParam,
+    ProjectionAxis, ProjectionTarget, FAMILY_ID as PROJECTION_FAMILY_ID,
 };

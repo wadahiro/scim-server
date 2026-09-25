@@ -1,7 +1,9 @@
-//! Drives all thirty-two [`crate::axes::AXES`] against a live target and
-//! assembles the resulting [`Profile`]. New here (no direct source-branch
-//! equivalent -- that branch's `probes::run_all` had no write-budget
-//! concept, since every probe it ran was always allowed to write): the
+//! Drives all thirty-two [`crate::axes::AXES`], the schema-derived matrix
+//! (`crate::matrix::derive`), and the `attribute_projection` family
+//! (`crate::matrix::projection`) against a live target and assembles the
+//! resulting [`Profile`]. New here (no direct source-branch equivalent --
+//! that branch's `probes::run_all` had no write-budget concept, since
+//! every probe it ran was always allowed to write): the
 //! `Cost`/`--allow-writes` gate. When an axis is skipped for budget, the
 //! profile records `Unobservable::NeedsWrite` for it -- never a silent
 //! omission (see the brief this crate was built from: "the tool must be
@@ -12,7 +14,9 @@ use crate::axis::{Cost, Observation, Profile, Unobservable, Value};
 use crate::capability;
 use crate::client::ScimClient;
 use crate::fixtures::{cleanup, Bookkeeping};
-use crate::matrix::{expand_all, run_derived_family};
+use crate::matrix::{
+    expand_all, expand_projection, projection_targets_from, run_derived_family, run_projection,
+};
 use crate::schema::decls_from_schemas;
 
 /// Runs every axis in `crate::axes::AXES` against `client`.
@@ -137,12 +141,16 @@ pub async fn run(client: &mut ScimClient, target: &str, allow_writes: bool) -> P
     cleanup(client, &bk).await;
 
     // The 389 (attribute x characteristic x method) schema-derived
-    // instances (`crate::matrix`), generated from the target's own `GET
-    // /Schemas`. Gated by `--allow-writes` exactly like the sixteen static
-    // axes above -- every derived family is `Cost::NeedsUser`.
+    // instances (`crate::matrix::derive`), generated from the target's own
+    // `GET /Schemas`. Gated by `--allow-writes` exactly like the sixteen
+    // static axes above -- every derived family is `Cost::NeedsUser`. Also
+    // captures `decls` for the `attribute_projection` family just below,
+    // which needs the same flattened declarations to find each declared
+    // resource type's own top-level attributes.
+    let mut decls: Vec<crate::schema::AttrDecl> = Vec::new();
     match client.get("/Schemas").await {
         Ok(r) if r.is_success() => {
-            let decls = decls_from_schemas(&r.body.unwrap_or(serde_json::Value::Null));
+            decls = decls_from_schemas(&r.body.unwrap_or(serde_json::Value::Null));
             let derived_axes = expand_all(&decls);
             if allow_writes {
                 observations.extend(run_derived_family(client, &derived_axes).await);
@@ -166,6 +174,43 @@ pub async fn run(client: &mut ScimClient, target: &str, allow_writes: bool) -> P
             // cannot be generated at all -- no instances to report, not an
             // error for the whole run (the sixteen static axes above still
             // stand on their own).
+        }
+    }
+
+    // The `attribute_projection` family (`crate::matrix::projection`):
+    // `attributes`/`excludedAttributes` honoured on every operation that
+    // returns a resource, expanded over the target's own declared resource
+    // types (`GET /ResourceTypes`) rather than a hardcoded User/Group pair.
+    // Gated by `--allow-writes` the same way as every other write-costed
+    // family above.
+    if !decls.is_empty() {
+        match client.get("/ResourceTypes").await {
+            Ok(r) if r.is_success() => {
+                let resource_types = r.body.unwrap_or(serde_json::Value::Null);
+                let targets = projection_targets_from(&resource_types, &decls);
+                let projection_axes = expand_projection(&targets);
+                if allow_writes {
+                    observations.extend(run_projection(client, &projection_axes).await);
+                } else {
+                    for instance in &projection_axes {
+                        observations.push(Observation {
+                            axis: instance.id.clone(),
+                            value: Value::Unobservable(Unobservable::NeedsWrite),
+                            evidence: Vec::new(),
+                            detail: format!(
+                                "skipped: observing {} would create a {}; pass --allow-writes to \
+                                 run it",
+                                instance.id, instance.target_name
+                            ),
+                        });
+                    }
+                }
+            }
+            _ => {
+                // GET /ResourceTypes itself failing means the family cannot
+                // be expanded at all -- no instances to report, not an
+                // error for the whole run.
+            }
         }
     }
 

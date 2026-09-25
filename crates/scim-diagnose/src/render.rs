@@ -130,6 +130,7 @@ pub fn render_profile(profile: &Profile) -> String {
     }
 
     render_derived_summary(profile, &mut out);
+    render_projection_summary(profile, &mut out);
 
     out
 }
@@ -223,6 +224,116 @@ fn render_derived_summary(profile: &Profile, out: &mut String) {
                         " -- ** majority value {maj_token:?} is non-conforming; no knob covers \
                          {family_prefix} -- candidate for a new compatibility option **"
                     ));
+                }
+            }
+            out.push('\n');
+
+            if let Some((maj_token, _)) = majority {
+                for (token, obs_list) in by_value {
+                    if token == maj_token {
+                        continue;
+                    }
+                    for obs in obs_list {
+                        out.push_str(&format!("    deviates: {} -> {token}", obs.axis));
+                        if !obs.detail.is_empty() {
+                            out.push_str(&format!(" ({})", obs.detail));
+                        }
+                        out.push('\n');
+                    }
+                }
+            }
+        }
+        out.push('\n');
+    }
+}
+
+/// Parses an `attribute_projection` id
+/// (`"attribute_projection/<ResourceType>.<param>/<method>"`) into
+/// `(resource_type, param, method)`. `None` for anything else (in
+/// particular, `crate::matrix::derive`'s ids, which also have three `/`-
+/// separated parts but whose middle segment is `<Resource>.<attr path>`,
+/// not `<ResourceType>.<param>` -- disambiguated by requiring the family
+/// prefix to be `crate::matrix::PROJECTION_FAMILY_ID` and the param suffix
+/// to be one of the two literal query parameter names this family ever
+/// uses).
+fn parse_projection_id(axis: &str) -> Option<(&str, &str, &str)> {
+    let mut parts = axis.splitn(3, '/');
+    let family = parts.next()?;
+    if family != matrix::PROJECTION_FAMILY_ID {
+        return None;
+    }
+    let resource_and_param = parts.next()?;
+    let method = parts.next()?;
+    let (resource_type, param) = resource_and_param.rsplit_once('.')?;
+    if param != "attributes" && param != "excludedAttributes" {
+        return None;
+    }
+    Some((resource_type, param, method))
+}
+
+/// Same aggregation strategy as [`render_derived_summary`] (one line per
+/// `(resource type x param x method x observed value)` with a count, then
+/// deviations from that combination's majority listed individually) --
+/// kept as its own function rather than folded into
+/// `render_derived_summary` because `attribute_projection`'s id shape
+/// carries a query parameter as well as a method, one dimension more than
+/// every `crate::matrix::derive` family.
+type ProjectionGroups<'a> =
+    BTreeMap<(&'a str, &'a str), BTreeMap<&'a str, BTreeMap<String, Vec<&'a Observation>>>>;
+
+fn render_projection_summary(profile: &Profile, out: &mut String) {
+    // (resource_type, param) -> method -> observed token -> matching observations
+    let mut groups: ProjectionGroups = BTreeMap::new();
+    for obs in &profile.observations {
+        let Some((resource_type, param, method)) = parse_projection_id(&obs.axis) else {
+            continue;
+        };
+        groups
+            .entry((resource_type, param))
+            .or_default()
+            .entry(method)
+            .or_default()
+            .entry(value_token(&obs.value))
+            .or_default()
+            .push(obs);
+    }
+    if groups.is_empty() {
+        return;
+    }
+
+    let total: usize = groups
+        .values()
+        .flat_map(|by_method| by_method.values())
+        .flat_map(|by_value| by_value.values())
+        .map(|v| v.len())
+        .sum();
+    out.push_str("attribute_projection (attributes / excludedAttributes)\n");
+    out.push_str(&format!(
+        "  {total} instances across {} (resource type x query param) combinations, expanded \
+         over the target's own declared resource types (see --format json for every \
+         individual instance)\n\n",
+        groups.len()
+    ));
+
+    for ((resource_type, param), by_method) in &groups {
+        out.push_str(&format!("{resource_type} ?{param}=...\n"));
+        for (method, by_value) in by_method {
+            let majority = by_value.iter().max_by_key(|(_, obs)| obs.len());
+            let line = by_value
+                .iter()
+                .map(|(token, obs)| format!("{token} x{}", obs.len()))
+                .collect::<Vec<_>>()
+                .join(", ");
+            out.push_str(&format!("  {method}: {line}"));
+
+            let is_fault_fn =
+                Method::parse(method).map(|m| matrix::projection_known_and_fault_for(m).1);
+            if let (Some((maj_token, _)), Some(is_fault)) = (majority, is_fault_fn) {
+                if is_fault(maj_token) {
+                    out.push_str(
+                        " -- ** majority value is non-conforming: the query parameter is not \
+                         being honoured **",
+                    );
                 }
             }
             out.push('\n');

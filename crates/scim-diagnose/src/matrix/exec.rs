@@ -110,7 +110,12 @@ fn set_attr_with_companion(
     }
 }
 
-fn set_attr(payload: &mut Json, decl: &AttrDecl, value: Json) {
+/// `pub(crate)`, not reimplemented, so `crate::matrix::projection`'s fixture
+/// bodies (which need to set arbitrary declared attributes generically,
+/// same as every other derived-family executor here) build on the exact
+/// same targeting logic this file's own executors use, rather than a
+/// second, drifting copy of it.
+pub(crate) fn set_attr(payload: &mut Json, decl: &AttrDecl, value: Json) {
     set_attr_with_companion(payload, decl, value, None);
 }
 
@@ -292,7 +297,11 @@ fn values_match(decl: &AttrDecl, sent: &Json, got: &Json) -> bool {
     sent == got
 }
 
-fn valid_value_for(decl: &AttrDecl) -> Json {
+/// `pub(crate)` for the same reason as [`set_attr`]: `crate::matrix::projection`
+/// needs a sample value for an arbitrary declared attribute (to populate its
+/// fixtures and PATCH bodies) and must not reimplement this file's
+/// type-driven value generation a second time.
+pub(crate) fn valid_value_for(decl: &AttrDecl) -> Json {
     match decl.path.as_str() {
         "emails.value" => return json!(format!("user-{}@example.com", short_uid())),
         "photos.value" => return json!("http://example.com/photo.jpg"),
