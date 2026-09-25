@@ -218,9 +218,13 @@ pub struct ProjectionAxis {
 /// only gates whether POST returns a representation *at all*; that case is
 /// already handled separately in [`judge`] (`Value::Known("no_body")`,
 /// never a fault) rather than by softening the keyword for every POST
-/// instance that *did* return a body. So the asymmetry this family models
-/// lives entirely in which passage backs the obligation, not in a
-/// per-method fault threshold -- see [`known_and_fault_for`], which every
+/// instance that *did* return a body. POST therefore cites §3.9 like the
+/// others -- the passage that actually carries the MUST -- and §3.3's
+/// SHOULD is named on the `no_body` observation, the one branch it
+/// governs. So the asymmetry this family models lives in which passage
+/// backs each method's obligation (PATCH's direct cross-reference, PUT's
+/// "unless otherwise specified" carve-out), not in a per-method fault
+/// threshold -- see [`known_and_fault_for`], which every
 /// instance's fault judgement actually goes through, for where `keyword`
 /// and `expected` turn into the boolean `crate::render` renders.
 fn rfc_for_method(method: Method) -> RfcPosition {
@@ -235,8 +239,14 @@ fn rfc_for_method(method: Method) -> RfcPosition {
             keyword: Keyword::Must,
             expected: "absent",
         },
+        // §3.9's MUST is what binds POST here, so that is what the report
+        // cites. §3.3's SHOULD (`PROJECTION_POST_BODY_SHOULD`) governs only
+        // whether a body comes back at all; citing it for the projection
+        // obligation would send a reader to a passage containing no MUST.
+        // It is attached to the `no_body` observation instead, where it is
+        // the operative text.
         Method::Post => RfcPosition::Mandated {
-            basis: rfc::PROJECTION_POST_BODY_SHOULD,
+            basis: rfc::PROJECTION_ATTRIBUTES_PARAM,
             keyword: Keyword::Must,
             expected: "absent",
         },
@@ -379,7 +389,13 @@ fn judge(axis: &ProjectionAxis, r: &ScimResponse) -> Observation {
             axis: axis.id.clone(),
             value: Value::Known("no_body"),
             evidence: vec![r.exchange.clone()],
-            detail,
+            // Returning a representation at all is a SHOULD, not a MUST --
+            // name the passage that says so, since this is the one branch
+            // it actually governs.
+            detail: format!(
+                "{detail} (returning a representation is a SHOULD: {})",
+                rfc::PROJECTION_POST_BODY_SHOULD
+            ),
         };
     }
     let present = field_present(&body, &axis.check_absent);
@@ -652,7 +668,10 @@ mod tests {
         let a: Vec<String> = expand(&targets).into_iter().map(|x| x.id).collect();
         let b: Vec<String> = expand(&targets).into_iter().map(|x| x.id).collect();
         assert_eq!(a, b);
-        assert_eq!(a.len(), 1 * PARAMS.len() * METHODS.len());
+        // targets.len() (== 1 here) x params x methods -- the count is a
+        // function of the target's own declared resource types, never a
+        // hardcoded 16.
+        assert_eq!(a.len(), targets.len() * PARAMS.len() * METHODS.len());
         assert!(a.contains(&"attribute_projection/User.attributes/POST".to_string()));
         assert!(a.contains(&"attribute_projection/User.excludedAttributes/GET".to_string()));
     }
