@@ -33,6 +33,7 @@ pub mod axes;
 pub mod axis;
 pub mod capability;
 pub mod client;
+pub mod discovery;
 pub mod fixtures;
 pub mod matrix;
 pub mod render;

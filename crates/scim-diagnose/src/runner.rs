@@ -13,6 +13,7 @@ use crate::axes;
 use crate::axis::{Cost, Observation, Profile, Unobservable, Value};
 use crate::capability;
 use crate::client::ScimClient;
+use crate::discovery;
 use crate::fixtures::{cleanup, Bookkeeping};
 use crate::matrix::{
     expand_all, expand_projection, projection_targets_from, run_derived_family, run_projection,
@@ -213,6 +214,16 @@ pub async fn run(client: &mut ScimClient, target: &str, allow_writes: bool) -> P
             }
         }
     }
+
+    // The `discovery_presence` family (`crate::discovery`): 38 static
+    // checks against RFC 7643 §5/§6/§7's `ServiceProviderConfig`/
+    // `ResourceType`/`Schema` required-member tables plus RFC 7644
+    // §3.4.2's `ListResponse` envelope. Every instance is
+    // `Cost::DiscoveryOnly` (four cached `GET`s total, no fixture ever
+    // created -- see `crate::discovery`'s module doc comment), so unlike
+    // every write-costed family above, this one always runs, regardless
+    // of `allow_writes`.
+    observations.extend(discovery::run(&*client).await);
 
     Profile {
         target: target.to_string(),

@@ -12,11 +12,20 @@ use std::collections::BTreeMap;
 
 use crate::axes::AXES;
 use crate::axis::{Axis, Observation, Profile, Value};
+use crate::discovery::DISCOVERY_AXES;
 use crate::matrix::{self, Method};
 use crate::rfc::{self, Keyword, RfcPosition};
 
+/// Searches both the thirty-two original static axes (`crate::axes::AXES`)
+/// and the thirty-eight `discovery_presence` static axes
+/// (`crate::discovery::DISCOVERY_AXES`) -- the latter kept in its own
+/// array rather than folded into `AXES` so `crate::axes::AXES`'s existing
+/// "exactly 32" test coverage (`tests/diagnose_axes_test.rs`) keeps
+/// meaning what it always meant.
 fn axis_for(id: &str) -> Option<&'static Axis> {
-    AXES.iter().find(|a| a.id == id)
+    AXES.iter()
+        .chain(DISCOVERY_AXES.iter())
+        .find(|a| a.id == id)
 }
 
 /// Whether `obs`'s value is a fault against `axis`'s `RfcPosition` --
@@ -67,6 +76,13 @@ pub fn render_profile(profile: &Profile) -> String {
         let Some(axis) = axis_for(&obs.axis) else {
             continue;
         };
+        // A large static family (currently `discovery_presence`, 38
+        // instances) would otherwise print ~5 lines each and bury the rest
+        // of the report. It gets the same aggregated treatment the derived
+        // families get -- see `render_static_family_summary`.
+        if aggregated_static_family(&obs.axis).is_some() {
+            continue;
+        }
         out.push_str(&format!("{}\n", axis.id));
         out.push_str(&format!("  about:  {}\n", axis.about));
         match axis.rfc {
@@ -130,6 +146,7 @@ pub fn render_profile(profile: &Profile) -> String {
     }
 
     render_derived_summary(profile, &mut out);
+    render_static_family_summary(profile, &mut out);
     render_projection_summary(profile, &mut out);
 
     out
@@ -481,6 +498,63 @@ fn bool_str(b: bool) -> &'static str {
         "true"
     } else {
         "false"
+    }
+}
+
+/// The id prefix of a static family large enough to deserve aggregation
+/// rather than one block per instance. `None` for a standalone axis, which
+/// still prints in full — a report with seven one-off axes reads better
+/// with each spelled out, and only a family in the dozens needs collapsing.
+fn aggregated_static_family(axis_id: &str) -> Option<&'static str> {
+    const AGGREGATED: &[&str] = &[crate::discovery::FAMILY_ID];
+    let prefix = axis_id.split('/').next().unwrap_or(axis_id);
+    AGGREGATED.iter().copied().find(|p| *p == prefix)
+}
+
+/// Aggregates every static family named by [`aggregated_static_family`]:
+/// one line per observed value with a count, then the instances whose
+/// value differs from the family's most common one, which are the ones
+/// worth looking at. Mirrors `render_derived_summary`'s strategy for the
+/// schema-derived families.
+fn render_static_family_summary(profile: &Profile, out: &mut String) {
+    use std::collections::BTreeMap;
+
+    let mut by_family: BTreeMap<&str, Vec<&Observation>> = BTreeMap::new();
+    for obs in &profile.observations {
+        if let Some(family) = aggregated_static_family(&obs.axis) {
+            by_family.entry(family).or_default().push(obs);
+        }
+    }
+
+    for (family, observations) in by_family {
+        let mut counts: BTreeMap<String, usize> = BTreeMap::new();
+        for obs in &observations {
+            *counts.entry(value_token(&obs.value)).or_default() += 1;
+        }
+        let majority = counts
+            .iter()
+            .max_by_key(|(_, n)| **n)
+            .map(|(v, _)| v.clone())
+            .unwrap_or_default();
+
+        out.push_str(&format!("{family}\n"));
+        out.push_str(&format!(
+            "  {} instances, aggregated by observed value (see --format json for each one)\n",
+            observations.len()
+        ));
+        for (value, n) in &counts {
+            out.push_str(&format!("  {value}: x{n}\n"));
+        }
+        for obs in &observations {
+            if value_token(&obs.value) != majority {
+                out.push_str(&format!(
+                    "  deviates: {} -> {}\n",
+                    obs.axis,
+                    value_token(&obs.value)
+                ));
+            }
+        }
+        out.push('\n');
     }
 }
 

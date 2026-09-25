@@ -700,6 +700,504 @@ pub const ETAG_TABLE8_PRECONDITION_FAILED: Basis = Basis {
     quote: None,
 };
 
+// ------------------------------------------ discovery_presence family
+//
+// Backs the 38 `discovery::DISCOVERY_AXES` static axes (`crate::discovery`):
+// which members a discovery endpoint's response must, may, or
+// conditionally must contain, per RFC 7643 ServiceProviderConfig (§5),
+// ResourceType (§6), Schema (§7), and RFC 7644 §3.4.2's ListResponse
+// envelope. Ported from `feat/rfc-extract`'s `golden/attrdefs.json` (61
+// scraped entries, 38 of which map to one of these four discovery
+// endpoints) -- hand-written here as typed constants rather than carrying
+// the JSON + scanner across, since the underlying data is small, fixed,
+// and the RFCs are frozen (see the report this family's brief asked
+// for). Verified the same way as every other constant in this file:
+// `sed -n '<range>p' spec/rfc/<doc>.txt`.
+
+/// RFC 7643 §5 (`rfc7643.txt:1493-1495`): "documentationUri An HTTP-addressable
+/// URL pointing to the service provider's human-consumable help documentation.
+/// OPTIONAL."
+pub const DISCOVERY_SPC_DOCUMENTATION_URI: Basis = Basis {
+    doc: "RFC 7643",
+    section: "5",
+    lines: "rfc7643.txt:1493-1495",
+    quote: Some(
+        "documentationUri An HTTP-addressable URL pointing to the service provider's \
+         human-consumable help documentation. OPTIONAL.",
+    ),
+};
+
+/// RFC 7643 §5 (`rfc7643.txt:1497-1499`): "patch A complex type that specifies
+/// PATCH configuration options. REQUIRED. See Section 3.5.2 of [RFC7644]."
+pub const DISCOVERY_SPC_PATCH: Basis = Basis {
+    doc: "RFC 7643",
+    section: "5",
+    lines: "rfc7643.txt:1497-1499",
+    quote: Some(
+        "patch A complex type that specifies PATCH configuration options. REQUIRED. See Section \
+         3.5.2 of [RFC7644].",
+    ),
+};
+
+/// RFC 7643 §5 (`rfc7643.txt:1501-1502`): "supported A Boolean value specifying
+/// whether or not the operation is supported. REQUIRED."
+pub const DISCOVERY_SPC_PATCH_SUPPORTED: Basis = Basis {
+    doc: "RFC 7643",
+    section: "5",
+    lines: "rfc7643.txt:1501-1502",
+    quote: Some(
+        "supported A Boolean value specifying whether or not the operation is supported. REQUIRED.",
+    ),
+};
+
+/// RFC 7643 §5 (`rfc7643.txt:1504-1506`): "bulk A complex type that specifies
+/// bulk configuration options. See Section 3.7 of [RFC7644]. REQUIRED."
+pub const DISCOVERY_SPC_BULK: Basis = Basis {
+    doc: "RFC 7643",
+    section: "5",
+    lines: "rfc7643.txt:1504-1506",
+    quote: Some(
+        "bulk A complex type that specifies bulk configuration options. See Section 3.7 of \
+         [RFC7644]. REQUIRED.",
+    ),
+};
+
+/// RFC 7643 §5 (`rfc7643.txt:1508-1509`): "supported A Boolean value specifying
+/// whether or not the operation is supported. REQUIRED."
+pub const DISCOVERY_SPC_BULK_SUPPORTED: Basis = Basis {
+    doc: "RFC 7643",
+    section: "5",
+    lines: "rfc7643.txt:1508-1509",
+    quote: Some(
+        "supported A Boolean value specifying whether or not the operation is supported. REQUIRED.",
+    ),
+};
+
+/// RFC 7643 §5 (`rfc7643.txt:1519-1520`): "maxOperations An integer value
+/// specifying the maximum number of operations. REQUIRED."
+pub const DISCOVERY_SPC_BULK_MAX_OPERATIONS: Basis = Basis {
+    doc: "RFC 7643",
+    section: "5",
+    lines: "rfc7643.txt:1519-1520",
+    quote: Some(
+        "maxOperations An integer value specifying the maximum number of operations. REQUIRED.",
+    ),
+};
+
+/// RFC 7643 §5 (`rfc7643.txt:1522-1523`): "maxPayloadSize An integer value
+/// specifying the maximum payload size in bytes. REQUIRED."
+pub const DISCOVERY_SPC_BULK_MAX_PAYLOAD_SIZE: Basis = Basis {
+    doc: "RFC 7643",
+    section: "5",
+    lines: "rfc7643.txt:1522-1523",
+    quote: Some(
+        "maxPayloadSize An integer value specifying the maximum payload size in bytes. REQUIRED.",
+    ),
+};
+
+/// RFC 7643 §5 (`rfc7643.txt:1525-1527`): "filter A complex type that specifies
+/// FILTER options. REQUIRED. See Section 3.4.2.2 of [RFC7644]."
+pub const DISCOVERY_SPC_FILTER: Basis = Basis {
+    doc: "RFC 7643",
+    section: "5",
+    lines: "rfc7643.txt:1525-1527",
+    quote: Some(
+        "filter A complex type that specifies FILTER options. REQUIRED. See Section 3.4.2.2 of \
+         [RFC7644].",
+    ),
+};
+
+/// RFC 7643 §5 (`rfc7643.txt:1529-1530`): "supported A Boolean value specifying
+/// whether or not the operation is supported. REQUIRED."
+pub const DISCOVERY_SPC_FILTER_SUPPORTED: Basis = Basis {
+    doc: "RFC 7643",
+    section: "5",
+    lines: "rfc7643.txt:1529-1530",
+    quote: Some(
+        "supported A Boolean value specifying whether or not the operation is supported. REQUIRED.",
+    ),
+};
+
+/// RFC 7643 §5 (`rfc7643.txt:1532-1533`): "maxResults An integer value
+/// specifying the maximum number of resources returned in a response.
+/// REQUIRED."
+pub const DISCOVERY_SPC_FILTER_MAX_RESULTS: Basis = Basis {
+    doc: "RFC 7643",
+    section: "5",
+    lines: "rfc7643.txt:1532-1533",
+    quote: Some(
+        "maxResults An integer value specifying the maximum number of resources returned in a \
+         response. REQUIRED.",
+    ),
+};
+
+/// RFC 7643 §5 (`rfc7643.txt:1535-1537`): "changePassword A complex type that
+/// specifies configuration options related to changing a password. REQUIRED."
+pub const DISCOVERY_SPC_CHANGE_PASSWORD: Basis = Basis {
+    doc: "RFC 7643",
+    section: "5",
+    lines: "rfc7643.txt:1535-1537",
+    quote: Some(
+        "changePassword A complex type that specifies configuration options related to changing a \
+         password. REQUIRED.",
+    ),
+};
+
+/// RFC 7643 §5 (`rfc7643.txt:1539-1540`): "supported A Boolean value specifying
+/// whether or not the operation is supported. REQUIRED."
+pub const DISCOVERY_SPC_CHANGE_PASSWORD_SUPPORTED: Basis = Basis {
+    doc: "RFC 7643",
+    section: "5",
+    lines: "rfc7643.txt:1539-1540",
+    quote: Some(
+        "supported A Boolean value specifying whether or not the operation is supported. REQUIRED.",
+    ),
+};
+
+/// RFC 7643 §5 (`rfc7643.txt:1542-1544`): "sort A complex type that specifies
+/// Sort configuration options. REQUIRED."
+pub const DISCOVERY_SPC_SORT: Basis = Basis {
+    doc: "RFC 7643",
+    section: "5",
+    lines: "rfc7643.txt:1542-1544",
+    quote: Some("sort A complex type that specifies Sort configuration options. REQUIRED."),
+};
+
+/// RFC 7643 §5 (`rfc7643.txt:1546-1547`): "supported A Boolean value specifying
+/// whether or not sorting is supported. REQUIRED."
+pub const DISCOVERY_SPC_SORT_SUPPORTED: Basis = Basis {
+    doc: "RFC 7643",
+    section: "5",
+    lines: "rfc7643.txt:1546-1547",
+    quote: Some(
+        "supported A Boolean value specifying whether or not sorting is supported. REQUIRED.",
+    ),
+};
+
+/// RFC 7643 §5 (`rfc7643.txt:1549-1551`): "etag A complex type that specifies
+/// ETag configuration options. REQUIRED."
+pub const DISCOVERY_SPC_ETAG: Basis = Basis {
+    doc: "RFC 7643",
+    section: "5",
+    lines: "rfc7643.txt:1549-1551",
+    quote: Some("etag A complex type that specifies ETag configuration options. REQUIRED."),
+};
+
+/// RFC 7643 §5 (`rfc7643.txt:1553-1554`): "supported A Boolean value specifying
+/// whether or not the operation is supported. REQUIRED."
+pub const DISCOVERY_SPC_ETAG_SUPPORTED: Basis = Basis {
+    doc: "RFC 7643",
+    section: "5",
+    lines: "rfc7643.txt:1553-1554",
+    quote: Some(
+        "supported A Boolean value specifying whether or not the operation is supported. REQUIRED.",
+    ),
+};
+
+/// RFC 7643 §5 (`rfc7643.txt:1578-1584`): "authenticationSchemes A multi-valued
+/// complex type that specifies supported authentication scheme properties. To
+/// enable seamless discovery of configurations, the service provider SHOULD,
+/// with the appropriate security considerations, make the authenticationSchemes
+/// attribute publicly accessible without prior authentication. REQUIRED. The
+/// following sub-attributes are defined:"
+pub const DISCOVERY_SPC_AUTHENTICATION_SCHEMES: Basis = Basis {
+    doc: "RFC 7643",
+    section: "5",
+    lines: "rfc7643.txt:1578-1584",
+    quote: Some(
+        "authenticationSchemes A multi-valued complex type that specifies supported authentication \
+         scheme properties. To enable seamless discovery of configurations, the service provider \
+         SHOULD, with the appropriate security considerations, make the authenticationSchemes \
+         attribute publicly accessible without prior authentication. REQUIRED. The following \
+         sub-attributes are defined:"
+    ),
+};
+
+/// RFC 7643 §5 (`rfc7643.txt:1586-1588`): "type The authentication scheme. This
+/// specification defines the values "oauth", "oauth2", "oauthbearertoken",
+/// "httpbasic", and "httpdigest". REQUIRED."
+pub const DISCOVERY_SPC_AUTHENTICATION_SCHEMES_TYPE: Basis = Basis {
+    doc: "RFC 7643",
+    section: "5",
+    lines: "rfc7643.txt:1586-1588",
+    quote: Some(
+        "type The authentication scheme. This specification defines the values \"oauth\", \
+         \"oauth2\", \"oauthbearertoken\", \"httpbasic\", and \"httpdigest\". REQUIRED.",
+    ),
+};
+
+/// RFC 7643 §5 (`rfc7643.txt:1590-1591`): "name The common authentication
+/// scheme name, e.g., HTTP Basic. REQUIRED."
+pub const DISCOVERY_SPC_AUTHENTICATION_SCHEMES_NAME: Basis = Basis {
+    doc: "RFC 7643",
+    section: "5",
+    lines: "rfc7643.txt:1590-1591",
+    quote: Some("name The common authentication scheme name, e.g., HTTP Basic. REQUIRED."),
+};
+
+/// RFC 7643 §5 (`rfc7643.txt:1593-1594`): "description A description of the
+/// authentication scheme. REQUIRED."
+pub const DISCOVERY_SPC_AUTHENTICATION_SCHEMES_DESCRIPTION: Basis = Basis {
+    doc: "RFC 7643",
+    section: "5",
+    lines: "rfc7643.txt:1593-1594",
+    quote: Some("description A description of the authentication scheme. REQUIRED."),
+};
+
+/// RFC 7643 §5 (`rfc7643.txt:1596-1597`): "specUri An HTTP-addressable URL
+/// pointing to the authentication scheme's specification. OPTIONAL."
+pub const DISCOVERY_SPC_AUTHENTICATION_SCHEMES_SPEC_URI: Basis = Basis {
+    doc: "RFC 7643",
+    section: "5",
+    lines: "rfc7643.txt:1596-1597",
+    quote: Some(
+        "specUri An HTTP-addressable URL pointing to the authentication scheme's specification. \
+         OPTIONAL.",
+    ),
+};
+
+/// RFC 7643 §5 (`rfc7643.txt:1599-1600`): "documentationUri An HTTP-addressable
+/// URL pointing to the authentication scheme's usage documentation. OPTIONAL."
+pub const DISCOVERY_SPC_AUTHENTICATION_SCHEMES_DOCUMENTATION_URI: Basis = Basis {
+    doc: "RFC 7643",
+    section: "5",
+    lines: "rfc7643.txt:1599-1600",
+    quote: Some(
+        "documentationUri An HTTP-addressable URL pointing to the authentication scheme's usage \
+         documentation. OPTIONAL.",
+    ),
+};
+
+/// RFC 7643 §6 (`rfc7643.txt:1614-1616`): "id The resource type's server unique
+/// id. This is often the same value as the "name" attribute. OPTIONAL."
+pub const DISCOVERY_RT_ID: Basis = Basis {
+    doc: "RFC 7643",
+    section: "6",
+    lines: "rfc7643.txt:1614-1616",
+    quote: Some(
+        "id The resource type's server unique id. This is often the same value as the \"name\" \
+         attribute. OPTIONAL.",
+    ),
+};
+
+/// RFC 7643 §6 (`rfc7643.txt:1618-1622`): "name The resource type name. When
+/// applicable, service providers MUST specify the name, e.g., "User" or
+/// "Group". This name is referenced by the "meta.resourceType" attribute in all
+/// resources. REQUIRED."
+pub const DISCOVERY_RT_NAME: Basis = Basis {
+    doc: "RFC 7643",
+    section: "6",
+    lines: "rfc7643.txt:1618-1622",
+    quote: Some(
+        "name The resource type name. When applicable, service providers MUST specify the name, \
+         e.g., \"User\" or \"Group\". This name is referenced by the \"meta.resourceType\" \
+         attribute in all resources. REQUIRED.",
+    ),
+};
+
+/// RFC 7643 §6 (`rfc7643.txt:1631-1633`): "description The resource type's
+/// human-readable description. When applicable, service providers MUST specify
+/// the description. OPTIONAL."
+pub const DISCOVERY_RT_DESCRIPTION: Basis = Basis {
+    doc: "RFC 7643",
+    section: "6",
+    lines: "rfc7643.txt:1631-1633",
+    quote: Some(
+        "description The resource type's human-readable description. When applicable, service \
+         providers MUST specify the description. OPTIONAL.",
+    ),
+};
+
+/// RFC 7643 §6 (`rfc7643.txt:1635-1637`): "endpoint The resource type's HTTP-
+/// addressable endpoint relative to the Base URL of the service provider, e.g.,
+/// "Users". REQUIRED."
+pub const DISCOVERY_RT_ENDPOINT: Basis = Basis {
+    doc: "RFC 7643",
+    section: "6",
+    lines: "rfc7643.txt:1635-1637",
+    quote: Some(
+        "endpoint The resource type's HTTP-addressable endpoint relative to the Base URL of the \
+         service provider, e.g., \"Users\". REQUIRED.",
+    ),
+};
+
+/// RFC 7643 §6 (`rfc7643.txt:1639-1643`): "schema The resource type's
+/// primary/base schema URI, e.g., "urn:ietf:params:scim:schemas:core:2.0:User".
+/// This MUST be equal to the "id" attribute of the associated "Schema"
+/// resource. REQUIRED."
+pub const DISCOVERY_RT_SCHEMA: Basis = Basis {
+    doc: "RFC 7643",
+    section: "6",
+    lines: "rfc7643.txt:1639-1643",
+    quote: Some(
+        "schema The resource type's primary/base schema URI, e.g., \
+         \"urn:ietf:params:scim:schemas:core:2.0:User\". This MUST be equal to the \"id\" attribute \
+         of the associated \"Schema\" resource. REQUIRED."
+    ),
+};
+
+/// RFC 7643 §6 (`rfc7643.txt:1645-1647`): "schemaExtensions A list of URIs of
+/// the resource type's schema extensions. OPTIONAL."
+pub const DISCOVERY_RT_SCHEMA_EXTENSIONS: Basis = Basis {
+    doc: "RFC 7643",
+    section: "6",
+    lines: "rfc7643.txt:1645-1647",
+    quote: Some(
+        "schemaExtensions A list of URIs of the resource type's schema extensions. OPTIONAL.",
+    ),
+};
+
+/// RFC 7643 §6 (`rfc7643.txt:1649-1651`): "schema The URI of an extended
+/// schema, e.g., "urn:edu:2.0:Staff". This MUST be equal to the "id" attribute
+/// of a "Schema" resource. REQUIRED."
+pub const DISCOVERY_RT_SCHEMA_EXTENSIONS_SCHEMA: Basis = Basis {
+    doc: "RFC 7643",
+    section: "6",
+    lines: "rfc7643.txt:1649-1651",
+    quote: Some(
+        "schema The URI of an extended schema, e.g., \"urn:edu:2.0:Staff\". This MUST be equal to \
+         the \"id\" attribute of a \"Schema\" resource. REQUIRED.",
+    ),
+};
+
+/// RFC 7643 §6 (`rfc7643.txt:1653-1658`): "required A Boolean value that
+/// specifies whether or not the schema extension is required for the resource
+/// type. If true, a resource of this type MUST include this schema extension
+/// and also include any attributes declared as required in this schema
+/// extension. If false, a resource of this type MAY omit this schema extension.
+/// REQUIRED."
+pub const DISCOVERY_RT_SCHEMA_EXTENSIONS_REQUIRED: Basis = Basis {
+    doc: "RFC 7643",
+    section: "6",
+    lines: "rfc7643.txt:1653-1658",
+    quote: Some(
+        "required A Boolean value that specifies whether or not the schema extension is required \
+         for the resource type. If true, a resource of this type MUST include this schema extension \
+         and also include any attributes declared as required in this schema extension. If false, a \
+         resource of this type MAY omit this schema extension. REQUIRED."
+    ),
+};
+
+/// RFC 7643 §7 (`rfc7643.txt:1689-1696`): "id The unique URI of the schema.
+/// When applicable, service providers MUST specify the URI, e.g.,
+/// "urn:ietf:params:scim:schemas:core:2.0:User". Unlike most other schemas,
+/// which use some sort of Globally Unique Identifier (GUID) for the "id", the
+/// schema "id" is a URI so that it can be registered and is portable between
+/// different service providers and clients. REQUIRED."
+pub const DISCOVERY_SCHEMA_ID: Basis = Basis {
+    doc: "RFC 7643",
+    section: "7",
+    lines: "rfc7643.txt:1689-1696",
+    quote: Some(
+        "id The unique URI of the schema. When applicable, service providers MUST specify the URI, \
+         e.g., \"urn:ietf:params:scim:schemas:core:2.0:User\". Unlike most other schemas, which use \
+         some sort of Globally Unique Identifier (GUID) for the \"id\", the schema \"id\" is a URI \
+         so that it can be registered and is portable between different service providers and \
+         clients. REQUIRED."
+    ),
+};
+
+/// RFC 7643 §7 (`rfc7643.txt:1698-1701`): "name The schema's human-readable
+/// name. When applicable, service providers MUST specify the name, e.g., "User"
+/// or "Group". OPTIONAL."
+pub const DISCOVERY_SCHEMA_NAME: Basis = Basis {
+    doc: "RFC 7643",
+    section: "7",
+    lines: "rfc7643.txt:1698-1701",
+    quote: Some(
+        "name The schema's human-readable name. When applicable, service providers MUST specify the \
+         name, e.g., \"User\" or \"Group\". OPTIONAL."
+    ),
+};
+
+/// RFC 7643 §7 (`rfc7643.txt:1703-1705`): "description The schema's human-
+/// readable description. When applicable, service providers MUST specify the
+/// description. OPTIONAL."
+pub const DISCOVERY_SCHEMA_DESCRIPTION: Basis = Basis {
+    doc: "RFC 7643",
+    section: "7",
+    lines: "rfc7643.txt:1703-1705",
+    quote: Some(
+        "description The schema's human-readable description. When applicable, service providers \
+         MUST specify the description. OPTIONAL.",
+    ),
+};
+
+/// RFC 7643 §7 (`rfc7643.txt:1743-1745`): "canonicalValues A collection of
+/// suggested canonical values that MAY be used (e.g., "work" and "home"). In
+/// some cases, service providers MAY choose to ignore unsupported values.
+/// OPTIONAL."
+pub const DISCOVERY_SCHEMA_ATTRIBUTES_CANONICAL_VALUES: Basis = Basis {
+    doc: "RFC 7643",
+    section: "7",
+    lines: "rfc7643.txt:1743-1745",
+    quote: Some(
+        "canonicalValues A collection of suggested canonical values that MAY be used (e.g., \
+         \"work\" and \"home\"). In some cases, service providers MAY choose to ignore unsupported \
+         values. OPTIONAL.",
+    ),
+};
+
+/// RFC 7644 §3.4.2 (`rfc7644.txt:821-825`): "totalResults The total number of
+/// results returned by the list or query operation. The value may be larger
+/// than the number of resources returned, such as when returning a single page
+/// (see Section 3.4.2.4) of results where multiple pages are available.
+/// REQUIRED."
+pub const DISCOVERY_LIST_TOTAL_RESULTS: Basis = Basis {
+    doc: "RFC 7644",
+    section: "3.4.2",
+    lines: "rfc7644.txt:821-825",
+    quote: Some(
+        "totalResults The total number of results returned by the list or query operation. The \
+         value may be larger than the number of resources returned, such as when returning a single \
+         page (see Section 3.4.2.4) of results where multiple pages are available. REQUIRED."
+    ),
+};
+
+/// RFC 7644 §3.4.2 (`rfc7644.txt:827-830`): "Resources A multi-valued list of
+/// complex objects containing the requested resources. This MAY be a subset of
+/// the full set of resources if pagination (Section 3.4.2.4) is requested.
+/// REQUIRED if "totalResults" is non-zero." Conditional presence: if
+/// "totalResults" is non-zero.
+pub const DISCOVERY_LIST_RESOURCES: Basis = Basis {
+    doc: "RFC 7644",
+    section: "3.4.2",
+    lines: "rfc7644.txt:827-830",
+    quote: Some(
+        "Resources A multi-valued list of complex objects containing the requested resources. This \
+         MAY be a subset of the full set of resources if pagination (Section 3.4.2.4) is requested. \
+         REQUIRED if \"totalResults\" is non-zero."
+    ),
+};
+
+/// RFC 7644 §3.4.2 (`rfc7644.txt:832-834`): "startIndex The 1-based index of
+/// the first result in the current set of list results. REQUIRED when partial
+/// results are returned due to pagination." Conditional presence: when partial
+/// results are returned due to pagination.
+pub const DISCOVERY_LIST_START_INDEX: Basis = Basis {
+    doc: "RFC 7644",
+    section: "3.4.2",
+    lines: "rfc7644.txt:832-834",
+    quote: Some(
+        "startIndex The 1-based index of the first result in the current set of list results. \
+         REQUIRED when partial results are returned due to pagination.",
+    ),
+};
+
+/// RFC 7644 §3.4.2 (`rfc7644.txt:836-838`): "itemsPerPage The number of
+/// resources returned in a list response page. REQUIRED when partial results
+/// are returned due to pagination." Conditional presence: when partial results
+/// are returned due to pagination.
+pub const DISCOVERY_LIST_ITEMS_PER_PAGE: Basis = Basis {
+    doc: "RFC 7644",
+    section: "3.4.2",
+    lines: "rfc7644.txt:836-838",
+    quote: Some(
+        "itemsPerPage The number of resources returned in a list response page. REQUIRED when \
+         partial results are returned due to pagination.",
+    ),
+};
+
 // -------------------------------------------------------- quote verification
 //
 // Part 5: every `Basis` with a `quote` attached is re-derived from the
@@ -795,6 +1293,101 @@ mod quote_tests {
                 PROJECTION_PUT_UNLESS_OTHERWISE,
             ),
             ("PROJECTION_POST_BODY_SHOULD", PROJECTION_POST_BODY_SHOULD),
+            (
+                "DISCOVERY_SPC_DOCUMENTATION_URI",
+                DISCOVERY_SPC_DOCUMENTATION_URI,
+            ),
+            ("DISCOVERY_SPC_PATCH", DISCOVERY_SPC_PATCH),
+            (
+                "DISCOVERY_SPC_PATCH_SUPPORTED",
+                DISCOVERY_SPC_PATCH_SUPPORTED,
+            ),
+            ("DISCOVERY_SPC_BULK", DISCOVERY_SPC_BULK),
+            ("DISCOVERY_SPC_BULK_SUPPORTED", DISCOVERY_SPC_BULK_SUPPORTED),
+            (
+                "DISCOVERY_SPC_BULK_MAX_OPERATIONS",
+                DISCOVERY_SPC_BULK_MAX_OPERATIONS,
+            ),
+            (
+                "DISCOVERY_SPC_BULK_MAX_PAYLOAD_SIZE",
+                DISCOVERY_SPC_BULK_MAX_PAYLOAD_SIZE,
+            ),
+            ("DISCOVERY_SPC_FILTER", DISCOVERY_SPC_FILTER),
+            (
+                "DISCOVERY_SPC_FILTER_SUPPORTED",
+                DISCOVERY_SPC_FILTER_SUPPORTED,
+            ),
+            (
+                "DISCOVERY_SPC_FILTER_MAX_RESULTS",
+                DISCOVERY_SPC_FILTER_MAX_RESULTS,
+            ),
+            (
+                "DISCOVERY_SPC_CHANGE_PASSWORD",
+                DISCOVERY_SPC_CHANGE_PASSWORD,
+            ),
+            (
+                "DISCOVERY_SPC_CHANGE_PASSWORD_SUPPORTED",
+                DISCOVERY_SPC_CHANGE_PASSWORD_SUPPORTED,
+            ),
+            ("DISCOVERY_SPC_SORT", DISCOVERY_SPC_SORT),
+            ("DISCOVERY_SPC_SORT_SUPPORTED", DISCOVERY_SPC_SORT_SUPPORTED),
+            ("DISCOVERY_SPC_ETAG", DISCOVERY_SPC_ETAG),
+            ("DISCOVERY_SPC_ETAG_SUPPORTED", DISCOVERY_SPC_ETAG_SUPPORTED),
+            (
+                "DISCOVERY_SPC_AUTHENTICATION_SCHEMES",
+                DISCOVERY_SPC_AUTHENTICATION_SCHEMES,
+            ),
+            (
+                "DISCOVERY_SPC_AUTHENTICATION_SCHEMES_TYPE",
+                DISCOVERY_SPC_AUTHENTICATION_SCHEMES_TYPE,
+            ),
+            (
+                "DISCOVERY_SPC_AUTHENTICATION_SCHEMES_NAME",
+                DISCOVERY_SPC_AUTHENTICATION_SCHEMES_NAME,
+            ),
+            (
+                "DISCOVERY_SPC_AUTHENTICATION_SCHEMES_DESCRIPTION",
+                DISCOVERY_SPC_AUTHENTICATION_SCHEMES_DESCRIPTION,
+            ),
+            (
+                "DISCOVERY_SPC_AUTHENTICATION_SCHEMES_SPEC_URI",
+                DISCOVERY_SPC_AUTHENTICATION_SCHEMES_SPEC_URI,
+            ),
+            (
+                "DISCOVERY_SPC_AUTHENTICATION_SCHEMES_DOCUMENTATION_URI",
+                DISCOVERY_SPC_AUTHENTICATION_SCHEMES_DOCUMENTATION_URI,
+            ),
+            ("DISCOVERY_RT_ID", DISCOVERY_RT_ID),
+            ("DISCOVERY_RT_NAME", DISCOVERY_RT_NAME),
+            ("DISCOVERY_RT_DESCRIPTION", DISCOVERY_RT_DESCRIPTION),
+            ("DISCOVERY_RT_ENDPOINT", DISCOVERY_RT_ENDPOINT),
+            ("DISCOVERY_RT_SCHEMA", DISCOVERY_RT_SCHEMA),
+            (
+                "DISCOVERY_RT_SCHEMA_EXTENSIONS",
+                DISCOVERY_RT_SCHEMA_EXTENSIONS,
+            ),
+            (
+                "DISCOVERY_RT_SCHEMA_EXTENSIONS_SCHEMA",
+                DISCOVERY_RT_SCHEMA_EXTENSIONS_SCHEMA,
+            ),
+            (
+                "DISCOVERY_RT_SCHEMA_EXTENSIONS_REQUIRED",
+                DISCOVERY_RT_SCHEMA_EXTENSIONS_REQUIRED,
+            ),
+            ("DISCOVERY_SCHEMA_ID", DISCOVERY_SCHEMA_ID),
+            ("DISCOVERY_SCHEMA_NAME", DISCOVERY_SCHEMA_NAME),
+            ("DISCOVERY_SCHEMA_DESCRIPTION", DISCOVERY_SCHEMA_DESCRIPTION),
+            (
+                "DISCOVERY_SCHEMA_ATTRIBUTES_CANONICAL_VALUES",
+                DISCOVERY_SCHEMA_ATTRIBUTES_CANONICAL_VALUES,
+            ),
+            ("DISCOVERY_LIST_TOTAL_RESULTS", DISCOVERY_LIST_TOTAL_RESULTS),
+            ("DISCOVERY_LIST_RESOURCES", DISCOVERY_LIST_RESOURCES),
+            ("DISCOVERY_LIST_START_INDEX", DISCOVERY_LIST_START_INDEX),
+            (
+                "DISCOVERY_LIST_ITEMS_PER_PAGE",
+                DISCOVERY_LIST_ITEMS_PER_PAGE,
+            ),
         ]
     }
 
