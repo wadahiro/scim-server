@@ -69,15 +69,49 @@ pub fn value_token(v: &Value) -> String {
     }
 }
 
+/// Label for a non-majority instance inside an aggregated family summary.
+///
+/// The aggregate lists only the values that differ from the family's
+/// majority, and "differs from the majority" is not the same claim as
+/// "breaks the RFC": an `immutable` attribute that is *rejected* on change
+/// conforms even when most of its siblings are silently *ignored*, and an
+/// attribute that could not be probed at all is not a deviation of any
+/// kind. Labelling every minority value "deviates" therefore reads as an
+/// accusation the data does not support, so the label is derived from the
+/// family's own fault predicate instead of from the count.
+fn minority_label(token: &str, is_fault: Option<&dyn Fn(&str) -> bool>) -> &'static str {
+    if token.starts_with("unobservable:") {
+        "not observed"
+    } else if token.starts_with("unknown:") {
+        "UNKNOWN VALUE (candidate option)"
+    } else if is_fault.is_some_and(|f| f(token)) {
+        "NON-CONFORMING"
+    } else {
+        "differs (conforming)"
+    }
+}
+
 // --------------------------------------------------------------- text view
 
 pub fn render_profile(profile: &Profile) -> String {
     let mut out = String::new();
     out.push_str(&format!("target: {}\n", profile.target));
     out.push_str(&format!("observed_at: {}\n", profile.observed_at));
+    // "reported" and "observed" are deliberately different numbers. Every
+    // axis in the run appears in the report even when this run could not
+    // reach it (no `--allow-writes`, or the probe could not be built), so
+    // a reader can see what a fuller run would add instead of having to
+    // notice an absence. Calling the total "observed" would overstate a
+    // discovery-only run by the ~437 axes it only names.
+    let observed = profile
+        .observations
+        .iter()
+        .filter(|o| !matches!(o.value, Value::Unobservable(_)))
+        .count();
+    let total = profile.observations.len();
     out.push_str(&format!(
-        "axes: {} observed\n\n",
-        profile.observations.len()
+        "axes: {total} reported, {observed} observed, {} not observed in this run\n\n",
+        total - observed
     ));
 
     for obs in &profile.observations {
@@ -534,7 +568,8 @@ fn render_derived_summary(profile: &Profile, out: &mut String) {
                         continue;
                     }
                     for obs in obs_list {
-                        out.push_str(&format!("    deviates: {} -> {token}", obs.axis));
+                        let label = minority_label(token, is_fault_fn.as_ref().map(|f| f as _));
+                        out.push_str(&format!("    {label}: {} -> {token}", obs.axis));
                         if !obs.detail.is_empty() {
                             out.push_str(&format!(" ({})", obs.detail));
                         }
@@ -644,7 +679,8 @@ fn render_projection_summary(profile: &Profile, out: &mut String) {
                         continue;
                     }
                     for obs in obs_list {
-                        out.push_str(&format!("    deviates: {} -> {token}", obs.axis));
+                        let label = minority_label(token, is_fault_fn.as_ref().map(|f| f as _));
+                        out.push_str(&format!("    {label}: {} -> {token}", obs.axis));
                         if !obs.detail.is_empty() {
                             out.push_str(&format!(" ({})", obs.detail));
                         }
@@ -872,12 +908,11 @@ fn render_static_family_summary(profile: &Profile, out: &mut String) {
             out.push_str(&format!("  {value}: x{n}\n"));
         }
         for obs in &observations {
-            if value_token(&obs.value) != majority {
-                out.push_str(&format!(
-                    "  deviates: {} -> {}\n",
-                    obs.axis,
-                    value_token(&obs.value)
-                ));
+            let token = value_token(&obs.value);
+            if token != majority {
+                let faulty = axis_for(&obs.axis).and_then(|a| is_fault(a, obs)) == Some(true);
+                let label = minority_label(&token, Some(&|_: &str| faulty));
+                out.push_str(&format!("  {label}: {} -> {token}\n", obs.axis));
             }
         }
         out.push('\n');
