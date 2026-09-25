@@ -53,7 +53,15 @@ pub(crate) fn is_fault(axis: &Axis, obs: &Observation) -> Option<bool> {
     }
 }
 
-fn value_token(v: &Value) -> String {
+/// Stable, comparable string form of an observed [`Value`] -- `Known`
+/// tokens pass through unchanged, `Unknown`/`Unobservable` get a
+/// discriminating prefix so a `Known("x")` never collides with an
+/// `Unknown("x")` when compared as strings. `pub` (not `pub(crate)`, the
+/// way `is_fault` above is) specifically so `tests/diagnose_fidelity_test.rs`
+/// can diff two profiles' observed values per axis without reimplementing
+/// this formatting -- see `CLAUDE.md`'s "never duplicate production logic
+/// in a test" rule.
+pub fn value_token(v: &Value) -> String {
     match v {
         Value::Known(s) => s.to_string(),
         Value::Unknown(s) => format!("unknown:{s}"),
@@ -148,8 +156,283 @@ pub fn render_profile(profile: &Profile) -> String {
     render_derived_summary(profile, &mut out);
     render_static_family_summary(profile, &mut out);
     render_projection_summary(profile, &mut out);
+    render_candidate_options_section(profile, &mut out);
+    render_fidelity_section(&mut out);
 
     out
+}
+
+// ------------------------------------------------------- candidate options
+
+/// One axis (or schema-derived/projection family x method combination)
+/// worth turning into a new `CompatibilityConfig` option: a `Value::Unknown`
+/// observation (a behaviour with no name at all), or a family whose
+/// majority observed value is a consistent, non-conforming variant with no
+/// knob covering it. This *is* re-measured against whatever target
+/// `profile` was taken from -- unlike [`render_fidelity_section`], which is
+/// static.
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct CandidateOption {
+    /// The axis id (for an `Unknown` observation) or `"<family_prefix>
+    /// (<method>)"` (for a family-level majority finding).
+    pub id: String,
+    pub reason: String,
+}
+
+/// Computes [`CandidateOption`]s for `profile`: see that type's doc comment
+/// for the two sources. Order: `Unknown` observations first (in profile
+/// order), then derived-family majority findings, then projection-family
+/// majority findings (each in the same family/method order
+/// `render_derived_summary`/`render_projection_summary` iterate).
+/// family_prefix -> method -> observed token -> instance count. Just the
+/// counts (unlike `render_derived_summary`'s grouping, which keeps the
+/// `&Observation`s themselves for their `detail` strings) -- a type alias
+/// so clippy's `type_complexity` lint stays quiet, matching
+/// `ProjectionGroups` below.
+type DerivedCountGroups<'a> = BTreeMap<&'a str, BTreeMap<&'a str, BTreeMap<String, usize>>>;
+
+/// (resource_type, param) -> method -> observed token -> instance count.
+type ProjectionCountGroups<'a> =
+    BTreeMap<(&'a str, &'a str), BTreeMap<&'a str, BTreeMap<String, usize>>>;
+
+pub fn candidate_options(profile: &Profile) -> Vec<CandidateOption> {
+    let mut out = Vec::new();
+
+    // Source 1: any axis (static, discovery, derived, or projection) whose
+    // observed value has no name in its `known` vocabulary -- the
+    // strongest discovery signal (see `Value::Unknown`'s doc comment).
+    for obs in &profile.observations {
+        if let Value::Unknown(v) = &obs.value {
+            out.push(CandidateOption {
+                id: obs.axis.clone(),
+                reason: format!(
+                    "observed an unnamed value ({v:?}) -- see --format json for the evidence"
+                ),
+            });
+        }
+    }
+
+    // Source 2: static axes with `knob: None` whose own observed value is
+    // itself a fault against a Mandated/SelfDeclared RfcPosition -- a
+    // single-instance "consistent variant" (there is only one instance of
+    // a static axis).
+    for obs in &profile.observations {
+        let Some(axis) = axis_for(&obs.axis) else {
+            continue;
+        };
+        if axis.knob.is_some() {
+            continue;
+        }
+        if is_fault(axis, obs) == Some(true) {
+            out.push(CandidateOption {
+                id: obs.axis.clone(),
+                reason: format!(
+                    "knob: None, and its observed value ({}) consistently deviates from the \
+                     RFC-preferred value -- no CompatibilityConfig option covers this axis today",
+                    value_token(&obs.value)
+                ),
+            });
+        }
+    }
+
+    // Source 3: schema-derived families (`crate::matrix::derive`) -- every
+    // one has `knob: None` (see `render_derived_summary`'s doc comment).
+    // Same (family x method) grouping as that function; a majority value
+    // that is itself a fault is a candidate.
+    let mut derived_groups: DerivedCountGroups = BTreeMap::new();
+    for obs in &profile.observations {
+        let Some((family_prefix, _attr, method_str)) = parse_derived_id(&obs.axis) else {
+            continue;
+        };
+        if matrix::family_for(&obs.axis).is_none() {
+            continue;
+        }
+        *derived_groups
+            .entry(family_prefix)
+            .or_default()
+            .entry(method_str)
+            .or_default()
+            .entry(value_token(&obs.value))
+            .or_default() += 1;
+    }
+    for (family_prefix, by_method) in &derived_groups {
+        for (method_str, by_value) in by_method {
+            let Some((maj_token, count)) = by_value.iter().max_by_key(|(_, n)| **n) else {
+                continue;
+            };
+            let is_fault_fn = Method::parse(method_str)
+                .and_then(|m| matrix::known_and_fault_for(family_prefix, m))
+                .map(|(_, f)| f);
+            if is_fault_fn.is_some_and(|f| f(maj_token)) {
+                out.push(CandidateOption {
+                    id: format!("{family_prefix} ({method_str})"),
+                    reason: format!(
+                        "knob: None; {count} of {} instances observed the non-conforming value \
+                         {maj_token:?} -- a consistent, unnamed variant",
+                        by_value.values().sum::<usize>()
+                    ),
+                });
+            }
+        }
+    }
+
+    // Source 4: the `attribute_projection` family -- same treatment.
+    let mut projection_groups: ProjectionCountGroups = BTreeMap::new();
+    for obs in &profile.observations {
+        let Some((resource_type, param, method)) = parse_projection_id(&obs.axis) else {
+            continue;
+        };
+        *projection_groups
+            .entry((resource_type, param))
+            .or_default()
+            .entry(method)
+            .or_default()
+            .entry(value_token(&obs.value))
+            .or_default() += 1;
+    }
+    for ((resource_type, param), by_method) in &projection_groups {
+        for (method, by_value) in by_method {
+            let Some((maj_token, count)) = by_value.iter().max_by_key(|(_, n)| **n) else {
+                continue;
+            };
+            let is_fault_fn =
+                Method::parse(method).map(|m| matrix::projection_known_and_fault_for(m).1);
+            if is_fault_fn.is_some_and(|f| f(maj_token)) {
+                out.push(CandidateOption {
+                    id: format!("attribute_projection/{resource_type}.{param} ({method})"),
+                    reason: format!(
+                        "knob: None; {count} of {} instances observed the non-conforming value \
+                         {maj_token:?} -- the query parameter is consistently not honoured",
+                        by_value.values().sum::<usize>()
+                    ),
+                });
+            }
+        }
+    }
+
+    out
+}
+
+fn render_candidate_options_section(profile: &Profile, out: &mut String) {
+    let candidates = candidate_options(profile);
+    out.push_str("candidate options (re-measured against this run's target)\n");
+    if candidates.is_empty() {
+        out.push_str(
+            "  none: no Unknown observation and no knob-less family showed a consistent \
+             non-conforming majority in this run\n\n",
+        );
+        return;
+    }
+    out.push_str(&format!(
+        "  {} candidate(s) -- axes/families with no CompatibilityConfig option that would let \
+         scim-server emulate them today\n",
+        candidates.len()
+    ));
+    for c in &candidates {
+        out.push_str(&format!("  {}: {}\n", c.id, c.reason));
+    }
+    out.push('\n');
+}
+
+// --------------------------------------------------- knob emulation fidelity
+
+/// One `CompatibilityConfig` knob's proven emulation blast radius: the
+/// exact set of axis ids that change when the knob is flipped from
+/// `scim-server`'s default, and, when that set is more than the knob's own
+/// axis, the mechanism.
+///
+/// **Static claim, not a live measurement.** These numbers come from
+/// `tests/diagnose_fidelity_test.rs` in the `scim-server` repository,
+/// which starts this server twice (default and flipped), takes a full
+/// profile of both, and asserts the changed-axis set exactly matches what
+/// is hardcoded here. That test runs in CI on `scim-server`'s own source,
+/// not against whatever target `scim-diagnose` was just pointed at --
+/// flipping the *target's* behaviour is not something this tool can do.
+/// So this section is a fact about this copy of `scim-server`'s test
+/// suite, current as of its last CI run, not a measurement this
+/// invocation of `diagnose` performed.
+struct KnobFidelity {
+    knob: &'static str,
+    /// Sorted, exact set of axis ids the fidelity test observed changing.
+    changed_axes: &'static [&'static str],
+    /// `None` when `changed_axes` is exactly the knob's own axis (the
+    /// common case); `Some` explains why more than one axis moved.
+    mechanism: Option<&'static str>,
+}
+
+/// Kept in sync by hand with `tests/diagnose_fidelity_test.rs`'s
+/// `EXPECTED` table -- see that test's module doc comment, which points
+/// back here.
+const KNOB_FIDELITY: &[KnobFidelity] = &[
+    KnobFidelity {
+        knob: "meta_datetime_format",
+        changed_axes: &["meta_datetime_format"],
+        mechanism: None,
+    },
+    KnobFidelity {
+        knob: "show_empty_groups_members",
+        changed_axes: &["empty_multivalued_rendering"],
+        mechanism: None,
+    },
+    KnobFidelity {
+        knob: "include_user_groups",
+        changed_axes: &[
+            "returned_never/User.groups/GET",
+            "returned_never/User.groups/PATCH",
+            "returned_never/User.groups/POST",
+            "returned_never/User.groups/PUT",
+            "user_groups_presence",
+        ],
+        mechanism: Some(
+            "also rewrites this server's own GET /Schemas declaration of User.groups's \
+             `returned` characteristic to `never` (src/resource/schema.rs); the schema-derived \
+             matrix regenerates against that new declaration, producing four new \
+             returned_never/User.groups/* instances (GET/POST/PUT/PATCH) that do not exist \
+             against the default server at all (which declares `returned: default` for that \
+             attribute, a characteristic the derived matrix does not probe)",
+        ),
+    },
+    KnobFidelity {
+        knob: "support_group_members_filter",
+        changed_axes: &["group_members_filter"],
+        mechanism: None,
+    },
+    KnobFidelity {
+        knob: "support_group_displayname_filter",
+        changed_axes: &["group_displayname_filter"],
+        mechanism: None,
+    },
+    KnobFidelity {
+        knob: "support_patch_replace_empty_array",
+        changed_axes: &["patch_replace_empty_array"],
+        mechanism: None,
+    },
+    KnobFidelity {
+        knob: "support_patch_replace_empty_value",
+        changed_axes: &["patch_replace_empty_value"],
+        mechanism: None,
+    },
+];
+
+fn render_fidelity_section(out: &mut String) {
+    out.push_str(
+        "compatibility-knob emulation fidelity (static claim -- see note)\n\
+         \x20 NOT measured against the target above. This reports what \
+         tests/diagnose_fidelity_test.rs proved, the last time it ran in CI, about this copy of \
+         scim-server's own seven CompatibilityConfig knobs: for each knob, the exact set of \
+         axes that change when it is flipped from default. Verified means that test passed;\n",
+    );
+    for kf in KNOB_FIDELITY {
+        out.push_str(&format!(
+            "  {}: verified -- flipping changes exactly: {}\n",
+            kf.knob,
+            kf.changed_axes.join(", ")
+        ));
+        if let Some(m) = kf.mechanism {
+            out.push_str(&format!("    mechanism: {m}\n"));
+        }
+    }
+    out.push('\n');
 }
 
 /// Parses a `DerivedAxis::id`/`Observation::axis` string
@@ -400,6 +683,27 @@ struct JsonExchange<'a> {
 struct JsonProfile<'a> {
     target: &'a str,
     axes: Vec<JsonAxis<'a>>,
+    /// Re-measured against `target` above by this very call -- see
+    /// [`candidate_options`].
+    candidate_options: Vec<CandidateOption>,
+    knob_fidelity: JsonKnobFidelitySection,
+}
+
+#[derive(serde::Serialize)]
+struct JsonKnobFidelitySection {
+    /// Spelled out in the JSON too, not just the text view, so a
+    /// machine reader can't mistake this for a measurement of `target`.
+    note: &'static str,
+    knobs: Vec<JsonKnobFidelity>,
+}
+
+#[derive(serde::Serialize)]
+struct JsonKnobFidelity {
+    knob: &'static str,
+    verified: bool,
+    changed_axes: &'static [&'static str],
+    #[serde(skip_serializing_if = "Option::is_none")]
+    mechanism: Option<&'static str>,
 }
 
 /// Sorted by axis id; evidence omitted unless the value is `Unknown`
@@ -407,6 +711,13 @@ struct JsonProfile<'a> {
 /// No timestamps inside per-axis records. Two calls against the same
 /// `Profile` produce byte-identical output (see
 /// `tests::profile_json_is_byte_stable_across_two_calls`).
+///
+/// Also carries `candidate_options` (re-measured against `profile`'s own
+/// target by this call) and `knob_fidelity` (a static claim about this
+/// copy of `scim-server`'s test suite -- see [`KNOB_FIDELITY`] and
+/// [`render_fidelity_section`]'s doc comment; every entry here reports
+/// `verified: true` because it is only ever populated from that hardcoded,
+/// hand-verified table, never from anything this call measured).
 pub fn profile_json(profile: &Profile) -> String {
     let mut axes: Vec<JsonAxis> = profile
         .observations
@@ -435,6 +746,21 @@ pub fn profile_json(profile: &Profile) -> String {
     let jp = JsonProfile {
         target: &profile.target,
         axes,
+        candidate_options: candidate_options(profile),
+        knob_fidelity: JsonKnobFidelitySection {
+            note: "static claim from tests/diagnose_fidelity_test.rs in the scim-server \
+                   repository's own test suite, as of its last CI run -- NOT re-measured \
+                   against `target` above by this invocation",
+            knobs: KNOB_FIDELITY
+                .iter()
+                .map(|kf| JsonKnobFidelity {
+                    knob: kf.knob,
+                    verified: true,
+                    changed_axes: kf.changed_axes,
+                    mechanism: kf.mechanism,
+                })
+                .collect(),
+        },
     };
     serde_json::to_string_pretty(&jp).unwrap_or_default()
 }
