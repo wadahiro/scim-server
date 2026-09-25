@@ -1,0 +1,1077 @@
+//! Three derived views over a [`Profile`]: `render_profile` (human text),
+//! `profile_json` (stable, diffable machine format), and
+//! `compatibility_config` (the payoff -- a `compatibility:` YAML block a
+//! human can paste straight into `scim-server`'s config, see `CLAUDE.md`).
+//!
+//! No direct source-branch equivalent: that branch's `report.rs`/
+//! `render.rs` rendered pass/fail findings against a schema-driven matrix.
+//! This module is a rewrite for the profile shape (see the brief this
+//! crate was built from -- "expect to rewrite most of it").
+
+use std::collections::BTreeMap;
+
+use crate::axes::AXES;
+use crate::axis::{Axis, Observation, Profile, Value};
+use crate::discovery::DISCOVERY_AXES;
+use crate::matrix::{self, Method};
+use crate::rfc::{self, Keyword, RfcPosition};
+
+/// Searches both the thirty-two original static axes (`crate::axes::AXES`)
+/// and the thirty-eight `discovery_presence` static axes
+/// (`crate::discovery::DISCOVERY_AXES`) -- the latter kept in its own
+/// array rather than folded into `AXES` so `crate::axes::AXES`'s existing
+/// "exactly 32" test coverage (`tests/diagnose_axes_test.rs`) keeps
+/// meaning what it always meant.
+fn axis_for(id: &str) -> Option<&'static Axis> {
+    AXES.iter()
+        .chain(DISCOVERY_AXES.iter())
+        .find(|a| a.id == id)
+}
+
+/// Whether `obs`'s value is a fault against `axis`'s `RfcPosition` --
+/// `None` when the axis has no fixed expectation to violate (`Permitted`,
+/// `Silent`, or the value itself is `Unobservable`).
+///
+/// `pub(crate)` (not `fn`, the way every other helper in this module stays
+/// private) specifically so `crate::axes::etag_token_tests` can exercise
+/// this actual predicate -- the one that decides whether an "advertised
+/// but not honoured" `etag_conditional_write/*/stale` observation
+/// (`Known("accepted_despite_stale")`) really does render as a fault --
+/// rather than a copy of its `match` reimplemented in the test. See that
+/// module's doc comment and `CLAUDE.md`'s "never duplicate production
+/// logic in a test" rule.
+pub(crate) fn is_fault(axis: &Axis, obs: &Observation) -> Option<bool> {
+    let Value::Known(v) = &obs.value else {
+        return None;
+    };
+    match axis.rfc {
+        RfcPosition::Mandated {
+            keyword, expected, ..
+        } => Some(keyword.is_fault(*v == expected)),
+        RfcPosition::Permitted { .. } | RfcPosition::Silent { .. } => None,
+        RfcPosition::SelfDeclared { .. } => Some(rfc::self_declared_is_fault(v)),
+    }
+}
+
+/// Stable, comparable string form of an observed [`Value`] -- `Known`
+/// tokens pass through unchanged, `Unknown`/`Unobservable` get a
+/// discriminating prefix so a `Known("x")` never collides with an
+/// `Unknown("x")` when compared as strings. `pub` (not `pub(crate)`, the
+/// way `is_fault` above is) specifically so `tests/diagnose_fidelity_test.rs`
+/// can diff two profiles' observed values per axis without reimplementing
+/// this formatting -- see `CLAUDE.md`'s "never duplicate production logic
+/// in a test" rule.
+pub fn value_token(v: &Value) -> String {
+    match v {
+        Value::Known(s) => s.to_string(),
+        Value::Unknown(s) => format!("unknown:{s}"),
+        Value::Unobservable(u) => format!("unobservable:{}", u.token()),
+    }
+}
+
+/// Label for a non-majority instance inside an aggregated family summary.
+///
+/// The aggregate lists only the values that differ from the family's
+/// majority, and "differs from the majority" is not the same claim as
+/// "breaks the RFC": an `immutable` attribute that is *rejected* on change
+/// conforms even when most of its siblings are silently *ignored*, and an
+/// attribute that could not be probed at all is not a deviation of any
+/// kind. Labelling every minority value "deviates" therefore reads as an
+/// accusation the data does not support, so the label is derived from the
+/// family's own fault predicate instead of from the count.
+fn minority_label(token: &str, is_fault: Option<&dyn Fn(&str) -> bool>) -> &'static str {
+    if token.starts_with("unobservable:") {
+        "not observed"
+    } else if token.starts_with("unknown:") {
+        "UNKNOWN VALUE (candidate option)"
+    } else if is_fault.is_some_and(|f| f(token)) {
+        "NON-CONFORMING"
+    } else {
+        "differs (conforming)"
+    }
+}
+
+// --------------------------------------------------------------- text view
+
+pub fn render_profile(profile: &Profile) -> String {
+    let mut out = String::new();
+    out.push_str(&format!("target: {}\n", profile.target));
+    out.push_str(&format!("observed_at: {}\n", profile.observed_at));
+    // "reported" and "observed" are deliberately different numbers. Every
+    // axis in the run appears in the report even when this run could not
+    // reach it (no `--allow-writes`, or the probe could not be built), so
+    // a reader can see what a fuller run would add instead of having to
+    // notice an absence. Calling the total "observed" would overstate a
+    // discovery-only run by the ~437 axes it only names.
+    let observed = profile
+        .observations
+        .iter()
+        .filter(|o| !matches!(o.value, Value::Unobservable(_)))
+        .count();
+    let total = profile.observations.len();
+    out.push_str(&format!(
+        "axes: {total} reported, {observed} observed, {} not observed in this run\n\n",
+        total - observed
+    ));
+
+    for obs in &profile.observations {
+        let Some(axis) = axis_for(&obs.axis) else {
+            continue;
+        };
+        // A large static family (currently `discovery_presence`, 38
+        // instances) would otherwise print ~5 lines each and bury the rest
+        // of the report. It gets the same aggregated treatment the derived
+        // families get -- see `render_static_family_summary`.
+        if aggregated_static_family(&obs.axis).is_some() {
+            continue;
+        }
+        out.push_str(&format!("{}\n", axis.id));
+        out.push_str(&format!("  about:  {}\n", axis.about));
+        match axis.rfc {
+            RfcPosition::Mandated {
+                basis,
+                keyword,
+                expected,
+            } => {
+                let kw = match keyword {
+                    Keyword::Must => "MUST",
+                    Keyword::Should => "SHOULD",
+                    Keyword::May => "MAY",
+                };
+                out.push_str(&format!(
+                    "  rfc:    mandated ({kw} be {expected:?}) -- {basis}\n"
+                ));
+            }
+            RfcPosition::Permitted { basis } => {
+                out.push_str(&format!(
+                    "  rfc:    permitted (either value conforms) -- {basis}\n"
+                ));
+            }
+            RfcPosition::Silent { basis } => match basis {
+                // Show what established the silence, so the classification
+                // is auditable rather than an assertion.
+                Some(b) => out.push_str(&format!(
+                    "  rfc:    silent (left open by the text) -- {b}\n"
+                )),
+                None => out.push_str(
+                    "  rfc:    silent -- not regulated by RFC 7643/7644 (no single passage)\n",
+                ),
+            },
+            RfcPosition::SelfDeclared { basis, declares } => {
+                out.push_str(&format!(
+                    "  rfc:    self-declared (bound by the target's own declaration of {declares}) -- {basis}\n"
+                ));
+            }
+        }
+        out.push_str(&format!(
+            "  knob:   {}\n",
+            axis.knob.unwrap_or("(none -- candidate for a new option)")
+        ));
+        out.push_str(&format!("  observed: {}\n", value_token(&obs.value)));
+        match (is_fault(axis, obs), axis.rfc) {
+            (Some(true), RfcPosition::SelfDeclared { .. }) => {
+                out.push_str("  verdict: VIOLATION (contradicts the target's own declaration)\n")
+            }
+            (Some(true), _) => {
+                out.push_str("  verdict: VIOLATION (deviates from a mandated value)\n")
+            }
+            (Some(false), _) => out.push_str("  verdict: conforms\n"),
+            (None, _) => out.push_str("  verdict: n/a (permitted, silent, or unobservable)\n"),
+        }
+        if matches!(obs.value, Value::Unknown(_)) {
+            out.push_str("  ** discovery: this value has no name -- a candidate for a new compatibility option **\n");
+        }
+        if !obs.detail.is_empty() {
+            out.push_str(&format!("  detail: {}\n", obs.detail));
+        }
+        out.push('\n');
+    }
+
+    render_derived_summary(profile, &mut out);
+    render_static_family_summary(profile, &mut out);
+    render_projection_summary(profile, &mut out);
+    render_candidate_options_section(profile, &mut out);
+    render_fidelity_section(&mut out);
+
+    out
+}
+
+// ------------------------------------------------------- candidate options
+
+/// One axis (or schema-derived/projection family x method combination)
+/// worth turning into a new `CompatibilityConfig` option: a `Value::Unknown`
+/// observation (a behaviour with no name at all), or a family whose
+/// majority observed value is a consistent, non-conforming variant with no
+/// knob covering it. This *is* re-measured against whatever target
+/// `profile` was taken from -- unlike [`render_fidelity_section`], which is
+/// static.
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct CandidateOption {
+    /// The axis id (for an `Unknown` observation) or `"<family_prefix>
+    /// (<method>)"` (for a family-level majority finding).
+    pub id: String,
+    pub reason: String,
+}
+
+/// Computes [`CandidateOption`]s for `profile`: see that type's doc comment
+/// for the two sources. Order: `Unknown` observations first (in profile
+/// order), then derived-family majority findings, then projection-family
+/// majority findings (each in the same family/method order
+/// `render_derived_summary`/`render_projection_summary` iterate).
+/// family_prefix -> method -> observed token -> instance count. Just the
+/// counts (unlike `render_derived_summary`'s grouping, which keeps the
+/// `&Observation`s themselves for their `detail` strings) -- a type alias
+/// so clippy's `type_complexity` lint stays quiet, matching
+/// `ProjectionGroups` below.
+type DerivedCountGroups<'a> = BTreeMap<&'a str, BTreeMap<&'a str, BTreeMap<String, usize>>>;
+
+/// (resource_type, param) -> method -> observed token -> instance count.
+type ProjectionCountGroups<'a> =
+    BTreeMap<(&'a str, &'a str), BTreeMap<&'a str, BTreeMap<String, usize>>>;
+
+pub fn candidate_options(profile: &Profile) -> Vec<CandidateOption> {
+    let mut out = Vec::new();
+
+    // Source 1: any axis (static, discovery, derived, or projection) whose
+    // observed value has no name in its `known` vocabulary -- the
+    // strongest discovery signal (see `Value::Unknown`'s doc comment).
+    for obs in &profile.observations {
+        if let Value::Unknown(v) = &obs.value {
+            out.push(CandidateOption {
+                id: obs.axis.clone(),
+                reason: format!(
+                    "observed an unnamed value ({v:?}) -- see --format json for the evidence"
+                ),
+            });
+        }
+    }
+
+    // Source 2: static axes with `knob: None` whose own observed value is
+    // itself a fault against a Mandated/SelfDeclared RfcPosition -- a
+    // single-instance "consistent variant" (there is only one instance of
+    // a static axis).
+    for obs in &profile.observations {
+        let Some(axis) = axis_for(&obs.axis) else {
+            continue;
+        };
+        if axis.knob.is_some() {
+            continue;
+        }
+        if is_fault(axis, obs) == Some(true) {
+            out.push(CandidateOption {
+                id: obs.axis.clone(),
+                reason: format!(
+                    "knob: None, and its observed value ({}) consistently deviates from the \
+                     RFC-preferred value -- no CompatibilityConfig option covers this axis today",
+                    value_token(&obs.value)
+                ),
+            });
+        }
+    }
+
+    // Source 3: schema-derived families (`crate::matrix::derive`) -- every
+    // one has `knob: None` (see `render_derived_summary`'s doc comment).
+    // Same (family x method) grouping as that function; a majority value
+    // that is itself a fault is a candidate.
+    let mut derived_groups: DerivedCountGroups = BTreeMap::new();
+    for obs in &profile.observations {
+        let Some((family_prefix, _attr, method_str)) = parse_derived_id(&obs.axis) else {
+            continue;
+        };
+        if matrix::family_for(&obs.axis).is_none() {
+            continue;
+        }
+        *derived_groups
+            .entry(family_prefix)
+            .or_default()
+            .entry(method_str)
+            .or_default()
+            .entry(value_token(&obs.value))
+            .or_default() += 1;
+    }
+    for (family_prefix, by_method) in &derived_groups {
+        for (method_str, by_value) in by_method {
+            let Some((maj_token, count)) = by_value.iter().max_by_key(|(_, n)| **n) else {
+                continue;
+            };
+            let is_fault_fn = Method::parse(method_str)
+                .and_then(|m| matrix::known_and_fault_for(family_prefix, m))
+                .map(|(_, f)| f);
+            if is_fault_fn.is_some_and(|f| f(maj_token)) {
+                out.push(CandidateOption {
+                    id: format!("{family_prefix} ({method_str})"),
+                    reason: format!(
+                        "knob: None; {count} of {} instances observed the non-conforming value \
+                         {maj_token:?} -- a consistent, unnamed variant",
+                        by_value.values().sum::<usize>()
+                    ),
+                });
+            }
+        }
+    }
+
+    // Source 4: the `attribute_projection` family -- same treatment.
+    let mut projection_groups: ProjectionCountGroups = BTreeMap::new();
+    for obs in &profile.observations {
+        let Some((resource_type, param, method)) = parse_projection_id(&obs.axis) else {
+            continue;
+        };
+        *projection_groups
+            .entry((resource_type, param))
+            .or_default()
+            .entry(method)
+            .or_default()
+            .entry(value_token(&obs.value))
+            .or_default() += 1;
+    }
+    for ((resource_type, param), by_method) in &projection_groups {
+        for (method, by_value) in by_method {
+            let Some((maj_token, count)) = by_value.iter().max_by_key(|(_, n)| **n) else {
+                continue;
+            };
+            let is_fault_fn =
+                Method::parse(method).map(|m| matrix::projection_known_and_fault_for(m).1);
+            if is_fault_fn.is_some_and(|f| f(maj_token)) {
+                out.push(CandidateOption {
+                    id: format!("attribute_projection/{resource_type}.{param} ({method})"),
+                    reason: format!(
+                        "knob: None; {count} of {} instances observed the non-conforming value \
+                         {maj_token:?} -- the query parameter is consistently not honoured",
+                        by_value.values().sum::<usize>()
+                    ),
+                });
+            }
+        }
+    }
+
+    out
+}
+
+fn render_candidate_options_section(profile: &Profile, out: &mut String) {
+    let candidates = candidate_options(profile);
+    out.push_str("candidate options (re-measured against this run's target)\n");
+    if candidates.is_empty() {
+        out.push_str(
+            "  none: no Unknown observation and no knob-less family showed a consistent \
+             non-conforming majority in this run\n\n",
+        );
+        return;
+    }
+    out.push_str(&format!(
+        "  {} candidate(s) -- axes/families with no CompatibilityConfig option that would let \
+         scim-server emulate them today\n",
+        candidates.len()
+    ));
+    for c in &candidates {
+        out.push_str(&format!("  {}: {}\n", c.id, c.reason));
+    }
+    out.push('\n');
+}
+
+// --------------------------------------------------- knob emulation fidelity
+
+/// One `CompatibilityConfig` knob's proven emulation blast radius: the
+/// exact set of axis ids that change when the knob is flipped from
+/// `scim-server`'s default, and, when that set is more than the knob's own
+/// axis, the mechanism.
+///
+/// **Static claim, not a live measurement.** These numbers come from
+/// `tests/diagnose_fidelity_test.rs` in the `scim-server` repository,
+/// which starts this server twice (default and flipped), takes a full
+/// profile of both, and asserts the changed-axis set exactly matches what
+/// is hardcoded here. That test runs in CI on `scim-server`'s own source,
+/// not against whatever target `scim-diagnose` was just pointed at --
+/// flipping the *target's* behaviour is not something this tool can do.
+/// So this section is a fact about this copy of `scim-server`'s test
+/// suite, current as of its last CI run, not a measurement this
+/// invocation of `diagnose` performed.
+struct KnobFidelity {
+    knob: &'static str,
+    /// Sorted, exact set of axis ids the fidelity test observed changing.
+    changed_axes: &'static [&'static str],
+    /// `None` when `changed_axes` is exactly the knob's own axis (the
+    /// common case); `Some` explains why more than one axis moved.
+    mechanism: Option<&'static str>,
+}
+
+/// Kept in sync by hand with `tests/diagnose_fidelity_test.rs`'s
+/// `EXPECTED` table -- see that test's module doc comment, which points
+/// back here.
+const KNOB_FIDELITY: &[KnobFidelity] = &[
+    KnobFidelity {
+        knob: "meta_datetime_format",
+        changed_axes: &["meta_datetime_format"],
+        mechanism: None,
+    },
+    KnobFidelity {
+        knob: "show_empty_groups_members",
+        changed_axes: &["empty_multivalued_rendering"],
+        mechanism: None,
+    },
+    KnobFidelity {
+        knob: "include_user_groups",
+        changed_axes: &[
+            "returned_never/User.groups/GET",
+            "returned_never/User.groups/PATCH",
+            "returned_never/User.groups/POST",
+            "returned_never/User.groups/PUT",
+            "user_groups_presence",
+        ],
+        mechanism: Some(
+            "also rewrites this server's own GET /Schemas declaration of User.groups's \
+             `returned` characteristic to `never` (src/resource/schema.rs); the schema-derived \
+             matrix regenerates against that new declaration, producing four new \
+             returned_never/User.groups/* instances (GET/POST/PUT/PATCH) that do not exist \
+             against the default server at all (which declares `returned: default` for that \
+             attribute, a characteristic the derived matrix does not probe)",
+        ),
+    },
+    KnobFidelity {
+        knob: "support_group_members_filter",
+        changed_axes: &["group_members_filter"],
+        mechanism: None,
+    },
+    KnobFidelity {
+        knob: "support_group_displayname_filter",
+        changed_axes: &["group_displayname_filter"],
+        mechanism: None,
+    },
+    KnobFidelity {
+        knob: "support_patch_replace_empty_array",
+        changed_axes: &["patch_replace_empty_array"],
+        mechanism: None,
+    },
+    KnobFidelity {
+        knob: "support_patch_replace_empty_value",
+        changed_axes: &["patch_replace_empty_value"],
+        mechanism: None,
+    },
+];
+
+fn render_fidelity_section(out: &mut String) {
+    out.push_str(
+        "compatibility-knob emulation fidelity (static claim -- see note)\n\
+         \x20 NOT measured against the target above. This reports what \
+         tests/diagnose_fidelity_test.rs proved, the last time it ran in CI, about this copy of \
+         scim-server's own seven CompatibilityConfig knobs: for each knob, the exact set of \
+         axes that change when it is flipped from default. Verified means that test passed;\n",
+    );
+    for kf in KNOB_FIDELITY {
+        out.push_str(&format!(
+            "  {}: verified -- flipping changes exactly: {}\n",
+            kf.knob,
+            kf.changed_axes.join(", ")
+        ));
+        if let Some(m) = kf.mechanism {
+            out.push_str(&format!("    mechanism: {m}\n"));
+        }
+    }
+    out.push('\n');
+}
+
+/// Parses a `DerivedAxis::id`/`Observation::axis` string
+/// (`"<family_prefix>/<Resource>.<attr path>/<method>"`) into its three
+/// components. `None` for anything that isn't a derived id (the sixteen
+/// static axes' ids, which contain no `/`).
+fn parse_derived_id(axis: &str) -> Option<(&str, &str, &str)> {
+    let mut parts = axis.splitn(3, '/');
+    let family = parts.next()?;
+    let attr = parts.next()?;
+    let method = parts.next()?;
+    Some((family, attr, method))
+}
+
+/// 389 individual lines is unusable against a real provider (see the brief
+/// this was built from). `profile_json` still records every instance
+/// individually -- that's what makes it diffable and evidence-bearing --
+/// but the text view aggregates: one line per (family x method x observed
+/// value) with a count, then the instances that deviate from their
+/// (family, method)'s majority value listed individually. A provider that
+/// ignores readOnly on PATCH across the board reads as one line; a
+/// provider that does it for exactly one attribute reads as a one-line
+/// exception worth looking at. A family whose majority value is itself a
+/// fault is flagged as a compatibility-option candidate -- every derived
+/// family has `knob: None` (none of these eight characteristics has a
+/// `CompatibilityConfig` field today), so a consistent non-conforming
+/// majority is exactly the signal the brief calls "the tool's purpose, not
+/// a footnote."
+fn render_derived_summary(profile: &Profile, out: &mut String) {
+    // family_prefix -> method_str -> observed token -> matching observations
+    let mut groups: BTreeMap<&str, BTreeMap<&str, BTreeMap<String, Vec<&Observation>>>> =
+        BTreeMap::new();
+    for obs in &profile.observations {
+        let Some((family_prefix, _attr, method_str)) = parse_derived_id(&obs.axis) else {
+            continue;
+        };
+        if matrix::family_for(&obs.axis).is_none() {
+            continue;
+        }
+        groups
+            .entry(family_prefix)
+            .or_default()
+            .entry(method_str)
+            .or_default()
+            .entry(value_token(&obs.value))
+            .or_default()
+            .push(obs);
+    }
+    if groups.is_empty() {
+        return;
+    }
+
+    let total: usize = groups
+        .values()
+        .flat_map(|by_method| by_method.values())
+        .flat_map(|by_value| by_value.values())
+        .map(|v| v.len())
+        .sum();
+    out.push_str("schema-derived characteristics\n");
+    out.push_str(&format!(
+        "  {total} instances across {} families, aggregated by family x method x observed \
+         value (see --format json for every individual instance)\n\n",
+        groups.len()
+    ));
+
+    for (family_prefix, by_method) in &groups {
+        out.push_str(&format!("{family_prefix}\n"));
+        if let Some(family) = matrix::DERIVED_FAMILIES
+            .iter()
+            .find(|f| f.id_prefix == *family_prefix)
+        {
+            out.push_str(&format!("  about: {}\n", family.about));
+        }
+        for (method_str, by_value) in by_method {
+            let majority = by_value.iter().max_by_key(|(_, obs)| obs.len());
+            let line = by_value
+                .iter()
+                .map(|(token, obs)| format!("{token} x{}", obs.len()))
+                .collect::<Vec<_>>()
+                .join(", ");
+            out.push_str(&format!("  {method_str}: {line}"));
+
+            let is_fault_fn = Method::parse(method_str)
+                .and_then(|m| matrix::known_and_fault_for(family_prefix, m))
+                .map(|(_, f)| f);
+            if let (Some((maj_token, _)), Some(is_fault)) = (majority, is_fault_fn) {
+                if is_fault(maj_token) {
+                    out.push_str(&format!(
+                        " -- ** majority value {maj_token:?} is non-conforming; no knob covers \
+                         {family_prefix} -- candidate for a new compatibility option **"
+                    ));
+                }
+            }
+            out.push('\n');
+
+            if let Some((maj_token, _)) = majority {
+                for (token, obs_list) in by_value {
+                    if token == maj_token {
+                        continue;
+                    }
+                    for obs in obs_list {
+                        let label = minority_label(token, is_fault_fn.as_ref().map(|f| f as _));
+                        out.push_str(&format!("    {label}: {} -> {token}", obs.axis));
+                        if !obs.detail.is_empty() {
+                            out.push_str(&format!(" ({})", obs.detail));
+                        }
+                        out.push('\n');
+                    }
+                }
+            }
+        }
+        out.push('\n');
+    }
+}
+
+/// Parses an `attribute_projection` id
+/// (`"attribute_projection/<ResourceType>.<param>/<method>"`) into
+/// `(resource_type, param, method)`. `None` for anything else (in
+/// particular, `crate::matrix::derive`'s ids, which also have three `/`-
+/// separated parts but whose middle segment is `<Resource>.<attr path>`,
+/// not `<ResourceType>.<param>` -- disambiguated by requiring the family
+/// prefix to be `crate::matrix::PROJECTION_FAMILY_ID` and the param suffix
+/// to be one of the two literal query parameter names this family ever
+/// uses).
+fn parse_projection_id(axis: &str) -> Option<(&str, &str, &str)> {
+    let mut parts = axis.splitn(3, '/');
+    let family = parts.next()?;
+    if family != matrix::PROJECTION_FAMILY_ID {
+        return None;
+    }
+    let resource_and_param = parts.next()?;
+    let method = parts.next()?;
+    let (resource_type, param) = resource_and_param.rsplit_once('.')?;
+    if param != "attributes" && param != "excludedAttributes" {
+        return None;
+    }
+    Some((resource_type, param, method))
+}
+
+/// Same aggregation strategy as [`render_derived_summary`] (one line per
+/// `(resource type x param x method x observed value)` with a count, then
+/// deviations from that combination's majority listed individually) --
+/// kept as its own function rather than folded into
+/// `render_derived_summary` because `attribute_projection`'s id shape
+/// carries a query parameter as well as a method, one dimension more than
+/// every `crate::matrix::derive` family.
+type ProjectionGroups<'a> =
+    BTreeMap<(&'a str, &'a str), BTreeMap<&'a str, BTreeMap<String, Vec<&'a Observation>>>>;
+
+fn render_projection_summary(profile: &Profile, out: &mut String) {
+    // (resource_type, param) -> method -> observed token -> matching observations
+    let mut groups: ProjectionGroups = BTreeMap::new();
+    for obs in &profile.observations {
+        let Some((resource_type, param, method)) = parse_projection_id(&obs.axis) else {
+            continue;
+        };
+        groups
+            .entry((resource_type, param))
+            .or_default()
+            .entry(method)
+            .or_default()
+            .entry(value_token(&obs.value))
+            .or_default()
+            .push(obs);
+    }
+    if groups.is_empty() {
+        return;
+    }
+
+    let total: usize = groups
+        .values()
+        .flat_map(|by_method| by_method.values())
+        .flat_map(|by_value| by_value.values())
+        .map(|v| v.len())
+        .sum();
+    out.push_str("attribute_projection (attributes / excludedAttributes)\n");
+    out.push_str(&format!(
+        "  {total} instances across {} (resource type x query param) combinations, expanded \
+         over the target's own declared resource types (see --format json for every \
+         individual instance)\n\n",
+        groups.len()
+    ));
+
+    for ((resource_type, param), by_method) in &groups {
+        out.push_str(&format!("{resource_type} ?{param}=...\n"));
+        for (method, by_value) in by_method {
+            let majority = by_value.iter().max_by_key(|(_, obs)| obs.len());
+            let line = by_value
+                .iter()
+                .map(|(token, obs)| format!("{token} x{}", obs.len()))
+                .collect::<Vec<_>>()
+                .join(", ");
+            out.push_str(&format!("  {method}: {line}"));
+
+            let is_fault_fn =
+                Method::parse(method).map(|m| matrix::projection_known_and_fault_for(m).1);
+            if let (Some((maj_token, _)), Some(is_fault)) = (majority, is_fault_fn) {
+                if is_fault(maj_token) {
+                    out.push_str(
+                        " -- ** majority value is non-conforming: the query parameter is not \
+                         being honoured **",
+                    );
+                }
+            }
+            out.push('\n');
+
+            if let Some((maj_token, _)) = majority {
+                for (token, obs_list) in by_value {
+                    if token == maj_token {
+                        continue;
+                    }
+                    for obs in obs_list {
+                        let label = minority_label(token, is_fault_fn.as_ref().map(|f| f as _));
+                        out.push_str(&format!("    {label}: {} -> {token}", obs.axis));
+                        if !obs.detail.is_empty() {
+                            out.push_str(&format!(" ({})", obs.detail));
+                        }
+                        out.push('\n');
+                    }
+                }
+            }
+        }
+        out.push('\n');
+    }
+}
+
+// --------------------------------------------------------------- json view
+
+/// A stable, diffable JSON record for one axis. Field order is fixed by
+/// struct declaration order (serde_json preserves insertion order), and no
+/// timestamp lives inside a per-axis record -- only `Profile::observed_at`
+/// at the top level carries one, so two runs against the same unchanged
+/// target produce byte-identical per-axis bytes.
+#[derive(serde::Serialize)]
+struct JsonAxis<'a> {
+    id: &'a str,
+    observed: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    evidence: Option<Vec<JsonExchange<'a>>>,
+}
+
+#[derive(serde::Serialize)]
+struct JsonExchange<'a> {
+    method: &'a str,
+    url: &'a str,
+    status: Option<u16>,
+}
+
+#[derive(serde::Serialize)]
+struct JsonProfile<'a> {
+    target: &'a str,
+    axes: Vec<JsonAxis<'a>>,
+    /// Re-measured against `target` above by this very call -- see
+    /// [`candidate_options`].
+    candidate_options: Vec<CandidateOption>,
+    knob_fidelity: JsonKnobFidelitySection,
+}
+
+#[derive(serde::Serialize)]
+struct JsonKnobFidelitySection {
+    /// Spelled out in the JSON too, not just the text view, so a
+    /// machine reader can't mistake this for a measurement of `target`.
+    note: &'static str,
+    knobs: Vec<JsonKnobFidelity>,
+}
+
+#[derive(serde::Serialize)]
+struct JsonKnobFidelity {
+    knob: &'static str,
+    verified: bool,
+    changed_axes: &'static [&'static str],
+    #[serde(skip_serializing_if = "Option::is_none")]
+    mechanism: Option<&'static str>,
+}
+
+/// Sorted by axis id; evidence omitted unless the value is `Unknown`
+/// (the discovery signal is the one case where a diff needs to see why).
+/// No timestamps inside per-axis records. Two calls against the same
+/// `Profile` produce byte-identical output (see
+/// `tests::profile_json_is_byte_stable_across_two_calls`).
+///
+/// Also carries `candidate_options` (re-measured against `profile`'s own
+/// target by this call) and `knob_fidelity` (a static claim about this
+/// copy of `scim-server`'s test suite -- see [`KNOB_FIDELITY`] and
+/// [`render_fidelity_section`]'s doc comment; every entry here reports
+/// `verified: true` because it is only ever populated from that hardcoded,
+/// hand-verified table, never from anything this call measured).
+pub fn profile_json(profile: &Profile) -> String {
+    let mut axes: Vec<JsonAxis> = profile
+        .observations
+        .iter()
+        .map(|obs| JsonAxis {
+            id: &obs.axis,
+            observed: value_token(&obs.value),
+            evidence: if matches!(obs.value, Value::Unknown(_)) {
+                Some(
+                    obs.evidence
+                        .iter()
+                        .map(|e| JsonExchange {
+                            method: &e.method,
+                            url: &e.url,
+                            status: e.status,
+                        })
+                        .collect(),
+                )
+            } else {
+                None
+            },
+        })
+        .collect();
+    axes.sort_by(|a, b| a.id.cmp(b.id));
+
+    let jp = JsonProfile {
+        target: &profile.target,
+        axes,
+        candidate_options: candidate_options(profile),
+        knob_fidelity: JsonKnobFidelitySection {
+            note: "static claim from tests/diagnose_fidelity_test.rs in the scim-server \
+                   repository's own test suite, as of its last CI run -- NOT re-measured \
+                   against `target` above by this invocation",
+            knobs: KNOB_FIDELITY
+                .iter()
+                .map(|kf| JsonKnobFidelity {
+                    knob: kf.knob,
+                    verified: true,
+                    changed_axes: kf.changed_axes,
+                    mechanism: kf.mechanism,
+                })
+                .collect(),
+        },
+    };
+    serde_json::to_string_pretty(&jp).unwrap_or_default()
+}
+
+// ------------------------------------------------------ compatibility.yaml
+
+/// Emits the `compatibility:` YAML block that makes `scim-server` behave
+/// like the diagnosed target -- one line per axis whose observed value
+/// maps to a knob value, commented with the axis it came from. Axes that
+/// were `Unobservable` are omitted rather than guessed at.
+pub fn compatibility_config(profile: &Profile) -> String {
+    let mut lines = vec!["compatibility:".to_string()];
+    let mut any = false;
+
+    for obs in &profile.observations {
+        let Some(axis) = axis_for(&obs.axis) else {
+            continue;
+        };
+        let Some(field) = axis.knob else { continue };
+        let Value::Known(value) = &obs.value else {
+            continue;
+        };
+        any = true;
+        lines.push(format!("  # from axis: {}", axis.id));
+        lines.push(format!("  {field}: {}", knob_yaml_value(field, value)));
+    }
+
+    if !any {
+        return "compatibility: {}  # no axis produced an emittable knob value\n".to_string();
+    }
+
+    lines.push(String::new());
+    lines.join("\n")
+}
+
+/// Translates an axis's `Value::Known` token into the literal YAML value
+/// `scim-server`'s `CompatibilityConfig` expects for `field` -- most knobs
+/// are booleans keyed by a different truthy token per axis
+/// (`support_patch_replace_empty_array` is `true` for `"cleared"`, for
+/// instance), while `meta_datetime_format` is a string enum and passes its
+/// token straight through.
+fn knob_yaml_value(field: &str, observed: &str) -> String {
+    match field {
+        "meta_datetime_format" => format!("\"{observed}\""),
+        "show_empty_groups_members" => bool_str(observed == "empty_array").to_string(),
+        // `observed` is a `declares_<value>_<present|absent>` token (see
+        // `crate::axes::self_declared_token`): the knob tracks the actual
+        // observed presence, independent of whether the declaration was
+        // self-consistent.
+        "include_user_groups" => bool_str(observed.ends_with("_present")).to_string(),
+        "support_group_members_filter" => bool_str(observed == "processed").to_string(),
+        "support_group_displayname_filter" => bool_str(observed == "processed").to_string(),
+        "support_patch_replace_empty_array" => bool_str(observed == "cleared").to_string(),
+        "support_patch_replace_empty_value" => bool_str(observed == "cleared").to_string(),
+        _ => format!("\"{observed}\""),
+    }
+}
+
+fn bool_str(b: bool) -> &'static str {
+    if b {
+        "true"
+    } else {
+        "false"
+    }
+}
+
+/// The id prefix of a static family large enough to deserve aggregation
+/// rather than one block per instance. `None` for a standalone axis, which
+/// still prints in full — a report with seven one-off axes reads better
+/// with each spelled out, and only a family in the dozens needs collapsing.
+fn aggregated_static_family(axis_id: &str) -> Option<&'static str> {
+    const AGGREGATED: &[&str] = &[crate::discovery::FAMILY_ID];
+    let prefix = axis_id.split('/').next().unwrap_or(axis_id);
+    AGGREGATED.iter().copied().find(|p| *p == prefix)
+}
+
+/// Aggregates every static family named by [`aggregated_static_family`]:
+/// one line per observed value with a count, then the instances whose
+/// value differs from the family's most common one, which are the ones
+/// worth looking at. Mirrors `render_derived_summary`'s strategy for the
+/// schema-derived families.
+fn render_static_family_summary(profile: &Profile, out: &mut String) {
+    use std::collections::BTreeMap;
+
+    let mut by_family: BTreeMap<&str, Vec<&Observation>> = BTreeMap::new();
+    for obs in &profile.observations {
+        if let Some(family) = aggregated_static_family(&obs.axis) {
+            by_family.entry(family).or_default().push(obs);
+        }
+    }
+
+    for (family, observations) in by_family {
+        let mut counts: BTreeMap<String, usize> = BTreeMap::new();
+        for obs in &observations {
+            *counts.entry(value_token(&obs.value)).or_default() += 1;
+        }
+        let majority = counts
+            .iter()
+            .max_by_key(|(_, n)| **n)
+            .map(|(v, _)| v.clone())
+            .unwrap_or_default();
+
+        out.push_str(&format!("{family}\n"));
+        out.push_str(&format!(
+            "  {} instances, aggregated by observed value (see --format json for each one)\n",
+            observations.len()
+        ));
+        for (value, n) in &counts {
+            out.push_str(&format!("  {value}: x{n}\n"));
+        }
+        for obs in &observations {
+            let token = value_token(&obs.value);
+            if token != majority {
+                let faulty = axis_for(&obs.axis).and_then(|a| is_fault(a, obs)) == Some(true);
+                let label = minority_label(&token, Some(&|_: &str| faulty));
+                out.push_str(&format!("  {label}: {} -> {token}\n", obs.axis));
+            }
+        }
+        out.push('\n');
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::client::Exchange;
+
+    fn hand_built_profile() -> Profile {
+        Profile {
+            target: "https://example.test/scim/v2".to_string(),
+            observed_at: "2026-09-24T00:00:00Z".to_string(),
+            observations: vec![
+                // Known, mandated, matches expected -> conforms.
+                Observation {
+                    axis: "meta_datetime_format".to_string(),
+                    value: Value::Known("rfc3339"),
+                    evidence: vec![Exchange {
+                        method: "POST".to_string(),
+                        url: "https://example.test/scim/v2/Users".to_string(),
+                        status: Some(201),
+                        elapsed_ms: 5,
+                        request_body: None,
+                        response_body: None,
+                    }],
+                    detail: "meta.created/lastModified parse as RFC 3339".to_string(),
+                },
+                // Permitted -> never a fault regardless of value.
+                Observation {
+                    axis: "empty_multivalued_rendering".to_string(),
+                    value: Value::Known("omitted"),
+                    evidence: Vec::new(),
+                    detail: "members omitted entirely".to_string(),
+                },
+                // Silent, Unknown -> the discovery signal, carries evidence.
+                Observation {
+                    axis: "group_members_filter".to_string(),
+                    value: Value::Unknown("processed_but_case_insensitive".to_string()),
+                    evidence: vec![Exchange {
+                        method: "GET".to_string(),
+                        url: "https://example.test/scim/v2/Groups?filter=...".to_string(),
+                        status: Some(200),
+                        elapsed_ms: 3,
+                        request_body: None,
+                        response_body: Some("{\"Resources\":[]}".to_string()),
+                    }],
+                    detail: "filter matched case-insensitively, an unnamed behaviour".to_string(),
+                },
+                // Unobservable: one of each variant.
+                Observation {
+                    axis: "group_displayname_filter".to_string(),
+                    value: Value::Unobservable(crate::axis::Unobservable::CapabilityNotAdvertised(
+                        "filter",
+                    )),
+                    evidence: Vec::new(),
+                    detail: String::new(),
+                },
+                Observation {
+                    axis: "user_groups_presence".to_string(),
+                    value: Value::Unobservable(crate::axis::Unobservable::NeedsWrite),
+                    evidence: Vec::new(),
+                    detail: "skipped: would create a User and a Group".to_string(),
+                },
+                Observation {
+                    axis: "patch_replace_empty_array".to_string(),
+                    value: Value::Unobservable(crate::axis::Unobservable::NotDeclaredBySchema),
+                    evidence: Vec::new(),
+                    detail: String::new(),
+                },
+                Observation {
+                    axis: "patch_replace_empty_value".to_string(),
+                    value: Value::Unobservable(crate::axis::Unobservable::ProbeFailed(
+                        "fixture POST failed: 500".to_string(),
+                    )),
+                    evidence: Vec::new(),
+                    detail: String::new(),
+                },
+            ],
+        }
+    }
+
+    #[test]
+    fn render_profile_shows_verdict_and_discovery_flag() {
+        let text = render_profile(&hand_built_profile());
+        assert!(text.contains("meta_datetime_format"));
+        assert!(text.contains("verdict: conforms"));
+        assert!(text.contains("discovery: this value has no name"));
+        assert!(text.contains("unobservable:capability_not_advertised:filter"));
+        assert!(text.contains("unobservable:needs_write"));
+    }
+
+    #[test]
+    fn profile_json_is_sorted_and_omits_evidence_except_for_unknown() {
+        let json = profile_json(&hand_built_profile());
+        let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
+        let axes = parsed["axes"].as_array().unwrap();
+        let ids: Vec<&str> = axes.iter().map(|a| a["id"].as_str().unwrap()).collect();
+        let mut sorted = ids.clone();
+        sorted.sort();
+        assert_eq!(ids, sorted, "axes must be sorted by id");
+
+        let unknown_axis = axes
+            .iter()
+            .find(|a| a["id"] == "group_members_filter")
+            .unwrap();
+        assert!(unknown_axis.get("evidence").is_some());
+        assert_eq!(
+            unknown_axis["observed"],
+            "unknown:processed_but_case_insensitive"
+        );
+
+        let known_axis = axes
+            .iter()
+            .find(|a| a["id"] == "meta_datetime_format")
+            .unwrap();
+        assert!(
+            known_axis.get("evidence").is_none(),
+            "evidence must be omitted for a Known value"
+        );
+
+        assert!(
+            !json.to_lowercase().contains("2026"),
+            "per-axis records must carry no timestamp, so two runs diff cleanly"
+        );
+    }
+
+    #[test]
+    fn profile_json_is_byte_stable_across_two_calls() {
+        let profile = hand_built_profile();
+        assert_eq!(profile_json(&profile), profile_json(&profile));
+    }
+
+    #[test]
+    fn compatibility_config_emits_only_known_knobbed_axes() {
+        let yaml = compatibility_config(&hand_built_profile());
+        assert!(yaml.contains("meta_datetime_format: \"rfc3339\""));
+        assert!(yaml.contains("show_empty_groups_members: false"));
+        assert!(yaml.contains("# from axis: meta_datetime_format"));
+        // Unknown, Unobservable, and no-knob axes never appear as a knob line.
+        assert!(!yaml.contains("support_group_members_filter"));
+        assert!(!yaml.contains("include_user_groups"));
+    }
+
+    #[test]
+    fn compatibility_config_with_no_emittable_axis_says_so() {
+        let profile = Profile {
+            target: "t".to_string(),
+            observed_at: "now".to_string(),
+            observations: vec![Observation {
+                axis: "meta_datetime_format".to_string(),
+                value: Value::Unobservable(crate::axis::Unobservable::NeedsWrite),
+                evidence: Vec::new(),
+                detail: String::new(),
+            }],
+        };
+        let yaml = compatibility_config(&profile);
+        assert!(yaml.contains("no axis produced an emittable knob value"));
+    }
+}

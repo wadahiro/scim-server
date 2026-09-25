@@ -22,29 +22,57 @@ mod utils;
 use backend::database::DatabaseBackendConfig;
 use backend::{BackendFactory, ScimBackend};
 use config::AppConfig;
+use scim_server::cli::{Args, Command, DiagnoseArgs, OutputFormat};
 
-#[derive(Parser, Debug)]
-#[command(name = "scim-server")]
-#[command(about = "A SCIM 2.0 server implementation")]
-#[command(version = env!("CARGO_PKG_VERSION"))]
-struct Args {
-    /// Configuration file path
-    #[arg(short, long)]
-    config: Option<String>,
+/// Runs `scim-diagnose` and prints its behavioural profile. Exits the
+/// process directly (rather than returning a value `main` would have to
+/// translate) since the exit code diagnose needs -- 0 clean, 2 bad CLI
+/// usage or an unreachable target -- doesn't fit `main`'s existing
+/// `Result<(), Box<dyn Error>>` return, and changing that signature would
+/// ripple into the serve path for no benefit to it. Unlike a conformance
+/// checker, a behavioural profile has no pass/fail of its own to encode in
+/// an exit status -- see `scim_diagnose`'s crate docs.
+async fn run_diagnose(args: DiagnoseArgs) -> ! {
+    let opts = match args.to_diag_options() {
+        Ok(opts) => opts,
+        Err(msg) => {
+            eprintln!("error: {msg}");
+            std::process::exit(2);
+        }
+    };
 
-    /// Port to listen on (overrides config file)
-    #[arg(short, long)]
-    port: Option<u16>,
+    let profile = match scim_diagnose::run(&opts).await {
+        Ok(profile) => profile,
+        Err(e) => {
+            eprintln!("error: {e}");
+            std::process::exit(2);
+        }
+    };
 
-    /// Host to bind to (overrides config file)
-    #[arg(long)]
-    host: Option<String>,
+    let mut text = match args.format {
+        OutputFormat::Text => scim_diagnose::render_profile(&profile),
+        OutputFormat::Json => scim_diagnose::profile_json(&profile),
+    };
 
-    /// Validate the configuration and exit without starting the server (no
-    /// database file or tables are created, no port is bound). With no -c,
-    /// validates the built-in zero-config defaults.
-    #[arg(long)]
-    validate: bool,
+    if args.emit_config {
+        text.push_str("\n---\n");
+        text.push_str(&scim_diagnose::compatibility_config(&profile));
+    }
+
+    match &args.output {
+        Some(path) => {
+            if let Err(e) = std::fs::write(path, &text) {
+                eprintln!("error: could not write {}: {e}", path.display());
+                std::process::exit(2);
+            }
+            if !args.quiet {
+                println!("report written to {}", path.display());
+            }
+        }
+        None => print!("{text}"),
+    }
+
+    std::process::exit(0);
 }
 
 async fn setup_backend(
@@ -99,6 +127,10 @@ async fn setup_backend(
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Parse command line arguments
     let args = Args::parse();
+
+    if let Some(Command::Diagnose(diagnose_args)) = args.command {
+        run_diagnose(diagnose_args).await;
+    }
 
     // Initialize tracing for better debugging
     tracing_subscriber::fmt::init();

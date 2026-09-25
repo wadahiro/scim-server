@@ -1,3 +1,6 @@
+[workspace]
+members = [".", "crates/*"]
+
 [package]
 name = "scim-server"
 version = "0.4.2"
@@ -40,6 +43,7 @@ chrono-tz = "0.10"
 fluent-uri = "0.3.2"
 lazy_static = "1.4"
 ipnet = "2.9"
+scim-diagnose = { path = "crates/scim-diagnose" }
 
 [dependencies.uuid]
 version = "1.14.0"
